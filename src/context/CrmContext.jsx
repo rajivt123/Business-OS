@@ -1,0 +1,2303 @@
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+
+const CrmContext = createContext();
+
+export function useCrm() {
+  return useContext(CrmContext);
+}
+
+/**
+ * Role Normalization Layer (Step 9)
+ * Maps DB tenant roles (OWNER, ADMIN, MANAGER, TEAM, VIEWER) to legacy UI expectations (admin, team, viewer, guest).
+ */
+export function normalizeRole(tenantRole, profileRole) {
+  if (!tenantRole && !profileRole) return 'guest';
+  const tRole = (tenantRole || '').toUpperCase();
+  if (tRole === 'OWNER' || tRole === 'ADMIN') return 'admin';
+  if (tRole === 'MANAGER' || tRole === 'TEAM') return 'team';
+  if (tRole === 'VIEWER') return 'viewer';
+
+  // Fallback to profileRole if tenantRole is not set
+  const pRole = (profileRole || '').toLowerCase();
+  if (pRole === 'admin' || pRole === 'owner') return 'admin';
+  if (pRole === 'team' || pRole === 'member' || pRole === 'manager') return 'team';
+  if (pRole === 'viewer') return 'viewer';
+  return 'guest';
+}
+
+export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsDarkMode, onSignOut }) {
+  // --- Authenticated Context State ---
+  const [session, setSession] = useState(sessionProp || null);
+  const [currentUser, setCurrentUser] = useState(sessionProp?.user || null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Tenant State (public.tenant_memberships)
+  const [tenantId, setTenantId] = useState(null);
+  const [tenantMembership, setTenantMembership] = useState(null);
+  const [tenantRole, setTenantRole] = useState(null);
+
+  // Operating Company State (public.tenant_companies - OUR OWN OPERATING COMPANIES)
+  const [operatingCompanies, setOperatingCompanies] = useState([]);
+  const [activeOperatingCompanyId, setActiveOperatingCompanyIdState] = useState(null);
+
+  // Derived Active Operating Company object
+  const activeOperatingCompany = operatingCompanies.find(c => c.id === activeOperatingCompanyId) || null;
+
+  const setActiveOperatingCompanyId = (newId) => {
+    if (newId === null || operatingCompanies.some(c => c.id === newId)) {
+      setActiveOperatingCompanyIdState(newId);
+      if (newId) {
+        localStorage.setItem('crm_active_operating_company_id', newId);
+      } else {
+        localStorage.setItem('crm_active_operating_company_id', 'ALL');
+      }
+    } else {
+      console.warn(`[OperatingCompanyContext]: Refused selection of unauthorized operating company ID: ${newId}`);
+    }
+  };
+
+  const [userRole, setUserRole] = useState('guest');
+
+  // AI State
+  const [aiSummary, setAiSummary] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  const [aiChatMessages, setAiChatMessages] = useState([
+    {
+      id: 'welcome',
+      sender: 'ai',
+      text: 'Hello! I am your RAJIV CRM Google AI Assistant. Ask me anything about your clients, active projects, pipeline status, open snags, tasks, or missing data.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const [isAiChatSending, setIsAiChatSending] = useState(false);
+
+  // Hierarchy State (public.companies = CLIENT / CUSTOMER ORGANIZATIONS)
+  const [companies, setCompanies] = useState([]);
+  const [activeCompanyId, setActiveCompanyId] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [activeUnitId, setActiveUnitId] = useState(null);
+  const [works, setWorks] = useState([]);
+  const [activeWorkId, setActiveWorkId] = useState(null);
+
+  // View States
+  const [centerView, setCenterView] = useState('pipeline');
+  const [rightView, setRightView] = useState('tasks');
+
+  // Custom Modals State
+  const [promptModal, setPromptModal] = useState({ isOpen: false, title: '', placeholder: '', defaultValue: '', resolvePromise: null });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', resolvePromise: null });
+
+  // Modals & Forms State
+  const [isWorkModalOpen, setIsWorkModalOpen] = useState(false);
+  const [editingWorkId, setEditingWorkId] = useState(null);
+  const [workForm, setWorkForm] = useState({ title: '', po_number: '', wo_number: '', boq_url: '', po_file_url: '', wo_file_url: '' });
+  const [boqFile, setBoqFile] = useState(null);
+  const [poFile, setPoFile] = useState(null);
+  const [woFile, setWoFile] = useState(null);
+  const [isWorkUploading, setIsWorkUploading] = useState(false);
+  
+  const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
+  const [editedStages, setEditedStages] = useState([]);
+  const [activeStageIndex, setActiveStageIndex] = useState(0);
+
+  // Issues State
+  const [issues, setIssues] = useState([]);
+  const [activeIssueId, setActiveIssueId] = useState(null);
+  const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
+  const [issueTitleInput, setIssueTitleInput] = useState('');
+
+  // Logs State
+  const [logs, setLogs] = useState([]);
+  const [logInput, setLogInput] = useState('');
+  const [editingLogId, setEditingLogId] = useState(null);
+  const [editLogContent, setEditLogContent] = useState('');
+  const [historyLog, setHistoryLog] = useState(null);
+  const [isBinModalOpen, setIsBinModalOpen] = useState(false);
+  const [attachment, setAttachment] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Reminders & Missing Data State
+  const [reminders, setReminders] = useState([]);
+  const [missingData, setMissingData] = useState([]);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminderForm, setReminderForm] = useState({ 
+    content: '', target_date: '', company_id: '', unit_id: '', work_id: '', log_id: '', stage_name: '' 
+  });
+  const [modalUnits, setModalUnits] = useState([]);
+  const [modalWorks, setModalWorks] = useState([]);
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+
+  // Project Assignments State (public.project_assignments)
+  const [projectAssignments, setProjectAssignments] = useState([]);
+  const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
+  const [isProjectTeamModalOpen, setIsProjectTeamModalOpen] = useState(false);
+
+  // Stage Definitions / Stage Assignments (Phase 1C)
+  // stage_definitions is the normalized source of truth; works.stages remains legacy compatibility data.
+  const [stageDefinitions, setStageDefinitions] = useState([]);
+  const [isStageDefinitionsLoading, setIsStageDefinitionsLoading] = useState(false);
+  const [stageAssignments, setStageAssignments] = useState([]);
+  const [isStageAssignmentsLoading, setIsStageAssignmentsLoading] = useState(false);
+  const [isStageAssignmentModalOpen, setIsStageAssignmentModalOpen] = useState(false);
+  const [stageAssignmentTargetId, setStageAssignmentTargetId] = useState(null);
+
+  // Tenant Members State (public.tenant_memberships where tenant_id = activeTenant and status = 'active')
+  const [tenantMembers, setTenantMembers] = useState([]);
+  const [isFetchingTenantMembers, setIsFetchingTenantMembers] = useState(false);
+
+  // Navigation State
+  const [pendingNav, setPendingNav] = useState(null);
+
+  // --- Auth & Tenant Context Resolution (Steps 1, 2, 3, 4, 6, 8) ---
+  const loadAuthAndTenantContext = async (currentSession) => {
+    if (!currentSession?.user) {
+      setSession(null);
+      setCurrentUser(null);
+      setTenantId(null);
+      setTenantMembership(null);
+      setTenantRole(null);
+      setOperatingCompanies([]);
+      setActiveOperatingCompanyIdState(null);
+      setUserRole('guest');
+      setAuthLoading(false);
+      return;
+    }
+
+    setSession(currentSession);
+    setCurrentUser(currentSession.user);
+    setAuthLoading(true);
+
+    try {
+      // Step 2: Load Active Tenant Membership from public.tenant_memberships
+      const { data: membershipData, error: membershipError } = await supabase
+        .from('tenant_memberships')
+        .select('*')
+        .eq('user_id', currentSession.user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (membershipError) {
+        console.error('[Supabase Query Error - tenant_memberships]:', membershipError);
+      }
+
+      let resolvedTenantId = null;
+      let resolvedTenantRole = null;
+      let resolvedMembership = null;
+      let resolvedOpCoId = null;
+
+      if (membershipData) {
+        resolvedTenantId = membershipData.tenant_id;
+        resolvedTenantRole = membershipData.role;
+        resolvedMembership = membershipData;
+      }
+
+      setTenantId(resolvedTenantId);
+      setTenantRole(resolvedTenantRole);
+      setTenantMembership(resolvedMembership);
+
+      // Load profile for fallback role mapping
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentSession.user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('[Supabase Query Error - profiles]:', profileError);
+      }
+
+      // Step 9: Map role compatibility for UI
+      const mappedRole = normalizeRole(resolvedTenantRole, profileData?.role);
+      setUserRole(mappedRole);
+
+      // Step 3: Load Authorized Operating Companies from public.tenant_companies
+      if (resolvedTenantId) {
+        const { data: opCompData, error: opCompError } = await supabase
+          .from('tenant_companies')
+          .select('*')
+          .eq('tenant_id', resolvedTenantId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: true });
+
+        if (opCompError) {
+          console.error('[Supabase Query Error - tenant_companies]:', opCompError);
+          setOperatingCompanies([]);
+          setActiveOperatingCompanyIdState(null);
+        } else if (opCompData) {
+          setOperatingCompanies(opCompData);
+
+          // Step 4: Resolve Active Operating Company (supports specific UUID and ALL COMPANIES)
+          const savedOpCompId = localStorage.getItem('crm_active_operating_company_id');
+          const isSavedAuthorized = opCompData.some(c => c.id === savedOpCompId);
+
+          if (savedOpCompId === 'ALL') {
+            resolvedOpCoId = null;
+          } else if (savedOpCompId && isSavedAuthorized) {
+            resolvedOpCoId = savedOpCompId;
+          } else {
+            // Default to ALL COMPANIES (null) for global context
+            resolvedOpCoId = null;
+            localStorage.setItem('crm_active_operating_company_id', 'ALL');
+          }
+          setActiveOperatingCompanyIdState(resolvedOpCoId);
+        }
+      } else {
+        setOperatingCompanies([]);
+        setActiveOperatingCompanyIdState(null);
+      }
+
+      // Step 6 & 8: Perform authenticated data fetching only after session & auth context are ready
+      await Promise.all([
+        fetchCompanies(resolvedOpCoId),
+        fetchReminders(resolvedOpCoId),
+        fetchMissingData(resolvedOpCoId),
+        fetchProfiles(),
+        fetchTenantMembers(resolvedTenantId)
+      ]);
+    } catch (err) {
+      console.error('[AuthContext Initialization Error]:', err);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      loadAuthAndTenantContext(initialSession);
+    }).catch(err => {
+      console.error('[Auth Initialization Error]:', err);
+      setAuthLoading(false);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      loadAuthAndTenantContext(newSession);
+    });
+
+    return () => authListener?.subscription?.unsubscribe();
+  }, []);
+
+  // --- Operating Company Context Change Effect (Step 5) ---
+  const isFirstOpCoMount = useRef(true);
+  useEffect(() => {
+    if (isFirstOpCoMount.current) {
+      isFirstOpCoMount.current = false;
+      return;
+    }
+    if (!authLoading && session?.user) {
+      setProjectAssignments([]);
+      setStageDefinitions([]);
+      setStageAssignments([]);
+      setStageAssignmentTargetId(null);
+      fetchCompanies(activeOperatingCompanyId);
+      fetchReminders(activeOperatingCompanyId);
+      fetchMissingData(activeOperatingCompanyId);
+    }
+  }, [activeOperatingCompanyId]);
+
+  // Sticky Log Inputs Fix: Clear input & attachment when switching company, unit, project, stage, or issue
+  useEffect(() => {
+    setLogInput('');
+    setAttachment(null);
+  }, [activeCompanyId, activeUnitId, activeWorkId, activeStageIndex, activeIssueId, centerView]);
+
+  // Sidebar State (Exported for Mobile & Desktop Navigation)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Admin Panel State
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [isFetchingProfiles, setIsFetchingProfiles] = useState(false);
+
+  // Move Log Stage State
+  const [moveLogModal, setMoveLogModal] = useState({ isOpen: false, log: null });
+
+  // Edit / Reschedule Reminder State
+  const [editReminderModal, setEditReminderModal] = useState({ isOpen: false, reminder: null });
+  const [editReminderForm, setEditReminderForm] = useState({ content: '', target_date: '' });
+  // Font Size Scaling State ('80' | '90' | '100' | '110' | '120' | '130')
+  const FONT_SCALES = ['80', '90', '100', '110', '120', '130'];
+  const [fontSize, setFontSizeState] = useState(() => {
+    const saved = localStorage.getItem('crm_font_size');
+    if (saved === 'sm') return '90';
+    if (saved === 'md') return '100';
+    if (saved === 'lg') return '110';
+    if (saved === 'xl') return '120';
+    if (saved === '2xl') return '130';
+    return saved || '100';
+  });
+
+  const applyFontSizeClass = (size) => {
+    ['80', '90', '100', '110', '120', '130', 'xs', 'sm', 'md', 'lg', 'xl', '2xl'].forEach(s => {
+      document.documentElement.classList.remove(`font-scale-${s}`);
+      if (document.body) document.body.classList.remove(`font-scale-${s}`);
+    });
+    document.documentElement.classList.add(`font-scale-${size}`);
+    if (document.body) document.body.classList.add(`font-scale-${size}`);
+  };
+
+  const setFontSize = (size) => {
+    setFontSizeState(size);
+    localStorage.setItem('crm_font_size', size);
+    applyFontSizeClass(size);
+  };
+
+  const increaseFontSize = () => {
+    const currentIndex = FONT_SCALES.indexOf(fontSize);
+    if (currentIndex < FONT_SCALES.length - 1 && currentIndex >= 0) {
+      setFontSize(FONT_SCALES[currentIndex + 1]);
+    } else if (currentIndex < 0) {
+      setFontSize('110');
+    }
+  };
+
+  const decreaseFontSize = () => {
+    const currentIndex = FONT_SCALES.indexOf(fontSize);
+    if (currentIndex > 0) {
+      setFontSize(FONT_SCALES[currentIndex - 1]);
+    } else if (currentIndex < 0) {
+      setFontSize('90');
+    }
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('crm_font_size') || '100';
+    applyFontSizeClass(saved);
+  }, []);
+
+  // Document Instant Preview Modal State
+  const [docPreviewModal, setDocPreviewModal] = useState({
+    isOpen: false,
+    title: '',
+    url: ''
+  });
+
+  const openDocPreview = (url, title = 'Document Preview') => {
+    if (!url) return;
+    setDocPreviewModal({ isOpen: true, title, url });
+  };
+
+  const closeDocPreview = () => {
+    setDocPreviewModal({ isOpen: false, title: '', url: '' });
+  };
+
+  // --- Centralized Topmost Modal Close & Mobile Back Button / Esc Key Handlers ---
+  function closeTopmostModal() {
+    if (docPreviewModal?.isOpen) { closeDocPreview(); return true; }
+    if (confirmModal?.isOpen) { closeConfirm(false); return true; }
+    if (promptModal?.isOpen) { closePrompt(null); return true; }
+    if (isProjectTeamModalOpen) { setIsProjectTeamModalOpen(false); return true; }
+    if (isStageAssignmentModalOpen) { closeStageAssignmentModal(); return true; }
+    if (editReminderModal?.isOpen) { setEditReminderModal({ isOpen: false, reminder: null }); return true; }
+    if (moveLogModal?.isOpen) { setMoveLogModal({ isOpen: false, log: null }); return true; }
+    if (historyLog) { setHistoryLog(null); return true; }
+    if (isAiChatOpen) { setIsAiChatOpen(false); return true; }
+    if (isAdminPanelOpen) { setIsAdminPanelOpen(false); return true; }
+    if (isBinModalOpen) { setIsBinModalOpen(false); return true; }
+    if (isStageManagerOpen) { setIsStageManagerOpen(false); return true; }
+    if (isWorkModalOpen) { setIsWorkModalOpen(false); return true; }
+    if (isReminderModalOpen) { setIsReminderModalOpen(false); return true; }
+    if (isIssueModalOpen) { setIsIssueModalOpen(false); return true; }
+    if (isSidebarOpen) { setIsSidebarOpen(false); return true; }
+    return false;
+  }
+
+  // 1. Escape Key Listener (for PC keyboard)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        const closed = closeTopmostModal();
+        if (closed) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    docPreviewModal, confirmModal, promptModal, isProjectTeamModalOpen, isStageAssignmentModalOpen, editReminderModal, moveLogModal, historyLog,
+    isAiChatOpen, isAdminPanelOpen, isBinModalOpen, isStageManagerOpen,
+    isWorkModalOpen, isReminderModalOpen, isIssueModalOpen, isSidebarOpen
+  ]);
+
+  // Toast Notifications & Mobile Hardware Back Button Handling
+  const [toastMessage, setToastMessage] = useState(null);
+  const [lastBackPress, setLastBackPress] = useState(0);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => (prev === msg ? null : prev));
+    }, 2500);
+  };
+
+  const refreshAllData = async () => {
+    try {
+      await Promise.all([
+        fetchCompanies(),
+        fetchReminders(),
+        fetchMissingData()
+      ]);
+      if (activeCompanyId) {
+        const { data: unitData } = await supabase.from('units').select('*').eq('company_id', activeCompanyId).order('created_at', { ascending: true });
+        if (unitData) setUnits(unitData);
+      }
+      if (activeUnitId) {
+        const { data: workData } = await supabase.from('works').select('*').eq('unit_id', activeUnitId).order('created_at', { ascending: true });
+        if (workData) setWorks(workData);
+      }
+      showToast('Workspace data refreshed!');
+    } catch (e) {
+      console.error("Refresh error:", e);
+    }
+  };
+
+  // 2. Mobile Hardware / Browser Back Button Listener (History API & popstate)
+  const hasAnyModalOpen = Boolean(
+    docPreviewModal?.isOpen || confirmModal?.isOpen || promptModal?.isOpen || isStageAssignmentModalOpen || editReminderModal?.isOpen ||
+    moveLogModal?.isOpen || historyLog || isAiChatOpen || isAdminPanelOpen ||
+    isBinModalOpen || isStageManagerOpen || isWorkModalOpen || isReminderModalOpen ||
+    isIssueModalOpen || isSidebarOpen
+  );
+
+  useEffect(() => {
+    // Push dummy history entry on mount so hardware back button can be intercepted
+    window.history.pushState({ crmRoot: true }, '');
+  }, []);
+
+  useEffect(() => {
+    if (hasAnyModalOpen) {
+      window.history.pushState({ crmModalActive: true }, '');
+    }
+  }, [hasAnyModalOpen]);
+
+  useEffect(() => {
+    const handlePopState = (e) => {
+      const closed = closeTopmostModal();
+      if (closed) {
+        return;
+      }
+
+      // No modal is open: handle double back button press to exit app
+      const now = Date.now();
+      if (now - lastBackPress < 2000) {
+        // Second press within 2s -> Allow browser/PWA to go back / exit
+        window.history.back();
+      } else {
+        // First press -> Intercept and warn user
+        setLastBackPress(now);
+        showToast('Press back again to exit CRM app');
+        window.history.pushState({ crmRoot: true }, '');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [
+    hasAnyModalOpen, lastBackPress,
+    docPreviewModal, confirmModal, promptModal, editReminderModal, moveLogModal, historyLog,
+    isAiChatOpen, isAdminPanelOpen, isBinModalOpen, isStageManagerOpen,
+    isWorkModalOpen, isReminderModalOpen, isIssueModalOpen, isSidebarOpen
+  ]);
+
+  // --- Navigation Effects ---
+  useEffect(() => {
+    if (activeCompanyId) {
+      supabase.from('units').select('*').eq('company_id', activeCompanyId).order('created_at', { ascending: true }).then(({ data }) => {
+        if (data) {
+          setUnits(data);
+          setActiveUnitId(prev => (data.some(u => u.id === prev) ? prev : (data.length > 0 ? data[0].id : null)));
+        }
+      });
+    } else { 
+      setUnits([]); 
+      setActiveUnitId(null); 
+    }
+  }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (activeUnitId) {
+      supabase.from('works').select('*').eq('unit_id', activeUnitId).order('created_at', { ascending: true }).then(({ data }) => {
+        if (data) {
+          setWorks(data);
+          setActiveWorkId(prev => (data.some(w => w.id === prev) ? prev : (data.length > 0 ? data[0].id : null)));
+        }
+      });
+    } else { 
+      setWorks([]); 
+      setActiveWorkId(null); 
+    }
+  }, [activeUnitId]);
+
+  // --- PIPELINE STAGE NAVIGATION ---
+  // stage_definitions is the normalized source of truth. Legacy works.stages is used
+  // only as a compatibility fallback while the normalized rows are loading.
+  const activeStageDefinitions = stageDefinitions
+    .filter(s => s.status === 'active')
+    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+  useEffect(() => {
+    if (!activeWorkId) {
+      setStageDefinitions([]);
+      setStageAssignments([]);
+      setStageAssignmentTargetId(null);
+      return;
+    }
+    fetchStageDefinitions(activeWorkId);
+    fetchStageAssignments(activeWorkId);
+  }, [activeWorkId]);
+
+  // Reset pipeline stage to 0 when switching projects unless a navigation request
+  // explicitly targets a stage.
+  useEffect(() => {
+    if (pendingNav && pendingNav.workId === activeWorkId) return;
+    setActiveStageIndex(0);
+    setStageAssignmentTargetId(null);
+    setCenterView('pipeline');
+  }, [activeWorkId]);
+
+  // Execute navigation to a stage by normalized stage name first, then legacy data.
+  useEffect(() => {
+    if (!pendingNav || pendingNav.workId !== activeWorkId) return;
+
+    const targetName = pendingNav.stageName;
+    const normalizedIndex = activeStageDefinitions.findIndex(
+      s => s.name === targetName
+    );
+
+    if (normalizedIndex >= 0) {
+      setActiveStageIndex(normalizedIndex);
+    } else {
+      const legacyStages = works.find(w => w.id === pendingNav.workId)?.stages || [];
+      const legacyIndex = legacyStages.indexOf(targetName);
+      setActiveStageIndex(legacyIndex >= 0 ? legacyIndex : 0);
+    }
+
+    setPendingNav(null);
+  }, [activeWorkId, stageDefinitions, works, pendingNav]);
+
+  useEffect(() => {
+    if (!activeWorkId) {
+      setLogs([]);
+      setIssues([]);
+      setProjectAssignments([]);
+      setStageAssignments([]);
+      return;
+    }
+
+    fetchIssues(activeWorkId);
+    fetchProjectAssignments(activeWorkId);
+
+    if (centerView === 'pipeline') {
+      const stageName =
+        activeStageDefinitions[activeStageIndex]?.name ||
+        works.find(w => w.id === activeWorkId)?.stages?.[activeStageIndex];
+
+      if (stageName) {
+        fetchLogs(activeWorkId, stageName, null);
+      } else {
+        setLogs([]);
+      }
+    } else if (centerView === 'issues') {
+      if (activeIssueId) {
+        fetchLogs(activeWorkId, 'Issue', activeIssueId);
+      } else {
+        setLogs([]);
+      }
+    }
+  }, [activeWorkId, activeStageIndex, centerView, activeIssueId, works, stageDefinitions]);
+
+  // --- Database Fetches ---
+  async function fetchCompanies(targetOpCoId) { 
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    let query = supabase.from('companies').select('*').order('created_at', { ascending: true });
+    if (opCoId) {
+      query = query.eq('tenant_company_id', opCoId);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Supabase Query Error - companies (client)]:', error);
+      return;
+    }
+    if (data) { 
+      setCompanies(data); 
+      setActiveCompanyId(prev => {
+        if (prev && data.some(c => c.id === prev)) {
+          return prev;
+        }
+        return data.length > 0 ? data[0].id : null;
+      });
+    } 
+  }
+
+  async function fetchProfiles() {
+    setIsFetchingProfiles(true);
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    if (error) {
+      console.error('[Supabase Query Error - profiles]:', error);
+    } else if (data) {
+      setProfiles(data);
+    }
+    setIsFetchingProfiles(false);
+  }
+
+  async function fetchTenantMembers(targetTenantId) {
+    const tId = targetTenantId || tenantId;
+    if (!tId) {
+      setTenantMembers([]);
+      return;
+    }
+    setIsFetchingTenantMembers(true);
+    try {
+      const { data, error } = await supabase
+        .from('tenant_memberships')
+        .select('*')
+        .eq('tenant_id', tId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[Supabase Query Error - tenant_memberships]:', error);
+        setTenantMembers([]);
+      } else if (data) {
+        setTenantMembers(data);
+      }
+    } catch (err) {
+      console.error('[Fetch Tenant Members Error]:', err);
+      setTenantMembers([]);
+    } finally {
+      setIsFetchingTenantMembers(false);
+    }
+  }
+
+  async function handleUpdateUserRole(userId, newRole) {
+    const { data, error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId).select();
+    if (error) {
+      alert("Failed to update role: " + error.message);
+      return;
+    }
+    if (data) {
+      setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole } : p));
+      const currentSession = await supabase.auth.getSession();
+      if (currentSession?.data?.session?.user?.id === userId) {
+        setUserRole(newRole);
+      }
+    }
+  }
+
+  async function handleApproveUser(userId, role = 'member') {
+    await handleUpdateUserRole(userId, role);
+  }
+
+  async function handleTerminateUser(userId) {
+    const confirmed = await showConfirm("Are you sure you want to terminate access for this user?");
+    if (!confirmed) return;
+    await handleUpdateUserRole(userId, 'terminated');
+  }
+
+  async function handleAdminCreateUser(newEmail, newRole = 'Team') {
+    if (!newEmail || !newEmail.trim()) {
+      alert("Please enter a valid email address.");
+      return false;
+    }
+    const cleanEmail = newEmail.trim().toLowerCase();
+    
+    // Create user in Supabase auth with default password crm12345
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: 'crm12345'
+    });
+
+    if (authError) {
+      alert("Error creating user account: " + authError.message);
+      return false;
+    }
+
+    const newUserId = authData?.user?.id;
+    if (newUserId) {
+      const { error: profileError } = await supabase.from('profiles').upsert([
+        { id: newUserId, email: cleanEmail, role: newRole || 'Team' }
+      ]);
+      if (profileError) {
+        console.warn("Profile creation warning:", profileError.message);
+      }
+    }
+
+    await fetchProfiles();
+    alert(`Success! Created user account for "${cleanEmail}" with default password: crm12345`);
+    return true;
+  }
+
+  async function fetchLogs(workId, stageName, issueId) { 
+    let query = supabase.from('logs').select('*').eq('work_id', workId).order('created_at', { ascending: false });
+    if (issueId) {
+      query = query.eq('issue_id', issueId);
+    } else {
+      query = query.eq('stage_name', stageName).is('issue_id', null);
+    }
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Supabase Query Error - logs]:', error);
+      return;
+    }
+    if (data) setLogs(data);
+  }
+
+  async function fetchIssues(workId) { 
+    const { data, error } = await supabase.from('issues').select('*').eq('work_id', workId).order('created_at', { ascending: false });
+    if (error) {
+      console.error('[Supabase Query Error - issues]:', error);
+      return;
+    }
+    if (data) { 
+      setIssues(data); 
+      if (data.length > 0 && !activeIssueId) setActiveIssueId(data[0].id);
+    } 
+  }
+
+  // --- Stage Definitions Handlers (Step 7D application integration) ---
+
+  async function fetchStageDefinitions(workId) {
+    if (!workId) {
+      setStageDefinitions([]);
+      return [];
+    }
+
+    setIsStageDefinitionsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('stage_definitions')
+        .select('*')
+        .eq('work_id', workId)
+        .order('display_order', { ascending: true });
+
+      if (error) {
+        console.error('[Supabase Query Error - stage_definitions]:', error);
+        setStageDefinitions([]);
+        return [];
+      }
+
+      const rows = data || [];
+      setStageDefinitions(rows);
+      return rows;
+    } catch (err) {
+      console.error('[Fetch Stage Definitions Error]:', err);
+      setStageDefinitions([]);
+      return [];
+    } finally {
+      setIsStageDefinitionsLoading(false);
+    }
+  }
+
+  async function openStageManager() {
+    if (!activeWorkId) return;
+    const rows = await fetchStageDefinitions(activeWorkId);
+    setEditedStages(
+      (rows || [])
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        .map(stage => ({ ...stage, _isNew: false }))
+    );
+    setIsStageManagerOpen(true);
+  }
+
+  function updateStageName(index, newName) {
+    setEditedStages(prev => prev.map((stage, i) =>
+      i === index ? { ...stage, name: newName } : stage
+    ));
+  }
+
+  function updateStageDescription(index, description) {
+    setEditedStages(prev => prev.map((stage, i) =>
+      i === index ? { ...stage, description } : stage
+    ));
+  }
+
+  function moveStage(index, direction) {
+    setEditedStages(prev => {
+      const next = [...prev];
+      if (direction === 'up' && index > 0) {
+        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      } else if (direction === 'down' && index < next.length - 1) {
+        [next[index + 1], next[index]] = [next[index], next[index + 1]];
+      }
+      return next.map((stage, i) => ({ ...stage, display_order: i + 1 }));
+    });
+  }
+
+  function removeStage(index) {
+    setEditedStages(prev => prev.map((stage, i) =>
+      i === index ? { ...stage, status: 'inactive' } : stage
+    ));
+  }
+
+  function addNewStage() {
+    setEditedStages(prev => [
+      ...prev,
+      {
+        id: null,
+        tenant_id: tenantId,
+        tenant_company_id: activeOperatingCompanyId,
+        work_id: activeWorkId,
+        name: 'New Stage',
+        description: '',
+        display_order: prev.length + 1,
+        status: 'active',
+        created_by: currentUser?.id || null,
+        _isNew: true
+      }
+    ]);
+  }
+
+  function restoreStage(index) {
+    setEditedStages(prev => prev.map((stage, i) =>
+      i === index ? { ...stage, status: 'active' } : stage
+    ));
+  }
+
+  async function saveStages() {
+    if (!activeWorkId || !tenantId) return;
+
+    const activeDrafts = editedStages
+      .filter(s => s.status === 'active' && s.name?.trim())
+      .map((s, i) => ({ ...s, name: s.name.trim(), display_order: i + 1 }));
+
+    const removedExisting = editedStages.filter(s => s.id && s.status === 'inactive');
+
+    // Normalize duplicate/blank names before touching the database.
+    const seenNames = new Set();
+    for (const stage of activeDrafts) {
+      const key = stage.name.toLowerCase();
+      if (!key || seenNames.has(key)) {
+        alert(`Duplicate stage name: "${stage.name}". Stage names must be unique within this project.`);
+        return;
+      }
+      seenNames.add(key);
+    }
+
+    try {
+      // The active display_order index is unique. Move existing active rows out of
+      // the way first so reordering cannot collide with another active row.
+      const existingActive = stageDefinitions.filter(s => s.status === 'active');
+      if (existingActive.length > 0) {
+        const offset = 10000;
+        for (let i = 0; i < existingActive.length; i++) {
+          const { error } = await supabase
+            .from('stage_definitions')
+            .update({ display_order: offset + i + 1 })
+            .eq('id', existingActive[i].id);
+          if (error) throw error;
+        }
+      }
+
+      // Update/create active rows.
+      for (const stage of activeDrafts) {
+        if (stage.id) {
+          const { error } = await supabase
+            .from('stage_definitions')
+            .update({
+              name: stage.name,
+              description: stage.description || null,
+              display_order: stage.display_order,
+              status: 'active'
+            })
+            .eq('id', stage.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('stage_definitions')
+            .insert([{
+              tenant_id: tenantId,
+              tenant_company_id: stage.tenant_company_id || activeOperatingCompanyId,
+              work_id: activeWorkId,
+              name: stage.name,
+              description: stage.description || null,
+              display_order: stage.display_order,
+              status: 'active',
+              created_by: currentUser?.id || null
+            }]);
+          if (error) throw error;
+        }
+      }
+
+      // Removed stages are intentionally deactivated, never deleted.
+      for (const stage of removedExisting) {
+        const { error } = await supabase
+          .from('stage_definitions')
+          .update({
+            status: 'inactive',
+            display_order: stage.display_order
+          })
+          .eq('id', stage.id);
+        if (error) throw error;
+      }
+
+      const refreshed = await fetchStageDefinitions(activeWorkId);
+
+      // Keep legacy works.stages synchronized when permitted. If the legacy
+      // compatibility column is unavailable/protected, normalized stage data
+      // remains authoritative and the failure is non-blocking.
+      const legacyStages = refreshed
+        .filter(s => s.status === 'active')
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(s => s.name);
+
+      const legacyResult = await supabase
+        .from('works')
+        .update({ stages: legacyStages })
+        .eq('id', activeWorkId);
+
+      if (!legacyResult.error) {
+        setWorks(prev => prev.map(w =>
+          w.id === activeWorkId ? { ...w, stages: legacyStages } : w
+        ));
+      } else {
+        console.warn('[Legacy works.stages sync skipped]:', legacyResult.error.message);
+      }
+
+      const newActiveIndex = Math.min(
+        activeStageIndex,
+        Math.max(0, legacyStages.length - 1)
+      );
+      setActiveStageIndex(newActiveIndex);
+      setIsStageManagerOpen(false);
+      showToast('Pipeline stages saved successfully.');
+    } catch (err) {
+      console.error('[Save Stage Definitions Error]:', err);
+      alert(`Failed to save pipeline stages: ${err.message || err}`);
+      await fetchStageDefinitions(activeWorkId);
+    }
+  }
+
+  // --- Stage Assignments Handlers (Step 7E application integration) ---
+
+  async function fetchStageAssignments(workId, stageId = null) {
+    if (!workId) {
+      setStageAssignments([]);
+      return [];
+    }
+
+    setIsStageAssignmentsLoading(true);
+    try {
+      let query = supabase
+        .from('stage_assignments')
+        .select('*')
+        .eq('work_id', workId)
+        .order('created_at', { ascending: false });
+
+      if (stageId) query = query.eq('stage_id', stageId);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[Supabase Query Error - stage_assignments]:', error);
+        setStageAssignments([]);
+        return [];
+      }
+
+      setStageAssignments(data || []);
+      return data || [];
+    } catch (err) {
+      console.error('[Fetch Stage Assignments Error]:', err);
+      setStageAssignments([]);
+      return [];
+    } finally {
+      setIsStageAssignmentsLoading(false);
+    }
+  }
+
+  function openStageAssignmentModal(stageId) {
+    if (!stageId) return;
+    setStageAssignmentTargetId(stageId);
+    setIsStageAssignmentModalOpen(true);
+    fetchStageAssignments(activeWorkId);
+  }
+
+  function closeStageAssignmentModal() {
+    setIsStageAssignmentModalOpen(false);
+    setStageAssignmentTargetId(null);
+  }
+
+  async function assignUserToStage({ workId, stageId, userId, stageRole = 'responsible' }) {
+    const targetWorkId = workId || activeWorkId;
+    const targetStageId = stageId || stageAssignmentTargetId;
+
+    if (!targetWorkId || !targetStageId || !userId) {
+      const message = 'Project, stage, and user are required.';
+      alert(message);
+      return { success: false, message };
+    }
+
+    const activeProjectTeam = getActiveProjectAssignments(targetWorkId);
+    const isProjectTeamMember = activeProjectTeam.some(a => a.user_id === userId);
+
+    if (!isProjectTeamMember && !['OWNER', 'ADMIN'].includes((tenantRole || '').toUpperCase())) {
+      const message = 'Stage assignees must first be assigned to the project team.';
+      alert(message);
+      return { success: false, message };
+    }
+
+    const duplicate = stageAssignments.some(
+      a => a.work_id === targetWorkId &&
+           a.stage_id === targetStageId &&
+           a.user_id === userId &&
+           a.status === 'active'
+    );
+
+    if (duplicate) {
+      const message = 'User is already assigned to this stage.';
+      showToast(message);
+      return { success: false, message };
+    }
+
+    try {
+      const targetWork = works.find(w => w.id === targetWorkId);
+      const opCoId =
+        targetWork?.tenant_company_id ||
+        activeOperatingCompanyId ||
+        operatingCompanies[0]?.id;
+
+      const { data, error } = await supabase
+        .from('stage_assignments')
+        .insert([{
+          tenant_id: tenantId,
+          tenant_company_id: opCoId,
+          work_id: targetWorkId,
+          stage_id: targetStageId,
+          user_id: userId,
+          assigned_by: currentUser?.id,
+          stage_role: stageRole,
+          status: 'active'
+        }])
+        .select();
+
+      if (error) {
+        console.error('[Supabase Insert Error - stage_assignments]:', error);
+        const message = error.code === '23505'
+          ? 'User is already assigned to this stage.'
+          : (error.code === '42501' || error.message?.includes('row-level security')
+              ? 'Permission denied: only Managers or the authorized Project Lead can assign stage users.'
+              : error.message);
+        alert(`Failed to assign stage user: ${message}`);
+        return { success: false, error, message };
+      }
+
+      await fetchStageAssignments(targetWorkId);
+      showToast('User assigned to stage successfully.');
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.error('[Assign Stage User Error]:', err);
+      alert(`Failed to assign stage user: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  async function endStageAssignment(assignmentId) {
+    if (!assignmentId) return { success: false };
+
+    const confirmed = await showConfirm('End this stage assignment?');
+    if (!confirmed) return { success: false };
+
+    try {
+      const { data, error } = await supabase
+        .from('stage_assignments')
+        .update({
+          status: 'ended',
+          ended_at: new Date().toISOString()
+        })
+        .eq('id', assignmentId)
+        .select();
+
+      if (error) {
+        console.error('[Supabase Update Error - endStageAssignment]:', error);
+        const message = error.code === '42501' || error.message?.includes('row-level security')
+          ? 'Permission denied: only Managers or the authorized Project Lead can end stage assignments.'
+          : error.message;
+        alert(`Failed to end stage assignment: ${message}`);
+        return { success: false, error };
+      }
+
+      await fetchStageAssignments(activeWorkId);
+      showToast('Stage assignment ended.');
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.error('[End Stage Assignment Error]:', err);
+      alert(`Failed to end stage assignment: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  function getStageAssignments(workIdParam, stageIdParam) {
+    const targetWork = workIdParam || activeWorkId;
+    const targetStage = stageIdParam || stageAssignmentTargetId;
+    return (stageAssignments || []).filter(
+      a => a.work_id === targetWork &&
+           (!targetStage || a.stage_id === targetStage)
+    );
+  }
+
+  // --- Project Assignments Handlers (Step 7C) ---
+  async function fetchProjectAssignments(workId) {
+    if (!workId) {
+      setProjectAssignments([]);
+      return;
+    }
+    setIsAssignmentsLoading(true);
+    try {
+      if (!profiles || profiles.length === 0) {
+        await fetchProfiles();
+      }
+
+      const { data, error } = await supabase
+        .from('project_assignments')
+        .select('*')
+        .eq('work_id', workId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[Supabase Query Error - project_assignments]:', error);
+        setProjectAssignments([]);
+      } else if (data) {
+        setProjectAssignments(data);
+      }
+    } catch (err) {
+      console.error('[Fetch Project Assignments Error]:', err);
+      setProjectAssignments([]);
+    } finally {
+      setIsAssignmentsLoading(false);
+    }
+  }
+
+  async function assignUserToProject({ workId, userId, projectRole = 'member' }) {
+    const targetWorkId = workId || activeWorkId;
+    if (!targetWorkId) {
+      const msg = "No active project selected.";
+      alert(msg);
+      return { success: false, message: msg };
+    }
+    if (!userId) {
+      const msg = "Please select a user to assign.";
+      alert(msg);
+      return { success: false, message: msg };
+    }
+    if (!tenantId) {
+      const msg = "Tenant context not found. Please log in again.";
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    // Check if user is already actively assigned locally
+    const isAlreadyAssigned = (projectAssignments || []).some(
+      a => a.work_id === targetWorkId && a.user_id === userId && a.status === 'active'
+    );
+    if (isAlreadyAssigned) {
+      const msg = "User is already assigned to this project.";
+      showToast(msg);
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    const targetWork = (works || []).find(w => w.id === targetWorkId);
+    const targetOpCoId = targetWork?.tenant_company_id || activeOperatingCompanyId || (operatingCompanies || [])[0]?.id;
+
+    if (!targetOpCoId) {
+      const msg = "Operating company context missing.";
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      tenant_company_id: targetOpCoId,
+      work_id: targetWorkId,
+      user_id: userId,
+      assigned_by: currentUser?.id,
+      project_role: projectRole,
+      status: 'active'
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('project_assignments')
+        .insert([payload])
+        .select();
+
+      if (error) {
+        console.error('[Supabase Insert Error - project_assignments]:', error);
+        let errorMsg = error.message;
+        if (error.code === '23505' || error.message?.includes('uq_project_assignments_active_user_work')) {
+          errorMsg = "User is already assigned to this project.";
+        } else if (error.message?.includes('row-level security') || error.code === '42501') {
+          errorMsg = "Permission denied: Only Managers and Admins can assign users to projects.";
+        }
+        showToast(`Failed to assign user: ${errorMsg}`);
+        alert(`Failed to assign user: ${errorMsg}`);
+        return { success: false, error, message: errorMsg };
+      }
+
+      if (data && data.length > 0) {
+        showToast("User assigned to project successfully!");
+        await fetchProjectAssignments(targetWorkId);
+        return { success: true, data: data[0] };
+      }
+    } catch (err) {
+      console.error('[Assign User Error]:', err);
+      showToast(`Unexpected error: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+    return { success: false };
+  }
+
+  async function endProjectAssignment(assignmentId) {
+    if (!assignmentId) return { success: false };
+    const confirmed = await showConfirm("Are you sure you want to end this project assignment?");
+    if (!confirmed) return { success: false };
+
+    try {
+      const { data, error } = await supabase
+        .from('project_assignments')
+        .update({
+          status: 'ended',
+          ended_at: new Date().toISOString()
+        })
+        .eq('id', assignmentId)
+        .select();
+
+      if (error) {
+        console.error('[Supabase Update Error - endProjectAssignment]:', error);
+        let errorMsg = error.message;
+        if (error.message?.includes('row-level security') || error.code === '42501') {
+          errorMsg = "Permission denied: Only Managers and Admins can end project assignments.";
+        }
+        showToast(`Failed to end assignment: ${errorMsg}`);
+        alert(`Failed to end assignment: ${errorMsg}`);
+        return { success: false, error };
+      }
+
+      if (data && data.length > 0) {
+        showToast("Project assignment ended.");
+        await fetchProjectAssignments(activeWorkId);
+        return { success: true, data: data[0] };
+      }
+    } catch (err) {
+      console.error('[End Assignment Error]:', err);
+      showToast(`Unexpected error: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+    return { success: false };
+  }
+
+  function getActiveProjectAssignments(workIdParam) {
+    const targetId = workIdParam || activeWorkId;
+    return (projectAssignments || []).filter(a => a.status === 'active' && (!targetId || a.work_id === targetId));
+  }
+
+  async function fetchReminders(targetOpCoId) { 
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    let query = supabase
+      .from('reminders')
+      .select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`)
+      .order('created_at', { ascending: false });
+
+    if (opCoId) {
+      query = query.eq('tenant_company_id', opCoId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Supabase Query Error - reminders]:', error);
+      return;
+    }
+    if (data) setReminders(data);
+  }
+
+  async function fetchMissingData(targetOpCoId) { 
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    let query = supabase
+      .from('works')
+      .select('id, title, company_id, unit_id, po_number, wo_number, boq_url')
+      .or('po_number.eq."",po_number.is.null,wo_number.eq."",wo_number.is.null,boq_url.eq."",boq_url.is.null');
+
+    if (opCoId) {
+      query = query.eq('tenant_company_id', opCoId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Supabase Query Error - missingData]:', error);
+      return;
+    }
+    if (data) setMissingData(data);
+  }
+
+  function navigateToContext(companyId, unitId, workId, issueId = null, stageName = null) {
+    if (companyId) setActiveCompanyId(companyId);
+    if (unitId) setActiveUnitId(unitId);
+    if (workId) setActiveWorkId(workId);
+    
+    if (issueId) { 
+      setCenterView('issues'); 
+      setActiveIssueId(issueId);
+    } else { 
+      setCenterView('pipeline');
+      if (stageName) {
+        setPendingNav({ workId, stageName });
+        // Immediate jump if work is already active and loaded
+        const targetWork = works.find(w => w.id === workId);
+        if (targetWork && targetWork.stages) {
+          const idx = targetWork.stages.indexOf(stageName);
+          if (idx !== -1) {
+            setActiveStageIndex(idx);
+          }
+        }
+      }
+    }
+  }
+
+  // --- Custom Modals Helpers ---
+  const showPrompt = (title, placeholder = '', defaultValue = '') => {
+    return new Promise((resolve) => setPromptModal({ isOpen: true, title, placeholder, defaultValue, resolvePromise: resolve }));
+  };
+
+  const closePrompt = (value) => {
+    if (promptModal.resolvePromise) promptModal.resolvePromise(value);
+    setPromptModal({ isOpen: false, title: '', placeholder: '', defaultValue: '', resolvePromise: null });
+  };
+
+  const showConfirm = (message) => {
+    return new Promise((resolve) => setConfirmModal({ isOpen: true, message, resolvePromise: resolve }));
+  };
+
+  const closeConfirm = (value) => {
+    if (confirmModal.resolvePromise) confirmModal.resolvePromise(value);
+    setConfirmModal({ isOpen: false, message: '', resolvePromise: null });
+  };
+
+  // --- Reminders Handlers ---
+  function openGlobalReminderModal() { 
+    setReminderForm({ content: '', target_date: '', company_id: '', unit_id: '', work_id: '', log_id: '', stage_name: '' }); 
+    setModalUnits([]); 
+    setModalWorks([]); 
+    setIsReminderModalOpen(true); 
+  }
+
+  function openReminderForLog(log) {
+    setReminderForm({ 
+      content: `Follow up on: "${(log.content || '').substring(0, 40)}..."`, 
+      target_date: '', 
+      company_id: activeCompanyId || '', 
+      unit_id: activeUnitId || '', 
+      work_id: activeWorkId || '',
+      log_id: log.id, 
+      stage_name: log.stage_name || ''
+    });
+    supabase.from('units').select('*').eq('company_id', activeCompanyId).then(({data}) => setModalUnits(data||[]));
+    supabase.from('works').select('*').eq('unit_id', activeUnitId).then(({data}) => setModalWorks(data||[]));
+    setIsReminderModalOpen(true);
+  }
+
+  async function handleModalCompanyChange(compId) { 
+    setReminderForm({ ...reminderForm, company_id: compId, unit_id: '', work_id: '' }); 
+    const { data } = await supabase.from('units').select('*').eq('company_id', compId); 
+    setModalUnits(data || []); 
+    setModalWorks([]); 
+  }
+
+  async function handleModalUnitChange(uId) { 
+    setReminderForm({ ...reminderForm, unit_id: uId, work_id: '' }); 
+    const { data } = await supabase.from('works').select('*').eq('unit_id', uId); 
+    setModalWorks(data || []); 
+  }
+
+  async function submitReminder(e) {
+    e.preventDefault(); 
+    if (!reminderForm.content.trim()) return;
+    
+    const payload = { 
+      content: reminderForm.content, 
+      target_date: reminderForm.target_date || null, 
+      company_id: reminderForm.company_id || null, 
+      unit_id: reminderForm.unit_id || null, 
+      work_id: reminderForm.work_id || null, 
+      log_id: reminderForm.log_id || null, 
+      stage_name: reminderForm.stage_name || null 
+    };
+    
+    const { data } = await supabase.from('reminders').insert([payload]).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+    if (data) { 
+      setReminders([data[0], ...(reminders || [])]); 
+      setIsReminderModalOpen(false); 
+    }
+  }
+
+  async function toggleReminder(id, currentStatus) { 
+    const { data } = await supabase.from('reminders').update({ is_completed: !currentStatus }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`); 
+    if (data) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
+  }
+
+  async function handleDeleteReminder(id) { 
+    const confirmed = await showConfirm("Move this task to the Recycle Bin?");
+    if (!confirmed) return; 
+    const { data } = await supabase.from('reminders').update({ is_deleted: true }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`); 
+    if (data) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
+  }
+
+  async function handleRestoreReminder(id) { 
+    const { data } = await supabase.from('reminders').update({ is_deleted: false }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`); 
+    if (data) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
+  }
+
+  async function handlePermanentDeleteReminder(id) { 
+    if (userRole !== 'admin') return alert("Only Admins can permanently delete tasks."); 
+    const confirmed = await showConfirm("Permanently delete this task?");
+    if (!confirmed) return; 
+    const { error } = await supabase.from('reminders').delete().eq('id', id); 
+    if (!error) setReminders((reminders || []).filter(r => r.id !== id));
+  }
+
+  // --- Issues Handlers ---
+  async function handleAddIssue(e) { 
+    e.preventDefault(); 
+    if (!issueTitleInput.trim() || !activeWorkId) return; 
+    const { data } = await supabase.from('issues').insert([{ work_id: activeWorkId, title: issueTitleInput, status: 'open' }]).select(); 
+    if (data) { 
+      setIssues([data[0], ...issues]); 
+      setActiveIssueId(data[0].id); 
+      setIssueTitleInput(''); 
+      setIsIssueModalOpen(false);
+    } 
+  }
+
+  async function toggleIssueStatus(id, currentStatus) { 
+    const newStatus = currentStatus === 'open' ? 'resolved' : 'open'; 
+    const { data } = await supabase.from('issues').update({ status: newStatus }).eq('id', id).select(); 
+    if (data) setIssues(issues.map(i => i.id === id ? data[0] : i));
+  }
+
+  // --- Logs Handlers ---
+  async function handleAddLog(e) {
+    e.preventDefault(); 
+    if ((!logInput.trim() && !attachment) || !activeWorkId) return; 
+    setIsUploading(true); 
+    let fileUrl = null;
+    
+    if (attachment) {
+      const fileExt = attachment.name.split('.').pop(); 
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { error } = await supabase.storage.from('attachments').upload(`${activeWorkId}/${fileName}`, attachment);
+      if (error) { 
+        alert("Error uploading file: " + error.message); 
+        setIsUploading(false); 
+        return; 
+      }
+      const { data } = supabase.storage.from('attachments').getPublicUrl(`${activeWorkId}/${fileName}`); 
+      fileUrl = data.publicUrl;
+    }
+    
+    let payload = { work_id: activeWorkId, content: logInput || "Attached a file.", attachment_url: fileUrl };
+    if (centerView === 'pipeline') {
+      payload.stage_name = works.find(w => w.id === activeWorkId).stages[activeStageIndex];
+    } else { 
+      if (!activeIssueId) { 
+        setIsUploading(false); 
+        return alert("Select an issue first.");
+      }
+      payload.stage_name = 'Issue'; 
+      payload.issue_id = activeIssueId;
+    }
+    
+    const { data } = await supabase.from('logs').insert([payload]).select(); 
+    if (data) { 
+      setLogs([data[0], ...(logs || [])]); 
+      setLogInput(''); 
+      setAttachment(null);
+    }
+    setIsUploading(false);
+  }
+
+  // --- AI HANDLER ---
+  // Ask Google which Gemini models are currently available instead of
+  // hard-coding an old model name. This prevents the CRM from breaking
+  // when Google retires or changes a model.
+  // Multi-Model Fallback for Google Gemini API
+  async function getAvailableGeminiModels(apiKey) {
+    try {
+      const response = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        { method: 'GET', headers: { 'x-goog-api-key': apiKey } }
+      );
+      const data = await response.json();
+      if (response.ok && data.models) {
+        const validModels = data.models
+          .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+
+        const preferred = [
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash',
+          'gemini-1.5-pro',
+          'gemini-2.5-pro',
+          'gemini-2.0-flash-lite'
+        ];
+
+        const candidateList = [];
+        for (const p of preferred) {
+          if (validModels.includes(p)) candidateList.push(p);
+        }
+        for (const v of validModels) {
+          if (!candidateList.includes(v) && !v.includes('embedding') && !v.includes('image') && !v.includes('audio') && !v.includes('tts') && !v.includes('live')) {
+            candidateList.push(v);
+          }
+        }
+        if (candidateList.length > 0) return candidateList;
+      }
+    } catch (e) {
+      console.warn("Could not fetch Gemini model list:", e);
+    }
+    return ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+  }
+
+  // Helper to filter out internal scratchpad reasoning, metadata, and draft markers
+  function cleanGeminiOutput(rawText) {
+    if (!rawText) return '';
+    let text = rawText.trim();
+
+    // Strip XML style thinking tags <thought>...</thought>
+    text = text.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
+
+    // If response contains internal scratchpad markers (* Role:, * Task:, * Draft 1:, * Refining...:)
+    if (text.includes('* Role:') || text.includes('* Task:') || text.includes('* Draft') || text.includes('* Constraint:') || text.includes('Refining for')) {
+      // Look for the refined final output after "Refining for...:" or "Draft 1:" or "Final Summary:"
+      const refiningIndex = text.lastIndexOf('Refining for');
+      if (refiningIndex !== -1) {
+        const afterRefining = text.substring(refiningIndex);
+        const colonIdx = afterRefining.indexOf(':*');
+        if (colonIdx !== -1) {
+          text = afterRefining.substring(colonIdx + 2).trim();
+        } else {
+          const normalColon = afterRefining.indexOf(':');
+          if (normalColon !== -1) text = afterRefining.substring(normalColon + 1).trim();
+        }
+      } else {
+        const lines = text.split('\n');
+        const cleanLines = lines.filter(line => {
+          const l = line.trim();
+          return !l.startsWith('* Role:') &&
+                 !l.startsWith('* Task:') &&
+                 !l.startsWith('* Input Data:') &&
+                 !l.startsWith('* Constraint:') &&
+                 !l.startsWith('* Draft') &&
+                 !l.startsWith('* *Refining') &&
+                 !l.startsWith('* *Status:*') &&
+                 !l.startsWith('* *Risk') &&
+                 !l.startsWith('* *Action Items') &&
+                 !l.startsWith('* *Governance');
+        });
+        text = cleanLines.join('\n').trim();
+      }
+    }
+
+    // Clean leading metadata block if present
+    text = text.replace(/^(\* (Role|Task|Input Data|Constraint|Draft \d+|Status|Risk\/Roadblock|Action Items|Governance):[^\n]*\n?)+/gi, '').trim();
+
+    return text || rawText.trim();
+  }
+
+  async function callGeminiWithFallback(prompt, apiKey, systemInstruction = null) {
+    const candidateModels = await getAvailableGeminiModels(apiKey);
+    let lastErrorMessage = '';
+
+    for (const model of candidateModels) {
+      try {
+        const requestBody = {
+          contents: [{ parts: [{ text: prompt }] }]
+        };
+
+        if (systemInstruction) {
+          requestBody.systemInstruction = {
+            parts: [{ text: systemInstruction }]
+          };
+        }
+
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify(requestBody)
+          }
+        );
+
+        const data = await res.json();
+        if (res.ok && data.candidates?.[0]?.content?.parts) {
+          const parts = data.candidates[0].content.parts.filter(p => !p.thought);
+          const partsToUse = parts.length > 0 ? parts : data.candidates[0].content.parts;
+          let text = partsToUse.map(p => p.text || '').join('').trim();
+          text = cleanGeminiOutput(text);
+          if (text) return text;
+        }
+
+        if (data.error) {
+          lastErrorMessage = data.error.message || `Error ${res.status}`;
+          console.warn(`Gemini Model ${model} responded with error: ${lastErrorMessage}. Attempting next model fallback...`);
+        }
+      } catch (err) {
+        lastErrorMessage = err.message;
+        console.warn(`Gemini Model ${model} network error: ${err.message}. Attempting next model fallback...`);
+      }
+    }
+    throw new Error(lastErrorMessage || "High demand on Google servers. Please try again shortly.");
+  }
+
+  async function handleSummarizeProject() {
+    if (!activeWorkId) return;
+    const projectLogs = logs.filter(l => !l.is_deleted).map(l => l.content);
+    if (projectLogs.length === 0) return alert("No logs available to summarize.");
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      setAiSummary("Gemini API key is missing. Check your .env.local file and restart the Vite server.");
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiSummary('Analyzing project updates with Google Gemini...');
+
+    const prompt = `Project Update Logs:\n${projectLogs.map(l => `- ${l}`).join('\n')}\n\nProvide a direct 2-3 sentence executive summary paragraph summarizing progress, open roadblocks, and next actions.`;
+    const systemInstruction = `You are RAJIV CRM's Senior Engineering Project Lead. Output ONLY the final 2-3 sentence summary paragraph directly. Never include internal thoughts, role definitions, task breakdowns, draft markers, or meta-commentary.`;
+
+    try {
+      const summaryText = await callGeminiWithFallback(prompt, apiKey, systemInstruction);
+      setAiSummary(summaryText);
+    } catch (err) {
+      console.error("Gemini Error:", err);
+      setAiSummary(`Gemini Error: ${err.message}`);
+    } finally {
+      setIsAiLoading(false);
+    }
+  }
+
+  function handleClearAiChat() {
+    setAiChatMessages([
+      {
+        id: Date.now().toString(),
+        sender: 'ai',
+        text: 'Chat history cleared. How can I help you today?',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+  }
+
+  async function handleSendAiChatMessage(userMessageText) {
+    if (!userMessageText || !userMessageText.trim()) return;
+
+    const trimmedMsg = userMessageText.trim();
+    const userMsg = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: trimmedMsg,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setAiChatMessages(prev => [...prev, userMsg]);
+    setIsAiChatSending(true);
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      const errorMsg = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: 'Error: Gemini API key is missing. Please check your .env.local file.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setAiChatMessages(prev => [...prev, errorMsg]);
+      setIsAiChatSending(false);
+      return;
+    }
+
+    // Fetch complete database context for multi-project / all-project reporting
+    let allWorksSummary = '';
+    try {
+      const [{ data: allWorksData }, { data: allIssuesData }, { data: allLogsData }] = await Promise.all([
+        supabase.from('works').select('id, title, po_number, wo_number, stages, boq_url, created_at, companies(name), units(name)'),
+        supabase.from('issues').select('id, title, status, work_id'),
+        supabase.from('logs').select('id, content, stage_name, work_id, created_at, is_deleted').eq('is_deleted', false).order('created_at', { ascending: false }).limit(50)
+      ]);
+
+      if (allWorksData && allWorksData.length > 0) {
+        allWorksSummary = allWorksData.map((w, idx) => {
+          const compName = w.companies?.name || 'N/A';
+          const uName = w.units?.name || 'N/A';
+          const pLogs = (allLogsData || []).filter(l => l.work_id === w.id).map(l => `[${l.stage_name || 'Update'}]: ${l.content}`);
+          const pIssues = (allIssuesData || []).filter(i => i.work_id === w.id && i.status === 'open').map(i => i.title);
+          
+          return `Project #${idx + 1}: "${w.title}" | Client: ${compName} | Unit: ${uName}
+   PO #: ${w.po_number || 'Missing'} | WO #: ${w.wo_number || 'Missing'} | BOQ: ${w.boq_url ? 'Attached' : 'Missing'}
+   Stages: ${w.stages ? w.stages.join(' -> ') : 'None'}
+   Open Snags (${pIssues.length}): ${pIssues.join(', ') || 'None'}
+   Recent Logs (${pLogs.length}): ${pLogs.slice(0, 5).join(' | ') || 'No logs yet'}`;
+        }).join('\n\n');
+      }
+    } catch (e) {
+      console.warn("Failed to fetch full portfolio context:", e);
+    }
+
+    const currentCompany = companies.find(c => c.id === activeCompanyId);
+    const currentUnit = units.find(u => u.id === activeUnitId);
+    const currentWork = works.find(w => w.id === activeWorkId);
+    const activeStage = currentWork?.stages?.[activeStageIndex];
+    const pendingTasks = reminders.filter(r => !r.is_completed && !r.is_deleted).map(r => r.content);
+    const missingAlerts = missingData.map(m => `${m.title} (Missing: ${[!m.po_number ? 'PO' : '', !m.wo_number ? 'WO' : '', !m.boq_url ? 'BOQ' : ''].filter(Boolean).join(', ')})`);
+
+    const contextSummary = `
+CURRENTLY SELECTED PROJECT FOCUS:
+Client: ${currentCompany ? currentCompany.name : 'None selected'}
+Unit: ${currentUnit ? currentUnit.name : 'None selected'}
+Project: ${currentWork ? `${currentWork.title} (PO: ${currentWork.po_number || 'N/A'}, WO: ${currentWork.wo_number || 'N/A'})` : 'None selected'}
+Stage: ${activeStage || 'N/A'}
+
+ALL PROJECTS PORTFOLIO (DATABASE SNAPSHOT):
+${allWorksSummary || 'No projects found in database.'}
+
+CRM SYSTEM ALERTS & TASKS:
+Action Required / Missing Data Projects (${missingAlerts.length}): ${missingAlerts.join('; ') || 'None'}
+Pending Tasks (${pendingTasks.length}): ${pendingTasks.slice(0, 10).join(' | ') || 'None'}
+Registered Clients: ${companies.map(c => c.name).join(', ') || 'None'}
+`;
+
+    const systemInstruction = `You are RAJIV CRM's Executive Assistant.
+
+STRICT DIRECTIVES FOR YOUR RESPONSE:
+1. Output ONLY your direct answer to the user's request. NEVER output internal thoughts, chain-of-thought reasoning, prompt breakdowns, role definitions, or meta text (such as "User Input:", "Context Provided:", "Goal:", "Looking through...").
+2. SPECIFIC PROJECT INQUIRIES (e.g. "what is the status of PB14"): Look up that specific project in the context and output ONLY a clean 2-4 sentence status update for THAT project (Client, Unit, PO/WO status, stage, open snags, recent activity). DO NOT list or mention unrelated projects.
+3. EMAIL DRAFTING INQUIRIES (e.g. "create a mail to Vaibhav regarding last activity"): Output ONLY the complete, ready-to-send email (Subject, Recipient, Salutation, Body, Sign-off). Do not include chat filler before or after the email draft.
+4. PORTFOLIO / ALL PROJECTS REPORTS: Provide a clear, clean executive summary of all projects without step-by-step reasoning steps.`;
+
+    const prompt = `CRM DATABASE CONTEXT:
+${contextSummary}
+
+USER REQUEST: ${trimmedMsg}`;
+
+    try {
+      const replyText = await callGeminiWithFallback(prompt, apiKey, systemInstruction);
+
+      const aiReply = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: replyText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setAiChatMessages(prev => [...prev, aiReply]);
+    } catch (err) {
+      console.error('Gemini Chat Error:', err);
+      const errorReply = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: `AI Error: ${err.message}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setAiChatMessages(prev => [...prev, errorReply]);
+    } finally {
+      setIsAiChatSending(false);
+    }
+  }
+
+
+  function startEditingLog(log) { 
+    if (userRole !== 'admin' && (log.edit_count || 0) >= 3) return alert("Edit limit reached."); 
+    setEditingLogId(log.id); 
+    setEditLogContent(log.content);
+  }
+
+  async function saveLogEdit(log) {
+    if (editLogContent.trim() === log.content) { 
+      setEditingLogId(null); 
+      return; 
+    }
+    const newHistoryEntry = { content: log.content, changed_at: new Date().toISOString() }; 
+    const updatedHistory = [...(log.previous_versions || []), newHistoryEntry];
+    
+    const { data } = await supabase.from('logs').update({ content: editLogContent, edit_count: (log.edit_count || 0) + 1, previous_versions: updatedHistory }).eq('id', log.id).select();
+    if (data) { 
+      setLogs((logs || []).map(l => l.id === log.id ? data[0] : l)); 
+      setEditingLogId(null);
+    }
+  }
+  
+  async function handleDeleteLog(id) { 
+    const confirmed = await showConfirm("Move this log to the Recycle Bin?");
+    if (!confirmed) return; 
+    const { data } = await supabase.from('logs').update({ is_deleted: true }).eq('id', id).select(); 
+    if (data) setLogs((logs || []).map(l => l.id === id ? data[0] : l));
+  }
+
+  async function handleRestoreLog(id) { 
+    const { data } = await supabase.from('logs').update({ is_deleted: false }).eq('id', id).select(); 
+    if (data) { 
+      setLogs((logs || []).map(l => l.id === id ? data[0] : l)); 
+      if ((logs || []).filter(l=>l.is_deleted).length <= 1) setIsBinModalOpen(false);
+    } 
+  }
+
+  async function handlePermanentDeleteLog(id) { 
+    if (userRole !== 'admin') return alert("Only Admins can permanently delete logs."); 
+    const confirmed = await showConfirm("Proceed with permanent deletion?");
+    if (!confirmed) return; 
+    const { error } = await supabase.from('logs').delete().eq('id', id); 
+    if (!error) { 
+      setLogs((logs || []).filter(l => l.id !== id)); 
+      if ((logs || []).filter(l=>l.is_deleted).length <= 1) setIsBinModalOpen(false);
+    } 
+  }
+
+  // --- Hierarchy Handlers ---
+  async function handleAddCompany() { 
+    const rawName = await showPrompt("Add New Client", "Enter Client name...");
+    if (!rawName || !rawName.trim()) return;
+    const name = rawName.trim();
+    try {
+      const { data, error } = await supabase.from('companies').insert([{ name }]).select();
+      if (error) {
+        console.error("Error adding company:", error);
+        showToast(`Failed to add client: ${error.message}`);
+        alert(`Error adding client: ${error.message}`);
+        return;
+      }
+      if (data && data.length > 0) { 
+        setCompanies(prev => [...prev, data[0]]); 
+        setActiveCompanyId(data[0].id);
+        showToast(`Client "${data[0].name}" added successfully!`);
+      } 
+    } catch (err) {
+      console.error("Unexpected error adding company:", err);
+      showToast(`Error: ${err.message || err}`);
+    }
+  }
+
+  async function handleAddUnit(targetCompanyIdParam = null) { 
+    const targetCompanyId = targetCompanyIdParam || activeCompanyId;
+    if (!targetCompanyId) {
+      alert("Please select or create a client company first.");
+      return;
+    }
+    const rawName = await showPrompt("Add New Unit", "Enter Unit name...");
+    if (!rawName || !rawName.trim()) return;
+    const name = rawName.trim();
+    try {
+      const { data, error } = await supabase.from('units').insert([{ company_id: targetCompanyId, name }]).select();
+      if (error) {
+        console.error("Error adding unit:", error);
+        showToast(`Failed to add unit: ${error.message}`);
+        alert(`Error adding unit: ${error.message}`);
+        return;
+      }
+      if (data && data.length > 0) { 
+        if (targetCompanyId === activeCompanyId) {
+          setUnits(prev => [...prev, data[0]]); 
+        }
+        setActiveCompanyId(targetCompanyId);
+        setActiveUnitId(data[0].id);
+        showToast(`Unit "${data[0].name}" added successfully!`);
+      } 
+    } catch (err) {
+      console.error("Unexpected error adding unit:", err);
+      showToast(`Error: ${err.message || err}`);
+    }
+  }
+
+  async function handleRenameCompany(id, oldName) { 
+    const rawName = await showPrompt("Rename Client", "Enter new name...", oldName);
+    if (!rawName || !rawName.trim() || rawName.trim() === oldName) return;
+    const newName = rawName.trim();
+    try {
+      const { error } = await supabase.from('companies').update({ name: newName }).eq('id', id);
+      if (error) {
+        console.error("Error renaming company:", error);
+        showToast(`Failed to rename client: ${error.message}`);
+        alert(`Error renaming client: ${error.message}`);
+        return;
+      }
+      setCompanies(prev => prev.map(c => c.id === id ? { ...c, name: newName } : c));
+      showToast("Client renamed successfully!");
+    } catch (err) {
+      console.error("Unexpected error renaming company:", err);
+      showToast(`Error: ${err.message || err}`);
+    }
+  }
+
+  async function handleDeleteCompany(id) { 
+    const confirmed = await showConfirm("WARNING: Are you sure you want to delete this company and all its associated data?");
+    if (!confirmed) return; 
+    try {
+      const { error } = await supabase.from('companies').delete().eq('id', id); 
+      if (error) {
+        console.error("Error deleting company:", error);
+        showToast(`Failed to delete client: ${error.message}`);
+        alert(`Error deleting client: ${error.message}`);
+        return;
+      }
+      setCompanies(prev => prev.filter(c => c.id !== id)); 
+      if (activeCompanyId === id) { 
+        setActiveCompanyId(null); 
+        setActiveUnitId(null); 
+        setActiveWorkId(null);
+      } 
+      showToast("Client deleted successfully");
+    } catch (err) {
+      console.error("Unexpected error deleting company:", err);
+      showToast(`Error: ${err.message || err}`);
+    }
+  }
+
+  async function handleRenameUnit(id, oldName) { 
+    const rawName = await showPrompt("Rename Unit", "Enter new name...", oldName);
+    if (!rawName || !rawName.trim() || rawName.trim() === oldName) return;
+    const newName = rawName.trim();
+    try {
+      const { error } = await supabase.from('units').update({ name: newName }).eq('id', id);
+      if (error) {
+        console.error("Error renaming unit:", error);
+        showToast(`Failed to rename unit: ${error.message}`);
+        alert(`Error renaming unit: ${error.message}`);
+        return;
+      }
+      setUnits(prev => prev.map(u => u.id === id ? { ...u, name: newName } : u));
+      showToast("Unit renamed successfully!");
+    } catch (err) {
+      console.error("Unexpected error renaming unit:", err);
+      showToast(`Error: ${err.message || err}`);
+    }
+  }
+
+  async function handleDeleteUnit(id) { 
+    const confirmed = await showConfirm("WARNING: Are you sure you want to delete this unit and all its associated data?");
+    if (!confirmed) return; 
+    try {
+      const { error } = await supabase.from('units').delete().eq('id', id); 
+      if (error) {
+        console.error("Error deleting unit:", error);
+        showToast(`Failed to delete unit: ${error.message}`);
+        alert(`Error deleting unit: ${error.message}`);
+        return;
+      }
+      setUnits(prev => prev.filter(u => u.id !== id)); 
+      if (activeUnitId === id) { 
+        setActiveUnitId(null); 
+        setActiveWorkId(null);
+      } 
+      showToast("Unit deleted successfully");
+    } catch (err) {
+      console.error("Unexpected error deleting unit:", err);
+      showToast(`Error: ${err.message || err}`);
+    }
+  }
+
+  function openNewWorkModal() { 
+    setEditingWorkId(null);
+    setWorkForm({ title: '', po_number: '', wo_number: '', boq_url: '', po_file_url: '', wo_file_url: '' }); 
+    setBoqFile(null); 
+    setPoFile(null);
+    setWoFile(null);
+    setIsWorkModalOpen(true);
+  }
+
+  function openEditWorkModal(work) { 
+    setEditingWorkId(work.id);
+    setWorkForm({ 
+      title: work.title, 
+      po_number: work.po_number || '', 
+      wo_number: work.wo_number || '', 
+      boq_url: work.boq_url || '',
+      po_file_url: work.po_file_url || '',
+      wo_file_url: work.wo_file_url || ''
+    }); 
+    setBoqFile(null); 
+    setPoFile(null);
+    setWoFile(null);
+    setIsWorkModalOpen(true);
+  }
+  
+  async function submitWork(e) {
+    e.preventDefault(); 
+    if (!activeUnitId) return; 
+
+    // --- 1. STRICT DATA VALIDATION ---
+    const trimmedTitle = workForm.title?.trim() || '';
+    const trimmedPO = workForm.po_number?.trim() || '';
+    const trimmedWO = workForm.wo_number?.trim() || '';
+
+    if (!trimmedTitle) {
+      alert("Validation Error: System / Title cannot be empty.");
+      return;
+    }
+
+    // Check for duplicate PO Number
+    if (trimmedPO) {
+      const isDuplicatePO = works.some(w => w.po_number === trimmedPO && w.id !== editingWorkId);
+      if (isDuplicatePO) {
+        alert(`Duplicate Found: The PO Number "${trimmedPO}" is already assigned to another project. Please use a unique PO Number.`);
+        return;
+      }
+    }
+
+    // Check for duplicate WO Number
+    if (trimmedWO) {
+      const isDuplicateWO = works.some(w => w.wo_number === trimmedWO && w.id !== editingWorkId);
+      if (isDuplicateWO) {
+        alert(`Duplicate Found: The WO Number "${trimmedWO}" is already assigned to another project. Please use a unique WO Number.`);
+        return;
+      }
+    }
+    // --- END VALIDATION ---
+
+    setIsWorkUploading(true); 
+    let finalBoqUrl = workForm.boq_url;
+    let finalPoFileUrl = workForm.po_file_url;
+    let finalWoFileUrl = workForm.wo_file_url;
+    
+    if (boqFile) { 
+      const fileExt = boqFile.name.split('.').pop(); 
+      const fileName = `${Math.random()}.${fileExt}`; 
+      const { error } = await supabase.storage.from('attachments').upload(`boqs/${fileName}`, boqFile); 
+      if (!error) { 
+        const { data } = supabase.storage.from('attachments').getPublicUrl(`boqs/${fileName}`); 
+        finalBoqUrl = data.publicUrl;
+      } 
+    }
+
+    if (poFile) { 
+      const fileExt = poFile.name.split('.').pop(); 
+      const fileName = `${Math.random()}.${fileExt}`; 
+      const { error } = await supabase.storage.from('attachments').upload(`pos/${fileName}`, poFile); 
+      if (!error) { 
+        const { data } = supabase.storage.from('attachments').getPublicUrl(`pos/${fileName}`); 
+        finalPoFileUrl = data.publicUrl;
+      } 
+    }
+
+    if (woFile) { 
+      const fileExt = woFile.name.split('.').pop(); 
+      const fileName = `${Math.random()}.${fileExt}`; 
+      const { error } = await supabase.storage.from('attachments').upload(`wos/${fileName}`, woFile); 
+      if (!error) { 
+        const { data } = supabase.storage.from('attachments').getPublicUrl(`wos/${fileName}`); 
+        finalWoFileUrl = data.publicUrl;
+      } 
+    }
+    
+    const payload = { 
+      title: trimmedTitle, 
+      po_number: trimmedPO, 
+      wo_number: trimmedWO, 
+      boq_url: finalBoqUrl,
+      po_file_url: finalPoFileUrl,
+      wo_file_url: finalWoFileUrl
+    };
+    
+    if (editingWorkId) { 
+      let { data, error } = await supabase.from('works').update(payload).eq('id', editingWorkId).select(); 
+      if (error && (error.message?.includes('po_file_url') || error.message?.includes('wo_file_url') || error.code === 'PGRST204')) {
+        const fallbackRes = await supabase.from('works').update({
+          title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl
+        }).eq('id', editingWorkId).select();
+        data = fallbackRes.data;
+      }
+      if (data && data.length > 0) { 
+        const updatedWork = { ...data[0], po_file_url: finalPoFileUrl, wo_file_url: finalWoFileUrl };
+        setWorks(works.map(w => w.id === editingWorkId ? updatedWork : w)); 
+        setIsWorkModalOpen(false); 
+        fetchMissingData();
+      } 
+    } else { 
+      let { data, error } = await supabase.from('works').insert([{ unit_id: activeUnitId, company_id: activeCompanyId, ...payload }]).select(); 
+      if (error && (error.message?.includes('po_file_url') || error.message?.includes('wo_file_url') || error.code === 'PGRST204')) {
+        const fallbackRes = await supabase.from('works').insert([{ 
+          unit_id: activeUnitId, company_id: activeCompanyId, title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl 
+        }]).select();
+        data = fallbackRes.data;
+      }
+      if (data && data.length > 0) { 
+        const newWork = { ...data[0], po_file_url: finalPoFileUrl, wo_file_url: finalWoFileUrl };
+        setWorks([...works, newWork]); 
+        setActiveWorkId(newWork.id); 
+        setIsWorkModalOpen(false); 
+        fetchMissingData();
+      } 
+    }
+    setIsWorkUploading(false);
+  }
+
+  async function handleDeleteWork(id) { 
+    const confirmed = await showConfirm("Delete this project?");
+    if (!confirmed) return; 
+    await supabase.from('works').delete().eq('id', id); 
+    setWorks(works.filter(w => w.id !== id)); 
+    if (activeWorkId === id) setActiveWorkId(null);
+    fetchMissingData();
+  }
+
+  async function handleSearch(e) { 
+    const query = e.target.value; 
+    setSearchQuery(query); 
+    if (query.length < 2) { 
+      setSearchResults([]); 
+      return;
+    } 
+    const { data } = await supabase.from('works').select('id, title, wo_number, po_number, company_id, unit_id').or(`wo_number.ilike.%${query}%,po_number.ilike.%${query}%,title.ilike.%${query}%`).limit(5); 
+    if (data) setSearchResults(data);
+  }
+
+  async function jumpToSearchResult(result) { 
+    setSearchQuery(''); 
+    setSearchResults([]); 
+    navigateToContext(result.company_id, result.unit_id, result.id);
+  }
+
+  function openMoveLogModal(log) {
+    setMoveLogModal({ isOpen: true, log });
+  }
+
+  async function handleMoveLogStage(logId, targetStageName) {
+    if (!targetStageName) return;
+    const { data, error } = await supabase.from('logs').update({ stage_name: targetStageName }).eq('id', logId).select();
+    if (error) {
+      alert("Error moving log: " + error.message);
+      return;
+    }
+    if (data) {
+      setLogs(prev => prev.filter(l => l.id !== logId));
+      setMoveLogModal({ isOpen: false, log: null });
+    }
+  }
+
+  function openEditReminderModal(reminder) {
+    setEditReminderModal({ isOpen: true, reminder });
+    setEditReminderForm({
+      content: reminder.content || '',
+      target_date: reminder.target_date ? new Date(reminder.target_date).toISOString().slice(0, 16) : ''
+    });
+  }
+
+  async function handleSaveReminderEdit(reminderId, newContent, newTargetDate) {
+    const currentReminder = (reminders || []).find(r => r.id === reminderId);
+    if (!currentReminder) return;
+
+    let history = currentReminder.reschedule_history || [];
+    if (typeof history === 'string') {
+      try { history = JSON.parse(history); } catch (e) { history = []; }
+    }
+    if (!Array.isArray(history)) history = [];
+
+    const newEntry = {
+      previous_content: currentReminder.content,
+      previous_date: currentReminder.target_date,
+      rescheduled_at: new Date().toISOString()
+    };
+    const updatedHistory = [...history, newEntry];
+
+    let payload = {
+      content: newContent,
+      target_date: newTargetDate || null,
+      reschedule_history: updatedHistory
+    };
+
+    let { data, error } = await supabase.from('reminders').update(payload).eq('id', reminderId).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+
+    // Schema Cache Fallback: If remote DB lacks reschedule_history column, fallback to content & target_date only!
+    if (error && (error.message?.includes('reschedule_history') || error.code === 'PGRST204')) {
+      console.warn("reschedule_history column not found in database schema cache. Falling back to content & target_date update.");
+      const fallbackRes = await supabase.from('reminders').update({
+        content: newContent,
+        target_date: newTargetDate || null
+      }).eq('id', reminderId).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+      
+      data = fallbackRes.data;
+      error = fallbackRes.error;
+    }
+
+    if (error) {
+      alert("Error updating task: " + error.message);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const updatedItem = { ...data[0], reschedule_history: updatedHistory };
+      setReminders((reminders || []).map(r => r.id === reminderId ? updatedItem : r));
+      setEditReminderModal({ isOpen: false, reminder: null });
+    }
+  }
+
+  const value = {
+    // Authenticated Context & Tenant Foundation (Step 1, 2, 3, 4, 9, 10)
+    session,
+    currentUser,
+    authLoading,
+    tenantId,
+    tenantMembership,
+    tenantRole,
+    operatingCompanies,
+    activeOperatingCompanyId,
+    activeOperatingCompany,
+    setActiveOperatingCompanyId,
+    clientCompanies: companies,
+    activeClientCompanyId: activeCompanyId,
+
+    // Project Assignments Foundation (Step 7C)
+    projectAssignments,
+    isAssignmentsLoading,
+    isProjectTeamModalOpen,
+    setIsProjectTeamModalOpen,
+    fetchProjectAssignments,
+    assignUserToProject,
+    endProjectAssignment,
+    getActiveProjectAssignments,
+    // Stage Definitions / Stage Assignments
+    stageDefinitions,
+    isStageDefinitionsLoading,
+    stageAssignments,
+    isStageAssignmentsLoading,
+    isStageAssignmentModalOpen,
+    stageAssignmentTargetId,
+    fetchStageDefinitions,
+    fetchStageAssignments,
+    openStageAssignmentModal,
+    closeStageAssignmentModal,
+    assignUserToStage,
+    endStageAssignment,
+    getStageAssignments,
+
+    tenantMembers,
+    isFetchingTenantMembers,
+    fetchTenantMembers,
+
+    isDarkMode, setIsDarkMode, onSignOut, userRole, isSidebarOpen, setIsSidebarOpen, companies, activeCompanyId, setActiveCompanyId, units, activeUnitId, setActiveUnitId, works, activeWorkId, setActiveWorkId,
+    fontSize, setFontSize, increaseFontSize, decreaseFontSize, docPreviewModal, openDocPreview, closeDocPreview,
+    centerView, setCenterView, rightView, setRightView, isWorkModalOpen, setIsWorkModalOpen, editingWorkId, workForm, setWorkForm, boqFile, setBoqFile, poFile, setPoFile, woFile, setWoFile, isWorkUploading,
+    isStageManagerOpen, setIsStageManagerOpen, editedStages, activeStageIndex, setActiveStageIndex, issues, activeIssueId, setActiveIssueId, isIssueModalOpen, setIsIssueModalOpen, issueTitleInput, setIssueTitleInput,
+    logs, logInput, setLogInput, editingLogId, setEditingLogId, editLogContent, setEditLogContent, historyLog, setHistoryLog, isBinModalOpen, setIsBinModalOpen, attachment, setAttachment, isUploading,
+    reminders, missingData, isReminderModalOpen, setIsReminderModalOpen, reminderForm, setReminderForm, modalUnits, modalWorks, searchQuery, setSearchQuery, searchResults, promptModal, closePrompt, confirmModal, closeConfirm,
+    isAdminPanelOpen, setIsAdminPanelOpen, profiles, setProfiles, isFetchingProfiles, fetchProfiles, handleUpdateUserRole, handleApproveUser, handleTerminateUser, handleAdminCreateUser,
+    moveLogModal, setMoveLogModal, openMoveLogModal, handleMoveLogStage,
+    editReminderModal, setEditReminderModal, editReminderForm, setEditReminderForm, openEditReminderModal, handleSaveReminderEdit,
+    refreshAllData, toastMessage, showToast,
+    
+    navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
+    handleAddIssue, toggleIssueStatus, handleAddLog, startEditingLog, saveLogEdit, handleDeleteLog, handleRestoreLog, handlePermanentDeleteLog, handleAddCompany, handleAddUnit, handleRenameCompany, handleDeleteCompany, handleRenameUnit, handleDeleteUnit,
+    openNewWorkModal, openEditWorkModal, submitWork, handleDeleteWork, openStageManager, updateStageName, moveStage, removeStage, addNewStage, saveStages, handleSearch, jumpToSearchResult, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
+    isAiChatOpen, setIsAiChatOpen, aiChatMessages, setAiChatMessages, isAiChatSending, handleSendAiChatMessage, handleClearAiChat
+  };
+
+  return (
+    <CrmContext.Provider value={value}>
+      {children}
+    </CrmContext.Provider>
+  );
+}
