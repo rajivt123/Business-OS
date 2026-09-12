@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from './lib/supabase'
+import { isSupabaseConfigured, supabase } from './lib/supabase'
 import BusinessOSWorkspace from './components/BusinessOSWorkspace'
 import { CrmProvider } from './context/CrmContext'
 import { Sun, Moon, KeyRound, Mail, Lock, ArrowLeft, CheckCircle, ShieldCheck, Flame } from 'lucide-react'
@@ -30,6 +30,11 @@ export default function App() {
   }, [isDarkMode])
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setIsInitializing(false)
+      return undefined
+    }
+
     // 1. Get initial session on page load
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -128,6 +133,21 @@ export default function App() {
   // --- Show Loading screen while checking memory ---
   if (isInitializing) {
     return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading your workspace...</div>
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-7 shadow-2xl">
+          <h1 className="text-xl font-bold text-sky-400">Supabase configuration required</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300">
+            Add your Supabase project URL and anonymous key to a local <code className="text-sky-300">.env</code> file, then restart the Vite server.
+          </p>
+          <pre className="mt-5 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-300">{`VITE_SUPABASE_URL=your_supabase_project_url\nVITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}</pre>
+          <p className="mt-4 text-xs text-slate-500">Use <code>.env.example</code> as the template. Do not commit the local credentials.</p>
+        </div>
+      </div>
+    )
   }
 
   // --- Only show Login if we are 100% sure there is no session ---
