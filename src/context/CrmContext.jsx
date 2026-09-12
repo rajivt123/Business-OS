@@ -137,6 +137,18 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
   const [isProjectTeamModalOpen, setIsProjectTeamModalOpen] = useState(false);
 
+  // Task Architecture Foundation (7F)
+  const [tasks, setTasks] = useState([]);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
+  const [isTaskEditorOpen, setIsTaskEditorOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskForm, setTaskForm] = useState({
+    title: '', description: '', status: 'not_started', priority: 'medium', due_date: '', stage_id: ''
+  });
+  const [taskAssignees, setTaskAssignees] = useState([]);
+  const [isTaskAssigneesLoading, setIsTaskAssigneesLoading] = useState(false);
+  const [taskAssigneeForm, setTaskAssigneeForm] = useState({ user_id: '', role: 'assignee' });
+
   // Stage Definitions / Stage Assignments (Phase 1C)
   // stage_definitions is the normalized source of truth; works.stages remains legacy compatibility data.
   const [stageDefinitions, setStageDefinitions] = useState([]);
@@ -199,6 +211,12 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setReminders([]);
       setMissingData([]);
       setProjectAssignments([]);
+      setTasks([]);
+      setTaskAssignees([]);
+      setIsTaskEditorOpen(false);
+      setEditingTaskId(null);
+      setTaskForm({ title: '', description: '', status: 'not_started', priority: 'medium', due_date: '', stage_id: '' });
+      setTaskAssigneeForm({ user_id: '', role: 'assignee' });
       setStageDefinitions([]);
       setStageAssignments([]);
       setStageAssignmentTargetId(null);
@@ -720,6 +738,18 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       }
     }
   }, [activeWorkId, activeStageIndex, centerView, activeIssueId, works, stageDefinitions]);
+
+  useEffect(() => {
+    if (!session?.user || !tenantId || !activeWorkId) {
+      setTasks([]);
+      setTaskAssignees([]);
+      setIsTaskEditorOpen(false);
+      setEditingTaskId(null);
+      return;
+    }
+    setTaskAssignees([]);
+    fetchTasks(activeWorkId, activeOperatingCompanyId);
+  }, [session?.user?.id, tenantId, activeWorkId, activeOperatingCompanyId]);
 
   // --- Database Fetches ---
   async function fetchCompanies(targetOpCoId, authGeneration) {
@@ -1409,6 +1439,297 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   function getActiveProjectAssignments(workIdParam) {
     const targetId = workIdParam || activeWorkId;
     return (projectAssignments || []).filter(a => a.status === 'active' && (!targetId || a.work_id === targetId));
+  }
+
+  async function fetchTasks(workIdParam = activeWorkId, targetOpCoId = activeOperatingCompanyId) {
+    if (!workIdParam || !tenantId) {
+      setTasks([]);
+      return [];
+    }
+    setIsTasksLoading(true);
+    try {
+      let query = supabase
+        .from('tasks')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('work_id', workIdParam)
+        .order('created_at', { ascending: false });
+
+      if (targetOpCoId) query = query.eq('tenant_company_id', targetOpCoId);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('[Supabase Query Error - tasks]:', error);
+        setTasks([]);
+        return [];
+      }
+      setTasks(data || []);
+      return data || [];
+    } catch (err) {
+      console.error('[Fetch Tasks Error]:', err);
+      setTasks([]);
+      return [];
+    } finally {
+      setIsTasksLoading(false);
+    }
+  }
+
+  async function fetchTaskAssignees(taskId) {
+    if (!taskId || !tenantId) {
+      setTaskAssignees([]);
+      return [];
+    }
+    setIsTaskAssigneesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('task_assignees')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('task_id', taskId)
+        .order('status', { ascending: true })
+        .order('assigned_at', { ascending: false });
+      if (error) {
+        console.error('[Supabase Query Error - task_assignees]:', error);
+        setTaskAssignees([]);
+        return [];
+      }
+      setTaskAssignees(data || []);
+      return data || [];
+    } catch (err) {
+      console.error('[Fetch Task Assignees Error]:', err);
+      setTaskAssignees([]);
+      return [];
+    } finally {
+      setIsTaskAssigneesLoading(false);
+    }
+  }
+
+  function canManageTask(workId = activeWorkId) {
+    const normalizedTenantRole = (tenantRole || '').toUpperCase();
+    if (['OWNER', 'ADMIN', 'MANAGER'].includes(normalizedTenantRole) || userRole === 'admin') return true;
+    return getActiveProjectAssignments(workId).some(assignment =>
+      assignment.user_id === currentUser?.id &&
+      assignment.status === 'active' &&
+      assignment.project_role === 'lead'
+    );
+  }
+
+  function openNewTask() {
+    if (!activeWorkId) {
+      showToast('Select a project before creating a task.');
+      return;
+    }
+    if (!canManageTask(activeWorkId)) {
+      showToast('Only Managers or the active Project Lead can manage tasks.');
+      return;
+    }
+    setEditingTaskId(null);
+    setTaskForm({
+      title: '', description: '', status: 'not_started', priority: 'medium', due_date: '', stage_id: ''
+    });
+    setTaskAssignees([]);
+    setTaskAssigneeForm({ user_id: '', role: 'assignee' });
+    setIsTaskEditorOpen(true);
+  }
+
+  function openEditTask(task) {
+    setEditingTaskId(task.id);
+    setTaskForm({
+      title: task.title || '',
+      description: task.description || '',
+      status: task.status || 'not_started',
+      priority: task.priority || 'medium',
+      due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : '',
+      stage_id: task.stage_id || ''
+    });
+    setTaskAssigneeForm({ user_id: '', role: 'assignee' });
+    setIsTaskEditorOpen(true);
+    fetchTaskAssignees(task.id);
+  }
+
+  function closeTaskEditor() {
+    setIsTaskEditorOpen(false);
+    setEditingTaskId(null);
+    setTaskAssignees([]);
+    setTaskAssigneeForm({ user_id: '', role: 'assignee' });
+  }
+
+  async function saveTask() {
+    const title = taskForm.title.trim();
+    const targetWork = (works || []).find(work => work.id === activeWorkId);
+    if (!title || !targetWork || !tenantId) {
+      alert('Task title, project, and tenant context are required.');
+      return { success: false };
+    }
+    if (!canManageTask(activeWorkId)) {
+      alert('Only Managers or the active Project Lead can manage tasks.');
+      return { success: false };
+    }
+
+    const selectedStage = taskForm.stage_id
+      ? (stageDefinitions || []).find(stage => stage.id === taskForm.stage_id && stage.work_id === activeWorkId)
+      : null;
+    if (taskForm.stage_id && !selectedStage) {
+      alert('Selected stage does not belong to the active project.');
+      return { success: false };
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      tenant_company_id: targetWork.tenant_company_id || activeOperatingCompanyId,
+      work_id: activeWorkId,
+      stage_id: selectedStage?.id || null,
+      title,
+      description: taskForm.description.trim() || null,
+      status: taskForm.status,
+      priority: taskForm.priority,
+      due_date: taskForm.due_date ? new Date(taskForm.due_date).toISOString() : null
+    };
+
+    try {
+      let response;
+      if (editingTaskId) {
+        response = await supabase.from('tasks').update({
+          stage_id: payload.stage_id,
+          title: payload.title,
+          description: payload.description,
+          status: payload.status,
+          priority: payload.priority,
+          due_date: payload.due_date
+        }).eq('id', editingTaskId).eq('tenant_id', tenantId).eq('work_id', activeWorkId).select('*');
+      } else {
+        response = await supabase.from('tasks').insert([{ ...payload, created_by: currentUser?.id }]).select('*');
+      }
+
+      if (response.error) {
+        console.error('[Supabase Mutation Error - tasks]:', response.error);
+        alert(`Failed to save task: ${response.error.message}`);
+        return { success: false, error: response.error };
+      }
+
+      await fetchTasks(activeWorkId, activeOperatingCompanyId);
+      if (!editingTaskId && response.data?.[0]) {
+        setEditingTaskId(response.data[0].id);
+        await fetchTaskAssignees(response.data[0].id);
+      }
+      showToast(editingTaskId ? 'Task updated.' : 'Task created.');
+      return { success: true, data: response.data?.[0] };
+    } catch (err) {
+      console.error('[Save Task Error]:', err);
+      alert(`Failed to save task: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  function getEligibleTaskAssignees(taskId = editingTaskId) {
+    const task = (tasks || []).find(item => item.id === taskId);
+    const activeMembers = getActiveProjectAssignments(task?.work_id || activeWorkId);
+    return activeMembers
+      .map(member => {
+        const profile = (profiles || []).find(item => item.id === member.user_id);
+        const tenantMember = (tenantMembers || []).find(item => item.user_id === member.user_id);
+        return {
+          user_id: member.user_id,
+          email: profile?.email || tenantMember?.email || `User (${member.user_id.slice(0, 8)}...)`,
+          project_role: member.project_role
+        };
+      })
+      .filter((member, index, all) => all.findIndex(item => item.user_id === member.user_id) === index);
+  }
+
+  async function assignUserToTask({ taskId = editingTaskId, userId, role = 'assignee' }) {
+    const task = (tasks || []).find(item => item.id === taskId);
+    if (!task || !tenantId || !userId) {
+      alert('Task and assignee are required.');
+      return { success: false };
+    }
+    if (!canManageTask(task.work_id)) {
+      alert('Only Managers or the active Project Lead can manage task assignees.');
+      return { success: false };
+    }
+
+    const activeProjectMember = getActiveProjectAssignments(task.work_id).some(member => member.user_id === userId);
+    if (!activeProjectMember) {
+      alert('Task assignees must be active project members.');
+      return { success: false };
+    }
+
+    if (role === 'accountable') {
+      const existingAccountable = (taskAssignees || []).some(assignment => assignment.status === 'active' && assignment.role === 'accountable');
+      if (existingAccountable) {
+        alert('Only one active accountable assignee is allowed per task.');
+        return { success: false };
+      }
+      if (task.stage_id) {
+        const stageEligible = (stageAssignments || []).some(assignment =>
+          assignment.status === 'active' && assignment.work_id === task.work_id && assignment.stage_id === task.stage_id && assignment.user_id === userId
+        );
+        if (!stageEligible) {
+          alert('A stage-specific accountable assignee must have an active assignment to that stage.');
+          return { success: false };
+        }
+      }
+    }
+
+    const duplicate = (taskAssignees || []).some(assignment => assignment.status === 'active' && assignment.user_id === userId && assignment.role === role);
+    if (duplicate) {
+      showToast('This user already has that active task role.');
+      return { success: false };
+    }
+
+    const targetWork = (works || []).find(work => work.id === task.work_id);
+    try {
+      const { data, error } = await supabase.from('task_assignees').insert([{
+        tenant_id: tenantId,
+        tenant_company_id: targetWork?.tenant_company_id || activeOperatingCompanyId,
+        task_id: task.id,
+        user_id: userId,
+        role,
+        status: 'active',
+        assigned_by: currentUser?.id
+      }]).select();
+      if (error) {
+        console.error('[Supabase Mutation Error - task_assignees]:', error);
+        alert(`Failed to assign task user: ${error.message}`);
+        return { success: false, error };
+      }
+      await fetchTaskAssignees(task.id);
+      showToast('Task assignee added.');
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.error('[Assign Task User Error]:', err);
+      alert(`Failed to assign task user: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  async function endTaskAssignment(assignmentId) {
+    if (!assignmentId) return { success: false };
+    if (!canManageTask()) {
+      alert('Only Managers or the active Project Lead can end task assignments.');
+      return { success: false };
+    }
+    const confirmed = await showConfirm('End this task assignment?');
+    if (!confirmed) return { success: false };
+    try {
+      const { data, error } = await supabase.from('task_assignees').update({
+        status: 'ended',
+        ended_by: currentUser?.id,
+        ended_at: new Date().toISOString()
+      }).eq('id', assignmentId).eq('tenant_id', tenantId).select();
+      if (error) {
+        console.error('[Supabase Mutation Error - end task assignment]:', error);
+        alert(`Failed to end task assignment: ${error.message}`);
+        return { success: false, error };
+      }
+      await fetchTaskAssignees(editingTaskId);
+      showToast('Task assignment ended.');
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.error('[End Task Assignment Error]:', err);
+      alert(`Failed to end task assignment: ${err.message || err}`);
+      return { success: false, error: err };
+    }
   }
 
   async function fetchReminders(targetOpCoId, authGeneration) {
@@ -2378,6 +2699,26 @@ USER REQUEST: ${trimmedMsg}`;
     assignUserToProject,
     endProjectAssignment,
     getActiveProjectAssignments,
+    tasks,
+    isTasksLoading,
+    isTaskEditorOpen,
+    setIsTaskEditorOpen,
+    editingTaskId,
+    taskForm,
+    setTaskForm,
+    taskAssignees,
+    isTaskAssigneesLoading,
+    taskAssigneeForm,
+    setTaskAssigneeForm,
+    fetchTasks,
+    fetchTaskAssignees,
+    openNewTask,
+    openEditTask,
+    closeTaskEditor,
+    saveTask,
+    getEligibleTaskAssignees,
+    assignUserToTask,
+    endTaskAssignment,
     // Stage Definitions / Stage Assignments
     stageDefinitions,
     isStageDefinitionsLoading,
