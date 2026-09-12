@@ -154,7 +154,19 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [pendingNav, setPendingNav] = useState(null);
 
   // --- Auth & Tenant Context Resolution (Steps 1, 2, 3, 4, 6, 8) ---
-  const loadAuthAndTenantContext = async (currentSession) => {
+  const authInitializationRef = useRef({
+    sessionKey: null,
+    promise: Promise.resolve(),
+    generation: 0
+  });
+  const authEventGenerationRef = useRef(0);
+
+  const isCurrentAuthInitialization = (generation) =>
+    authInitializationRef.current.generation === generation;
+
+  const initializeAuthAndTenantContext = async (currentSession, generation) => {
+    if (!isCurrentAuthInitialization(generation)) return;
+
     if (!currentSession?.user) {
       setSession(null);
       setCurrentUser(null);
@@ -163,7 +175,56 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setTenantRole(null);
       setOperatingCompanies([]);
       setActiveOperatingCompanyIdState(null);
+      localStorage.setItem('crm_active_operating_company_id', 'ALL');
       setUserRole('guest');
+      setAiSummary('');
+      setIsAiLoading(false);
+      setIsAiChatOpen(false);
+      setAiChatMessages([{
+        id: 'welcome',
+        sender: 'ai',
+        text: 'Hello! I am your RAJIV CRM Google AI Assistant. Ask me anything about your clients, active projects, pipeline status, open snags, tasks, or missing data.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+      setIsAiChatSending(false);
+      setCompanies([]);
+      setActiveCompanyId(null);
+      setUnits([]);
+      setActiveUnitId(null);
+      setWorks([]);
+      setActiveWorkId(null);
+      setIssues([]);
+      setActiveIssueId(null);
+      setLogs([]);
+      setReminders([]);
+      setMissingData([]);
+      setProjectAssignments([]);
+      setStageDefinitions([]);
+      setStageAssignments([]);
+      setStageAssignmentTargetId(null);
+      setTenantMembers([]);
+      setProfiles([]);
+      setSearchQuery('');
+      setSearchResults([]);
+      setPendingNav(null);
+      setActiveStageIndex(0);
+      setCenterView('pipeline');
+      setRightView('tasks');
+      setLogInput('');
+      setAttachment(null);
+      setEditingLogId(null);
+      setEditLogContent('');
+      setHistoryLog(null);
+      setIssueTitleInput('');
+      setReminderForm({ content: '', target_date: '', company_id: '', unit_id: '', work_id: '', log_id: '', stage_name: '' });
+      setModalUnits([]);
+      setModalWorks([]);
+      setWorkForm({ title: '', po_number: '', wo_number: '', boq_url: '', po_file_url: '', wo_file_url: '' });
+      setBoqFile(null);
+      setPoFile(null);
+      setWoFile(null);
+      setIsWorkUploading(false);
+      setIsUploading(false);
       setAuthLoading(false);
       return;
     }
@@ -180,6 +241,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         .eq('user_id', currentSession.user.id)
         .eq('status', 'active')
         .maybeSingle();
+
+      if (!isCurrentAuthInitialization(generation)) return;
 
       if (membershipError) {
         console.error('[Supabase Query Error - tenant_memberships]:', membershipError);
@@ -207,6 +270,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         .eq('id', currentSession.user.id)
         .maybeSingle();
 
+      if (!isCurrentAuthInitialization(generation)) return;
+
       if (profileError) {
         console.error('[Supabase Query Error - profiles]:', profileError);
       }
@@ -223,6 +288,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
           .eq('tenant_id', resolvedTenantId)
           .eq('status', 'active')
           .order('created_at', { ascending: true });
+
+        if (!isCurrentAuthInitialization(generation)) return;
 
         if (opCompError) {
           console.error('[Supabase Query Error - tenant_companies]:', opCompError);
@@ -253,28 +320,70 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
 
       // Step 6 & 8: Perform authenticated data fetching only after session & auth context are ready
       await Promise.all([
-        fetchCompanies(resolvedOpCoId),
-        fetchReminders(resolvedOpCoId),
-        fetchMissingData(resolvedOpCoId),
-        fetchProfiles(),
-        fetchTenantMembers(resolvedTenantId)
+        fetchCompanies(resolvedOpCoId, generation),
+        fetchReminders(resolvedOpCoId, generation),
+        fetchMissingData(resolvedOpCoId, generation),
+        fetchProfiles(generation),
+        fetchTenantMembers(resolvedTenantId, generation)
       ]);
     } catch (err) {
       console.error('[AuthContext Initialization Error]:', err);
+      throw err;
     } finally {
-      setAuthLoading(false);
+      if (isCurrentAuthInitialization(generation)) {
+        setAuthLoading(false);
+      }
     }
   };
 
+  const loadAuthAndTenantContext = (currentSession) => {
+    const sessionKey = currentSession?.user
+      ? currentSession.user.id
+      : 'signed-out';
+    const authInitialization = authInitializationRef.current;
+
+    if (authInitialization.sessionKey === sessionKey) {
+      if (currentSession?.user && authInitialization.promise) {
+        setSession(currentSession);
+        setCurrentUser(currentSession.user);
+      }
+      return authInitialization.promise;
+    }
+
+    const generation = authInitialization.generation + 1;
+    const nextInitialization = authInitialization.promise
+      .catch(() => {})
+      .then(() => initializeAuthAndTenantContext(currentSession, generation))
+      .catch((error) => {
+        if (authInitializationRef.current.promise === nextInitialization) {
+          authInitializationRef.current.sessionKey = null;
+        }
+        console.error('[AuthContext Initialization Error]:', error);
+      });
+
+    authInitializationRef.current = {
+      sessionKey,
+      promise: nextInitialization,
+      generation
+    };
+
+    return nextInitialization;
+  };
+
   useEffect(() => {
+    const initialAuthEventGeneration = authEventGenerationRef.current;
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      if (authEventGenerationRef.current !== initialAuthEventGeneration) return;
       loadAuthAndTenantContext(initialSession);
     }).catch(err => {
       console.error('[Auth Initialization Error]:', err);
-      setAuthLoading(false);
+      if (authEventGenerationRef.current === initialAuthEventGeneration) {
+        setAuthLoading(false);
+      }
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      authEventGenerationRef.current += 1;
       loadAuthAndTenantContext(newSession);
     });
 
@@ -613,13 +722,15 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   }, [activeWorkId, activeStageIndex, centerView, activeIssueId, works, stageDefinitions]);
 
   // --- Database Fetches ---
-  async function fetchCompanies(targetOpCoId) { 
+  async function fetchCompanies(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
     let query = supabase.from('companies').select('*').order('created_at', { ascending: true });
     if (opCoId) {
       query = query.eq('tenant_company_id', opCoId);
     }
     const { data, error } = await query;
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     if (error) {
       console.error('[Supabase Query Error - companies (client)]:', error);
       return;
@@ -635,9 +746,11 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     } 
   }
 
-  async function fetchProfiles() {
+  async function fetchProfiles(authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     setIsFetchingProfiles(true);
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     if (error) {
       console.error('[Supabase Query Error - profiles]:', error);
     } else if (data) {
@@ -646,7 +759,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     setIsFetchingProfiles(false);
   }
 
-  async function fetchTenantMembers(targetTenantId) {
+  async function fetchTenantMembers(targetTenantId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     const tId = targetTenantId || tenantId;
     if (!tId) {
       setTenantMembers([]);
@@ -661,6 +775,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
       if (error) {
         console.error('[Supabase Query Error - tenant_memberships]:', error);
         setTenantMembers([]);
@@ -1296,7 +1411,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     return (projectAssignments || []).filter(a => a.status === 'active' && (!targetId || a.work_id === targetId));
   }
 
-  async function fetchReminders(targetOpCoId) { 
+  async function fetchReminders(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
     let query = supabase
       .from('reminders')
@@ -1308,6 +1424,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
 
     const { data, error } = await query;
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     if (error) {
       console.error('[Supabase Query Error - reminders]:', error);
       return;
@@ -1315,7 +1432,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     if (data) setReminders(data);
   }
 
-  async function fetchMissingData(targetOpCoId) { 
+  async function fetchMissingData(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
     let query = supabase
       .from('works')
@@ -1327,6 +1445,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
 
     const { data, error } = await query;
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     if (error) {
       console.error('[Supabase Query Error - missingData]:', error);
       return;
