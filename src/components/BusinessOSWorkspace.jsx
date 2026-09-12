@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bell, BriefcaseBusiness,
   Building2, CalendarDays, Check, ChevronDown, ChevronRight, CircleDollarSign, ClipboardCheck,
@@ -90,8 +90,6 @@ const pageMeta = {
   admin: ['Administration', 'Organization, users, permissions, workflows and system controls.'],
 };
 
-const money = (n) => `₹${n.toLocaleString('en-IN')}`;
-
 function Badge({ children, tone = 'slate' }) {
   const tones = {
     slate: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
@@ -116,7 +114,7 @@ function StatCard({ icon: Icon, label, value, sub, trend, tone = 'blue' }) {
     <div className="os-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${toneClasses[tone]}`}><Icon size={18} /></div>
-        {trend && <span className={`text-[10px] font-extrabold flex items-center gap-0.5 ${trend.startsWith('-') ? 'text-rose-500' : 'text-emerald-500'}`}>{trend.startsWith('-') ? <ArrowDownRight size={12}/> : <ArrowUpRight size={12}/>} {trend}</span>}
+        {trend && <span className={`text-[10px] font-extrabold flex items-center gap-0.5 ${trend.startsWith('-') ? 'text-rose-500' : 'text-emerald-500'}`}>{trend.startsWith('-') ? <ArrowDownRight size={12} /> : <ArrowUpRight size={12} />} {trend}</span>}
       </div>
       <div className="mt-4 text-2xl font-black tracking-tight">{value}</div>
       <div className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">{label}</div>
@@ -130,7 +128,7 @@ function SectionCard({ title, subtitle, icon: Icon, action, children, className 
     <section className={`os-card overflow-hidden ${className}`}>
       <div className="px-4 py-3.5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          {Icon && <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300"><Icon size={15}/></div>}
+          {Icon && <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300"><Icon size={15} /></div>}
           <div className="min-w-0"><h3 className="text-xs font-black uppercase tracking-wider truncate">{title}</h3>{subtitle && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{subtitle}</p>}</div>
         </div>
         {action}
@@ -138,10 +136,6 @@ function SectionCard({ title, subtitle, icon: Icon, action, children, className 
       {children}
     </section>
   );
-}
-
-function Progress({ value }) {
-  return <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-indigo-500" style={{ width: `${value}%` }} /></div>;
 }
 
 function MiniTable({ columns, rows }) {
@@ -152,10 +146,10 @@ function UnavailableAction({ children, className = 'os-secondary', title = 'Unav
   return <button type="button" disabled title={title} className={`${className} opacity-60 cursor-not-allowed`}>{children}</button>;
 }
 
-function Dashboard({ role, onNavigate, onOpenClassic, companyName, companies, data }) {
-  const multi = companies.length > 1;
-  if (role === 'OWNER') return <OwnerDashboard onNavigate={onNavigate} companyName={companyName} multi={multi} companies={companies} data={data}/>;
-  if (role === 'MANAGER') return <ManagerDashboard onNavigate={onNavigate} data={data}/>;
+function Dashboard({ role, onNavigate, onOpenClassic, companyName, companies = [], data = {} }) {
+  const multi = (companies || []).length > 1;
+  if (role === 'OWNER') return <OwnerDashboard onNavigate={onNavigate} onOpenClassic={onOpenClassic} companyName={companyName} multi={multi} companies={companies} data={data} />;
+  if (role === 'MANAGER') return <ManagerDashboard onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
   if (role === 'SALES') return <FunctionalDashboard type="sales" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
   if (role === 'ACCOUNTANT') return <FunctionalDashboard type="accounts" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
   if (role === 'HR') return <FunctionalDashboard type="hr" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
@@ -165,11 +159,11 @@ function Dashboard({ role, onNavigate, onOpenClassic, companyName, companies, da
   return <MyWorkPage onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
 }
 
-function OwnerDashboard({ onNavigate, companyName, multi, companies, data }) {
-  const works = data.works || [];
-  const reminders = data.reminders || [];
-  const missingData = data.missingData || [];
-  const companyRows = companies.map(c => {
+function OwnerDashboard({ onNavigate, onOpenClassic, companyName, multi, companies = [], data = {} }) {
+  const works = data?.works || [];
+  const reminders = data?.reminders || [];
+  const missingData = data?.missingData || [];
+  const companyRows = (companies || []).map(c => {
     const companyWorks = works.filter(work => work.tenant_company_id === c.id);
     return [
       <div className="flex items-center gap-2"><div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black">{c.name?.charAt(0) || 'C'}</div><span className="font-bold">{c.name}</span></div>,
@@ -180,104 +174,200 @@ function OwnerDashboard({ onNavigate, companyName, multi, companies, data }) {
     ];
   });
   const attention = [
-    ...missingData.slice(0, 3).map(work => [`${work.title} is missing project data`, 'Project', 'amber']),
-    ...reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).slice(0, 2).map(reminder => [reminder.content, 'Reminder', 'blue'])
+    ...missingData.slice(0, 3).map(work => ({ text: `${work.title} is missing project data`, type: 'Project', tone: 'amber', work })),
+    ...reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).slice(0, 2).map(reminder => ({ text: reminder.content, type: 'Reminder', tone: 'blue', reminder }))
   ];
   return <div className="space-y-5">
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={CircleDollarSign} label="Group Revenue" value="Unavailable" sub="No revenue backend in current application" tone="blue"/><StatCard icon={WalletCards} label="Receivables" value="Unavailable" sub="No receivables backend in current application" tone="amber"/><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub={multi ? 'Across loaded authorized context' : `${companyName} context`} tone="violet"/><StatCard icon={Users} label="Employees" value="Unavailable" sub="No employee backend in current application" tone="emerald"/></div>
+    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={CircleDollarSign} label="Group Revenue" value="Unavailable" sub="No revenue backend in current application" tone="blue" /><StatCard icon={WalletCards} label="Receivables" value="Unavailable" sub="No receivables backend in current application" tone="amber" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub={multi ? 'Across loaded authorized context' : `${companyName} context`} tone="violet" /><StatCard icon={Users} label="Employees" value="Unavailable" sub="No employee backend in current application" tone="emerald" /></div>
     <div className="grid xl:grid-cols-[1.6fr_1fr] gap-4">
-      <SectionCard title={multi ? 'Company Performance' : 'Company Health'} subtitle={multi ? 'Consolidated view across operating companies' : 'Single-company operating overview'} icon={Building2} action={<button onClick={() => onNavigate('reports')} className="os-link">View report <ChevronRight size={13}/></button>}>
-        <MiniTable columns={['Company','Health','Progress','Revenue','Projects']} rows={companyRows.length ? companyRows : [[companyName, 'Unavailable', 'Unavailable', 'Unavailable', '0 loaded']]}/>
+      <SectionCard title={multi ? 'Company Performance' : 'Company Health'} subtitle={multi ? 'Consolidated view across operating companies' : 'Single-company operating overview'} icon={Building2} action={<button onClick={() => onNavigate('reports')} className="os-link">View report <ChevronRight size={13} /></button>}>
+        <MiniTable columns={['Company', 'Health', 'Progress', 'Revenue', 'Projects']} rows={companyRows.length ? companyRows : [[companyName, 'Unavailable', 'Unavailable', 'Unavailable', '0 loaded']]} />
       </SectionCard>
       <SectionCard title="Executive Attention" subtitle="Only exceptions and decisions that need management" icon={TriangleAlert}>
         <div className="p-4 space-y-2.5">
-          {attention.length ? attention.map(([x, y, t]) => <button onClick={() => onNavigate('projects')} key={`${x}-${y}`} className="w-full text-left p-3 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center gap-3 hover:border-sky-300"><div className={`h-2 w-2 rounded-full ${t === 'red' ? 'bg-rose-500' : t === 'amber' ? 'bg-amber-500' : 'bg-sky-500'}`}/><div className="min-w-0 flex-1"><p className="text-xs font-bold truncate">{x}</p><p className="text-[10px] text-slate-400">{y}</p></div><ChevronRight size={14} className="text-slate-400"/></button>) : <p className={`p-3 text-xs italic ${'text-slate-400'}`}>No loaded exceptions in the current context.</p>}
+          {attention.length ? attention.map((item, idx) => (
+            <button
+              onClick={() => {
+                if (item.work?.company_id) {
+                  data?.navigateToContext?.(item.work.company_id, item.work.unit_id, item.work.id);
+                  onOpenClassic?.();
+                } else if (item.reminder?.work_id) {
+                  data?.navigateToContext?.(item.reminder.company_id, item.reminder.unit_id, item.reminder.work_id);
+                  onOpenClassic?.();
+                } else {
+                  onNavigate('projects');
+                }
+              }}
+              key={idx}
+              className="w-full text-left p-3 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center gap-3 hover:border-sky-300 transition"
+            >
+              <div className={`h-2 w-2 rounded-full ${item.tone === 'red' ? 'bg-rose-500' : item.tone === 'amber' ? 'bg-amber-500' : 'bg-sky-500'}`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold truncate">{item.text}</p>
+                <p className="text-[10px] text-slate-400">{item.type}</p>
+              </div>
+              <ChevronRight size={14} className="text-slate-400" />
+            </button>
+          )) : <p className="p-3 text-xs italic text-slate-400">No loaded exceptions in the current context.</p>}
         </div>
       </SectionCard>
     </div>
     <div className="grid lg:grid-cols-3 gap-4">
       <SectionCard title="Financial Snapshot" icon={BarChart3}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no financial backend is connected to this dashboard.</p></div></SectionCard>
-      <SectionCard title="Project Health" icon={HeartPulse}><div className="p-4 grid grid-cols-3 gap-2">{[['Loaded','' + works.length,'blue'],['At Risk','Unavailable','amber'],['Delayed','Unavailable','red']].map(([a,b,t])=><div key={a} className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 text-center"><div className={`text-lg font-black ${t==='blue'?'text-sky-500':t==='amber'?'text-amber-500':'text-rose-500'}`}>{b}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">{a}</div></div>)}</div></SectionCard>
+      <SectionCard title="Project Health" icon={HeartPulse}><div className="p-4 grid grid-cols-3 gap-2">{[['Loaded', '' + works.length, 'blue'], ['At Risk', 'Unavailable', 'amber'], ['Delayed', 'Unavailable', 'red']].map(([a, b, t]) => <div key={a} className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 text-center"><div className={`text-lg font-black ${t === 'blue' ? 'text-sky-500' : t === 'amber' ? 'text-amber-500' : 'text-rose-500'}`}>{b}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">{a}</div></div>)}</div></SectionCard>
       <SectionCard title="Pending Approvals" icon={ClipboardCheck}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no approval backend is connected to this dashboard.</p></div></SectionCard>
     </div>
   </div>;
 }
 
-function ManagerDashboard({ onNavigate, data }) {
-  const works = data.works || [];
-  const tasks = data.tasks || [];
-  const assignments = data.projectAssignments || [];
-  const missingData = data.missingData || [];
+function ManagerDashboard({ onNavigate, onOpenClassic, data = {} }) {
+  const works = data?.works || [];
+  const tasks = data?.tasks || [];
+  const assignments = data?.projectAssignments || [];
+  const missingData = data?.missingData || [];
+  const profiles = data?.profiles || [];
+  const stageDefinitions = data?.stageDefinitions || [];
+
   const projectRows = works.map(work => {
     const lead = assignments.find(assignment => assignment.work_id === work.id && assignment.status === 'active' && assignment.project_role === 'lead');
-    const profile = (data.profiles || []).find(item => item.id === lead?.user_id);
-    const stage = (data.stageDefinitions || []).find(item => item.work_id === work.id && item.status === 'active');
-    return [<b>{work.title}</b>, stage?.name || 'Unavailable', 'Unavailable', <Badge tone="slate">Unavailable</Badge>, profile?.email || 'Unavailable'];
+    const profile = profiles.find(item => item.id === lead?.user_id);
+    const stage = stageDefinitions.find(item => item.work_id === work.id && item.status === 'active');
+    return [
+      <button
+        onClick={() => {
+          data?.navigateToContext?.(work.company_id, work.unit_id, work.id);
+          onOpenClassic?.();
+        }}
+        className="text-left font-bold hover:text-sky-500 transition"
+      >
+        {work.title}
+      </button>,
+      stage?.name || 'In Progress',
+      'Unavailable',
+      <Badge tone="slate">Unavailable</Badge>,
+      profile?.email || (lead ? `User (${lead.user_id.slice(0, 6)}...)` : 'Unassigned')
+    ];
   });
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub="Current loaded context" tone="violet"/><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue"/><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" sub="No approval backend" tone="amber"/><StatCard icon={AlertTriangle} label="Missing Data Alerts" value={missingData.length} sub="Existing project checks" tone="rose"/></div><div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Project Command Center" subtitle="Loaded projects where assignment context is available" icon={FolderKanban} action={<button onClick={()=>onNavigate('projects')} className="os-link">All projects <ChevronRight size={13}/></button>}><MiniTable columns={['Project','Stage','Progress','Health','Lead']} rows={projectRows.length ? projectRows : [['No loaded projects','Unavailable','Unavailable','Unavailable','Unavailable']]}/></SectionCard><SectionCard title="Team Bottlenecks" icon={Clock3}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no bottleneck or escalation backend is connected.</p></div></SectionCard></div></div>;
+
+  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub="Current loaded context" tone="violet" /><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" sub="No approval backend" tone="amber" /><StatCard icon={AlertTriangle} label="Missing Data Alerts" value={missingData.length} sub="Existing project checks" tone="rose" /></div><div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Project Command Center" subtitle="Loaded projects where assignment context is available" icon={FolderKanban} action={<button onClick={() => onNavigate('projects')} className="os-link">All projects <ChevronRight size={13} /></button>}><MiniTable columns={['Project', 'Stage', 'Progress', 'Health', 'Lead']} rows={projectRows.length ? projectRows : [['No loaded projects', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable']]} /></SectionCard><SectionCard title="Team Bottlenecks" icon={Clock3}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no bottleneck or escalation backend is connected.</p></div></SectionCard></div></div>;
 }
 
-function FunctionalDashboard({ type, onNavigate, onOpenClassic, data }) {
+function FunctionalDashboard({ type, onNavigate, onOpenClassic, data = {} }) {
   const configs = {
-    sales: { title:'Sales Command Center', cards:[['Open Enquiries','24'],['Quotations','13'],['Sales Orders','8'],['Receivables','₹86L']], links:[['New Quotation','sales'],['New Proforma','sales'],['New Sales Order','sales'],['Tax Invoice','accounts']] },
-    accounts: { title:'Accounts Workbench', cards:[['To Invoice','12'],['Purchase Bills','18'],['Receivables','₹86L'],['Payables','₹42L']], links:[['Tax Invoice','accounts'],['Purchase Bill','procurement'],['Receipt','accounts'],['Payment','accounts']] },
-    hr: { title:'HR Operations Center', cards:[['Employees','186'],['Present Today','164'],['Leave Requests','7'],['Missing Attendance','3']], links:[['Attendance','hr'],['Leave','hr'],['Payroll','hr'],['Employees','hr']] },
-    procurement: { title:'Procurement Command Center', cards:[['Purchase Requests','17'],['RFQs','9'],['PO Awaiting Approval','4'],['Bills to Verify','8']], links:[['Purchase Request','procurement'],['RFQ','procurement'],['Purchase Order','procurement'],['AI Bill Capture','procurement']] },
-    inventory: { title:'Inventory Control Center', cards:[['Stock Value','₹1.24Cr'],['Low Stock','14'],['Pending GRN','6'],['Project Issues','11']], links:[['Stock Receipt','inventory'],['Stock Issue','inventory'],['Transfer','inventory'],['Project Material','inventory']] },
-    engineer: { title:'Project / Site Workspace', cards:[['My Projects','4'],['My Tasks','16'],['Open Issues','5'],['Today Logs','3']], links:[['Daily Log','projects'],['My Tasks','my-work'],['Issues','projects'],['Documents','documents']] },
+    sales: { title: 'Sales Command Center', cards: [['Open Enquiries', '24'], ['Quotations', '13'], ['Sales Orders', '8'], ['Receivables', '₹86L']], links: [['New Quotation', 'sales'], ['New Proforma', 'sales'], ['New Sales Order', 'sales'], ['Tax Invoice', 'accounts']] },
+    accounts: { title: 'Accounts Workbench', cards: [['To Invoice', '12'], ['Purchase Bills', '18'], ['Receivables', '₹86L'], ['Payables', '₹42L']], links: [['Tax Invoice', 'accounts'], ['Purchase Bill', 'procurement'], ['Receipt', 'accounts'], ['Payment', 'accounts']] },
+    hr: { title: 'HR Operations Center', cards: [['Employees', '186'], ['Present Today', '164'], ['Leave Requests', '7'], ['Missing Attendance', '3']], links: [['Attendance', 'hr'], ['Leave', 'hr'], ['Payroll', 'hr'], ['Employees', 'hr']] },
+    procurement: { title: 'Procurement Command Center', cards: [['Purchase Requests', '17'], ['RFQs', '9'], ['PO Awaiting Approval', '4'], ['Bills to Verify', '8']], links: [['Purchase Request', 'procurement'], ['RFQ', 'procurement'], ['Purchase Order', 'procurement'], ['AI Bill Capture', 'procurement']] },
+    inventory: { title: 'Inventory Control Center', cards: [['Stock Value', '₹1.24Cr'], ['Low Stock', '14'], ['Pending GRN', '6'], ['Project Issues', '11']], links: [['Stock Receipt', 'inventory'], ['Stock Issue', 'inventory'], ['Transfer', 'inventory'], ['Project Material', 'inventory']] },
+    engineer: { title: 'Project / Site Workspace', cards: [['My Projects', '4'], ['My Tasks', '16'], ['Open Issues', '5'], ['Today Logs', '3']], links: [['Daily Log', 'projects'], ['My Tasks', 'my-work'], ['Issues', 'projects'], ['Documents', 'documents']] },
   };
-  const c=configs[type];
+  const c = configs[type];
   const isEngineer = type === 'engineer';
-  const taskCount = data.tasks?.length || 0;
-  const workCount = data.works?.length || 0;
-  const issueCount = data.issues?.filter(issue => issue.status === 'open').length || 0;
-  const logCount = data.logs?.filter(log => !log.is_deleted).length || 0;
+  const tasks = data?.tasks || [];
+  const works = data?.works || [];
+  const issues = data?.issues || [];
+  const logs = data?.logs || [];
+  const taskCount = tasks.length;
+  const workCount = works.length;
+  const issueCount = issues.filter(issue => issue.status === 'open').length;
+  const logCount = logs.filter(log => !log.is_deleted).length;
   const cards = isEngineer ? [['Loaded Projects', workCount], ['Loaded Tasks', taskCount], ['Open Issues', issueCount], ['Loaded Logs', logCount]] : c.cards.map(([label]) => [label, 'Unavailable']);
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3">{cards.map(([a,b],i)=><StatCard key={a} icon={[Gauge,Receipt,FolderKanban,AlertTriangle][i]} label={a} value={b} sub={isEngineer ? 'Current loaded context' : 'No backend for this module'} tone={['blue','violet','amber','emerald'][i]}/>)}</div><div className="grid lg:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="My Priority Queue" subtitle={isEngineer ? 'Existing project/task context' : 'Unavailable until this module has a real backend'} icon={Zap}>{isEngineer ? <MiniTable columns={['Item','Context','Due','Priority']} rows={(data.tasks || []).slice(0, 4).map(task => [<b>{task.title}</b>, task.stage_id ? 'Stage task' : 'Project task', task.due_date ? new Date(task.due_date).toLocaleDateString() : '—', <Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge>])}/> : <div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no operational data source is connected for {c.title}.</p><button onClick={onOpenClassic} className="os-link mt-3">Open current CRM workspace <ChevronRight size={13}/></button></div>}</SectionCard><SectionCard title="Quick Actions" icon={Plus}><div className="p-4 grid grid-cols-2 gap-2">{c.links.map(([a,n])=>isEngineer ? <button key={a} onClick={()=>n === 'projects' ? onOpenClassic() : onNavigate(n)} className="os-action"><Plus size={14}/>{a}</button> : <UnavailableAction key={a} className="os-action"><Plus size={14}/>{a}</UnavailableAction>)}</div></SectionCard></div><SectionCard title="Recent Activity" icon={Activity}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no activity feed backend is connected to this dashboard.</p></div></SectionCard></div>;
+  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3">{cards.map(([a, b], i) => <StatCard key={a} icon={[Gauge, Receipt, FolderKanban, AlertTriangle][i]} label={a} value={b} sub={isEngineer ? 'Current loaded context' : 'No backend for this module'} tone={['blue', 'violet', 'amber', 'emerald'][i]} />)}</div><div className="grid lg:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="My Priority Queue" subtitle={isEngineer ? 'Existing project/task context' : 'Unavailable until this module has a real backend'} icon={Zap}>{isEngineer ? <MiniTable columns={['Item', 'Context', 'Due', 'Priority']} rows={tasks.slice(0, 4).map(task => [<b key={task.id}>{task.title}</b>, task.stage_id ? 'Stage task' : 'Project task', task.due_date ? new Date(task.due_date).toLocaleDateString() : '—', <Badge key={`b-${task.id}`} tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge>])} /> : <div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no operational data source is connected for {c.title}.</p><button onClick={onOpenClassic} className="os-link mt-3">Open current CRM workspace <ChevronRight size={13} /></button></div>}</SectionCard><SectionCard title="Quick Actions" icon={Plus}><div className="p-4 grid grid-cols-2 gap-2">{c.links.map(([a, n]) => isEngineer ? <button key={a} onClick={() => n === 'projects' ? onOpenClassic() : onNavigate(n)} className="os-action"><Plus size={14} />{a}</button> : <UnavailableAction key={a} className="os-action"><Plus size={14} />{a}</UnavailableAction>)}</div></SectionCard></div><SectionCard title="Recent Activity" icon={Activity}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no activity feed backend is connected to this dashboard.</p></div></SectionCard></div>;
 }
 
-function MyWorkPage({ onNavigate, onOpenClassic, data }) {
-  const tasks = data.tasks || [];
-  const works = data.works || [];
-  const reminders = data.reminders || [];
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue"/><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet"/><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" tone="amber"/><StatCard icon={FileText} label="Documents" value="Unavailable" tone="emerald"/><StatCard icon={Bell} label="Open Reminders" value={reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).length} tone="rose"/></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Today's Work" subtitle="Existing tasks and reminders in the loaded context" icon={CalendarCheck2}><div className="p-4 space-y-2">{tasks.length ? tasks.slice(0, 5).map(task => <button key={task.id} onClick={onOpenClassic} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-left hover:border-sky-300"><span className="text-[10px] font-black text-slate-400 w-12">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}</span><div className="h-2 w-2 rounded-full bg-sky-500"/><div className="flex-1"><p className="text-xs font-bold">{task.title}</p><p className="text-[10px] text-slate-400">{task.status.replace('_', ' ')}</p></div><Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge></button>) : <p className="text-xs italic text-slate-400">No loaded 7F tasks for the current project context.</p>}</div></SectionCard><SectionCard title="My Projects" icon={FolderKanban}><div className="p-4 space-y-3">{works.length ? works.slice(0, 5).map(work => <button key={work.id} onClick={onOpenClassic} className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 transition"><div className="flex justify-between"><span className="text-xs font-bold">{work.title}</span><ChevronRight size={14} className="text-slate-400"/></div><div className="mt-2 text-[9px] text-slate-400">Progress unavailable</div></button>) : <p className="text-xs italic text-slate-400">No loaded projects in the current context.</p>}</div></SectionCard></div></div>;
+function MyWorkPage({ onNavigate, onOpenClassic, data = {} }) {
+  const tasks = data?.tasks || [];
+  const works = data?.works || [];
+  const reminders = data?.reminders || [];
+  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" tone="amber" /><StatCard icon={FileText} label="Documents" value="Unavailable" tone="emerald" /><StatCard icon={Bell} label="Open Reminders" value={reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).length} tone="rose" /></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Today's Work" subtitle="Existing tasks and reminders in the loaded context" icon={CalendarCheck2}><div className="p-4 space-y-2">{tasks.length ? tasks.slice(0, 5).map(task => <button key={task.id} onClick={() => { if (task.work_id) { const w = works.find(item => item.id === task.work_id); if (w) data?.navigateToContext?.(w.company_id, w.unit_id, w.id); } onOpenClassic(); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-left hover:border-sky-300 transition"><span className="text-[10px] font-black text-slate-400 w-12">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}</span><div className="h-2 w-2 rounded-full bg-sky-500" /><div className="flex-1"><p className="text-xs font-bold">{task.title}</p><p className="text-[10px] text-slate-400">{task.status.replace('_', ' ')}</p></div><Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge></button>) : <p className="text-xs italic text-slate-400">No loaded 7F tasks for the current project context.</p>}</div></SectionCard><SectionCard title="My Projects" icon={FolderKanban}><div className="p-4 space-y-3">{works.length ? works.slice(0, 5).map(work => <button key={work.id} onClick={() => { data?.navigateToContext?.(work.company_id, work.unit_id, work.id); onOpenClassic(); }} className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 transition"><div className="flex justify-between"><span className="text-xs font-bold">{work.title}</span><ChevronRight size={14} className="text-slate-400" /></div><div className="mt-2 text-[9px] text-slate-400">Click to view project in CRM</div></button>) : <p className="text-xs italic text-slate-400">No loaded projects in the current context.</p>}</div></SectionCard></div></div>;
 }
 
 function DataModulePage({ module, onNavigate }) {
   const definitions = {
-    crm: { icon: Contact, title:'CRM Workspace', tabs:['Dashboard','Enquiries','Customers','Contacts','Follow-ups'], rows:[['ENQ-104','Sail Life Sciences','Sprinkler Upgrade','₹24L','Follow-up'],['ENQ-105','Matrix Pharma','Hydrant Extension','₹18L','Quotation'],['ENQ-106','ABC Industries','AMC','₹8L','New']] },
-    sales: { icon: CircleDollarSign, title:'Sales Workspace', tabs:['Dashboard','Quotations','Proforma Invoices','Sales Orders','Tax Invoices','Receivables'], rows:[['QTN-1042','Sail Life Sciences','₹24,00,000','12 Sep','Negotiation'],['PI-0081','Matrix Pharma','₹18,40,000','11 Sep','Issued'],['SO-0192','ABC Industries','₹8,20,000','14 Sep','Confirmed'],['INV-0321','Sail Life Sciences','₹12,60,000','08 Sep','Part Paid']] },
-    procurement: { icon: ShoppingCart, title:'Procurement Workspace', tabs:['Dashboard','Purchase Requests','RFQs','Vendor Quotes','Purchase Orders','GRN','Purchase Bills','Vendors'], rows:[['PR-220','PB-14','Sprinkler heads','240','Pending'],['PO-1042','PB-14','Pipes & fittings','₹6,80,000','Approval'],['GRN-882','MEP-22','Valves','120','Received'],['PB-401','Vendor ABC','Electrical materials','₹1,24,000','To Verify']] },
-    inventory: { icon: Boxes, title:'Inventory Workspace', tabs:['Dashboard','Items','Warehouses','Stock','Receipts','Issues','Transfers','Project Material'], rows:[['SPR-001','ESFR Sprinkler','WH-01','420','Available'],['PIPE-042','MS Pipe 100mm','WH-01','1,280m','Available'],['VAL-012','Butterfly Valve','WH-02','18','Low Stock'],['MAT-88','PB-14 Allocation','WH-01','₹4.8L','Project']] },
-    accounts: { icon: Landmark, title:'Accounts Workspace', tabs:['Dashboard','Tax Invoices','Purchase Bills','Receivables','Payables','Payments','Banking','Ledger','GST','E-Invoice','E-Way Bill'], rows:[['INV-0321','Sail Life Sciences','₹12,60,000','₹4,20,000','Part Paid'],['INV-0318','Matrix Pharma','₹8,40,000','₹8,40,000','Paid'],['PB-401','Vendor ABC','₹1,24,000','₹1,24,000','Payable'],['RCPT-220','Customer XYZ','₹2,80,000','₹0','Received']] },
-    hr: { icon: Users, title:'HR Workspace', tabs:['Dashboard','Employees','Organization','Attendance','Leave','Payroll','Expenses','Documents','Reports'], rows:[['EMP-001','Rajiv K','Project Manager','Active','12 days'],['EMP-002','Misbha','Design Engineer','Active','10 days'],['EMP-003','Suresh','Site Engineer','Active','18 days'],['EMP-004','Anil','Accounts','Leave','—']] },
+    crm: { icon: Contact, title: 'CRM Workspace', tabs: ['Dashboard', 'Enquiries', 'Customers', 'Contacts', 'Follow-ups'], rows: [['ENQ-104', 'Sail Life Sciences', 'Sprinkler Upgrade', '₹24L', 'Follow-up'], ['ENQ-105', 'Matrix Pharma', 'Hydrant Extension', '₹18L', 'Quotation'], ['ENQ-106', 'ABC Industries', 'AMC', '₹8L', 'New']] },
+    sales: { icon: CircleDollarSign, title: 'Sales Workspace', tabs: ['Dashboard', 'Quotations', 'Proforma Invoices', 'Sales Orders', 'Tax Invoices', 'Receivables'], rows: [['QTN-1042', 'Sail Life Sciences', '₹24,00,000', '12 Sep', 'Negotiation'], ['PI-0081', 'Matrix Pharma', '₹18,40,000', '11 Sep', 'Issued'], ['SO-0192', 'ABC Industries', '₹8,20,000', '14 Sep', 'Confirmed'], ['INV-0321', 'Sail Life Sciences', '₹12,60,000', '08 Sep', 'Part Paid']] },
+    procurement: { icon: ShoppingCart, title: 'Procurement Workspace', tabs: ['Dashboard', 'Purchase Requests', 'RFQs', 'Vendor Quotes', 'Purchase Orders', 'GRN', 'Purchase Bills', 'Vendors'], rows: [['PR-220', 'PB-14', 'Sprinkler heads', '240', 'Pending'], ['PO-1042', 'PB-14', 'Pipes & fittings', '₹6,80,000', 'Approval'], ['GRN-882', 'MEP-22', 'Valves', '120', 'Received'], ['PB-401', 'Vendor ABC', 'Electrical materials', '₹1,24,000', 'To Verify']] },
+    inventory: { icon: Boxes, title: 'Inventory Workspace', tabs: ['Dashboard', 'Items', 'Warehouses', 'Stock', 'Receipts', 'Issues', 'Transfers', 'Project Material'], rows: [['SPR-001', 'ESFR Sprinkler', 'WH-01', '420', 'Available'], ['PIPE-042', 'MS Pipe 100mm', 'WH-01', '1,280m', 'Available'], ['VAL-012', 'Butterfly Valve', 'WH-02', '18', 'Low Stock'], ['MAT-88', 'PB-14 Allocation', 'WH-01', '₹4.8L', 'Project']] },
+    accounts: { icon: Landmark, title: 'Accounts Workspace', tabs: ['Dashboard', 'Tax Invoices', 'Purchase Bills', 'Receivables', 'Payables', 'Payments', 'Banking', 'Ledger', 'GST', 'E-Invoice', 'E-Way Bill'], rows: [['INV-0321', 'Sail Life Sciences', '₹12,60,000', '₹4,20,000', 'Part Paid'], ['INV-0318', 'Matrix Pharma', '₹8,40,000', '₹8,40,000', 'Paid'], ['PB-401', 'Vendor ABC', '₹1,24,000', '₹1,24,000', 'Payable'], ['RCPT-220', 'Customer XYZ', '₹2,80,000', '₹0', 'Received']] },
+    hr: { icon: Users, title: 'HR Workspace', tabs: ['Dashboard', 'Employees', 'Organization', 'Attendance', 'Leave', 'Payroll', 'Expenses', 'Documents', 'Reports'], rows: [['EMP-001', 'Rajiv K', 'Project Manager', 'Active', '12 days'], ['EMP-002', 'Misbha', 'Design Engineer', 'Active', '10 days'], ['EMP-003', 'Suresh', 'Site Engineer', 'Active', '18 days'], ['EMP-004', 'Anil', 'Accounts', 'Leave', '—']] },
   };
-  const d=definitions[module] || definitions.crm;
-  const [tab,setTab]=useState(d.tabs[0]);
-  return <div className="space-y-4"><div className="flex gap-2 overflow-x-auto pb-1">{d.tabs.map(t=><button key={t} onClick={()=>setTab(t)} className={`os-tab ${tab===t?'active':''}`}>{t}</button>)}</div><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={d.icon} label="Open Records" value="Unavailable" sub="No backend connected" tone="blue"/><StatCard icon={Clock3} label="Pending Action" value="Unavailable" sub="No backend connected" tone="amber"/><StatCard icon={CheckCircle2} label="Completed" value="Unavailable" sub="No backend connected" tone="emerald"/><StatCard icon={BarChart3} label="This Month" value="Unavailable" sub="No backend connected" tone="violet"/></div><SectionCard title={tab} subtitle="Module backend is not connected in the current application." icon={d.icon} action={<div className="flex gap-2"><UnavailableAction className="os-icon-btn" title="Unavailable: module filter backend is not connected."><Filter size={14}/></UnavailableAction><UnavailableAction className="os-primary"><Plus size={14}/> New</UnavailableAction></div>}><p className="p-4 text-xs italic text-slate-400">No live {tab.toLowerCase()} records are available from the current backend.</p></SectionCard></div>;
+  const d = definitions[module] || definitions.crm;
+  const [tab, setTab] = useState(d.tabs[0]);
+  return <div className="space-y-4"><div className="flex gap-2 overflow-x-auto pb-1">{d.tabs.map(t => <button key={t} onClick={() => setTab(t)} className={`os-tab ${tab === t ? 'active' : ''}`}>{t}</button>)}</div><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={d.icon} label="Open Records" value="Unavailable" sub="No backend connected" tone="blue" /><StatCard icon={Clock3} label="Pending Action" value="Unavailable" sub="No backend connected" tone="amber" /><StatCard icon={CheckCircle2} label="Completed" value="Unavailable" sub="No backend connected" tone="emerald" /><StatCard icon={BarChart3} label="This Month" value="Unavailable" sub="No backend connected" tone="violet" /></div><SectionCard title={tab} subtitle="Module backend is not connected in the current application." icon={d.icon} action={<div className="flex gap-2"><UnavailableAction className="os-icon-btn" title="Unavailable: module filter backend is not connected."><Filter size={14} /></UnavailableAction><UnavailableAction className="os-primary"><Plus size={14} /> New</UnavailableAction></div>}><p className="p-4 text-xs italic text-slate-400">No live {tab.toLowerCase()} records are available from the current backend.</p></SectionCard></div>;
 }
 
-function ProjectsPage({ onOpenClassic, data }) {
-  const works = data.works || [];
-  const stageDefinitions = data.stageDefinitions || [];
+function ProjectsPage({ onOpenClassic, data = {} }) {
+  const works = data?.works || [];
+  const stageDefinitions = data?.stageDefinitions || [];
+  const clientCompanies = data?.companies || [];
+  const projectAssignments = data?.projectAssignments || [];
+  const profiles = data?.profiles || [];
+
   const projectRows = works.map(work => {
+    const client = clientCompanies.find(c => c.id === work.company_id);
     const stage = stageDefinitions.find(item => item.work_id === work.id && item.status === 'active');
-    return [<b>{work.title}</b>, work.company_id || 'Unavailable', stage?.name || 'Unavailable', 'Unavailable', <Badge tone="slate">Unavailable</Badge>, 'Unavailable'];
+    const lead = projectAssignments.find(a => a.work_id === work.id && a.status === 'active' && a.project_role === 'lead');
+    const profile = profiles.find(p => p.id === lead?.user_id);
+    return [
+      <button
+        onClick={() => {
+          data?.navigateToContext?.(work.company_id, work.unit_id, work.id);
+          onOpenClassic?.();
+        }}
+        className="text-left font-bold hover:text-sky-500 transition"
+      >
+        {work.title}
+      </button>,
+      client?.name || 'Client Unit',
+      stage?.name || 'In Progress',
+      'Unavailable',
+      <Badge tone="slate">Unavailable</Badge>,
+      profile?.email || (lead ? `User (${lead.user_id.slice(0, 6)}...)` : 'Unassigned')
+    ];
   });
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet"/><StatCard icon={HeartPulse} label="On Track" value="Unavailable" tone="emerald"/><StatCard icon={TriangleAlert} label="At Risk" value="Unavailable" tone="amber"/><StatCard icon={AlertTriangle} label="Delayed" value="Unavailable" tone="rose"/><StatCard icon={CircleDollarSign} label="Open Value" value="Unavailable" tone="blue"/></div><SectionCard title="Project Pipeline" subtitle="Pipeline metrics require project status/progress fields not present in the current application model" icon={Workflow} action={<button onClick={onOpenClassic} className="os-secondary"><Grid2X2 size={14}/> Open current CRM workspace</button>}><div className="p-4"><p className="text-xs italic text-slate-400">Pipeline aggregation is unavailable. Use the current CRM workspace for live projects and stages.</p></div></SectionCard><div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Project Register" icon={FolderKanban}><MiniTable columns={['Project','Customer','Stage','Progress','Health','Manager']} rows={projectRows.length ? projectRows : [['No loaded projects','Unavailable','Unavailable','Unavailable','Unavailable','Unavailable']]}/></SectionCard><SectionCard title="Project Command Actions" icon={Zap}><div className="p-4 grid grid-cols-2 gap-2">{['New Project','Manage Stages','Assign Team','Create Task','Log Progress','Project Cost'].map(x=><UnavailableAction className="os-action" key={x}><Plus size={14}/>{x}</UnavailableAction>)}</div></SectionCard></div></div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+        <StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet" />
+        <StatCard icon={HeartPulse} label="On Track" value="Unavailable" tone="emerald" />
+        <StatCard icon={TriangleAlert} label="At Risk" value="Unavailable" tone="amber" />
+        <StatCard icon={AlertTriangle} label="Delayed" value="Unavailable" tone="rose" />
+        <StatCard icon={CircleDollarSign} label="Open Value" value="Unavailable" tone="blue" />
+      </div>
+      <SectionCard title="Project Pipeline" subtitle="Pipeline metrics require project status/progress fields not present in the current application model" icon={Workflow} action={<button onClick={onOpenClassic} className="os-secondary"><Grid2X2 size={14} /> Open current CRM workspace</button>}>
+        <div className="p-4"><p className="text-xs italic text-slate-400">Pipeline aggregation is unavailable. Use the current CRM workspace for live projects and stages.</p></div>
+      </SectionCard>
+      <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4">
+        <SectionCard title="Project Register" icon={FolderKanban}>
+          <MiniTable columns={['Project', 'Customer', 'Stage', 'Progress', 'Health', 'Manager']} rows={projectRows.length ? projectRows : [['No loaded projects', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable']]} />
+        </SectionCard>
+        <SectionCard title="Project Command Actions" icon={Zap}>
+          <div className="p-4 grid grid-cols-2 gap-2">
+            <button onClick={() => { data?.openNewWorkModal?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Plus size={14} /> New Project</button>
+            <button onClick={() => { data?.openStageManager?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Workflow size={14} /> Manage Stages</button>
+            <button onClick={() => { data?.setIsProjectTeamModalOpen?.(true); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><UserCog size={14} /> Assign Team</button>
+            <button onClick={() => { data?.openNewTask?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><ListChecks size={14} /> Create Task</button>
+            <button onClick={() => { data?.openGlobalReminderModal?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Bell size={14} /> Add Reminder</button>
+            <UnavailableAction className="os-action"><Plus size={14} /> Project Cost</UnavailableAction>
+          </div>
+        </SectionCard>
+      </div>
+    </div>
+  );
 }
 
 function ReportsPage() {
-  const groups=[['Executive',['Business Overview','Company Comparison','KPI Dashboard']],['Sales',['Enquiry Report','Quotation Report','Sales Order Report','Invoice Report']],['Projects',['Project Status','Project Cost','Profitability','Stage Performance','Delay Report']],['Procurement',['Purchase','Vendor','PO','Price Comparison']],['Inventory',['Stock','Movement','Project Consumption']],['Accounts',['Receivables','Payables','Ledger','Trial Balance','P&L','Balance Sheet','GST']],['HR',['Headcount','Attendance','Leave','Payroll','Employee Cost','Project Labour Cost']]];
-  return <div className="space-y-4"><div className="grid md:grid-cols-3 gap-3"><StatCard icon={BarChart3} label="Reports Available" value="Unavailable" sub="No reporting backend" tone="blue"/><StatCard icon={FileSpreadsheet} label="Scheduled Reports" value="Unavailable" sub="No reporting backend" tone="violet"/><StatCard icon={Download} label="Exports This Month" value="Unavailable" sub="No reporting backend" tone="emerald"/></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{groups.map(([g,items])=><SectionCard key={g} title={g} icon={FileBarChart}><div className="p-3 space-y-1">{items.map(i=><UnavailableAction key={i} className="w-full flex items-center justify-between p-2.5 rounded-lg text-left"><span className="text-xs font-bold">{i}</span><ChevronRight size={14} className="text-slate-400"/></UnavailableAction>)}</div></SectionCard>)}</div></div>;
+  const groups = [['Executive', ['Business Overview', 'Company Comparison', 'KPI Dashboard']], ['Sales', ['Enquiry Report', 'Quotation Report', 'Sales Order Report', 'Invoice Report']], ['Projects', ['Project Status', 'Project Cost', 'Profitability', 'Stage Performance', 'Delay Report']], ['Procurement', ['Purchase', 'Vendor', 'PO', 'Price Comparison']], ['Inventory', ['Stock', 'Movement', 'Project Consumption']], ['Accounts', ['Receivables', 'Payables', 'Ledger', 'Trial Balance', 'P&L', 'Balance Sheet', 'GST']], ['HR', ['Headcount', 'Attendance', 'Leave', 'Payroll', 'Employee Cost', 'Project Labour Cost']]];
+  return <div className="space-y-4"><div className="grid md:grid-cols-3 gap-3"><StatCard icon={BarChart3} label="Reports Available" value="Unavailable" sub="No reporting backend" tone="blue" /><StatCard icon={FileSpreadsheet} label="Scheduled Reports" value="Unavailable" sub="No reporting backend" tone="violet" /><StatCard icon={Download} label="Exports This Month" value="Unavailable" sub="No reporting backend" tone="emerald" /></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{groups.map(([g, items]) => <SectionCard key={g} title={g} icon={FileBarChart}><div className="p-3 space-y-1">{items.map(i => <UnavailableAction key={i} className="w-full flex items-center justify-between p-2.5 rounded-lg text-left"><span className="text-xs font-bold">{i}</span><ChevronRight size={14} className="text-slate-400" /></UnavailableAction>)}</div></SectionCard>)}</div></div>;
 }
 
 function DocumentsPage() {
-  return <div className="space-y-4"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={FileText} label="All Documents" value="Unavailable" tone="blue"/><StatCard icon={FolderKanban} label="Project Documents" value="Unavailable" tone="violet"/><StatCard icon={FileCheck2} label="Awaiting Review" value="Unavailable" tone="amber"/><StatCard icon={History} label="Recent Versions" value="Unavailable" tone="emerald"/></div><SectionCard title="Document Library" subtitle="Document backend is not connected in the current application." icon={FileText} action={<UnavailableAction className="os-primary"><Upload size={14}/> Upload</UnavailableAction>}><p className="p-4 text-xs italic text-slate-400">No live documents are available.</p></SectionCard></div>;
+  return <div className="space-y-4"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={FileText} label="All Documents" value="Unavailable" tone="blue" /><StatCard icon={FolderKanban} label="Project Documents" value="Unavailable" tone="violet" /><StatCard icon={FileCheck2} label="Awaiting Review" value="Unavailable" tone="amber" /><StatCard icon={History} label="Recent Versions" value="Unavailable" tone="emerald" /></div><SectionCard title="Document Library" subtitle="Document backend is not connected in the current application." icon={FileText} action={<UnavailableAction className="os-primary"><Upload size={14} /> Upload</UnavailableAction>}><p className="p-4 text-xs italic text-slate-400">No live documents are available.</p></SectionCard></div>;
 }
 
 function ApprovalsPage() {
-  return <div className="space-y-4"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={ClipboardCheck} label="Pending" value="Unavailable" tone="amber"/><StatCard icon={Clock3} label="Due Today" value="Unavailable" tone="rose"/><StatCard icon={CheckCircle2} label="Approved This Month" value="Unavailable" tone="emerald"/><StatCard icon={XCircle} label="Rejected / Sent Back" value="Unavailable" tone="slate"/></div><SectionCard title="Pending Approval Queue" subtitle="Approval backend is not connected in the current application." icon={ClipboardCheck}><p className="p-4 text-xs italic text-slate-400">No live approval records are available.</p></SectionCard></div>;
+  return <div className="space-y-4"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={ClipboardCheck} label="Pending" value="Unavailable" tone="amber" /><StatCard icon={Clock3} label="Due Today" value="Unavailable" tone="rose" /><StatCard icon={CheckCircle2} label="Approved This Month" value="Unavailable" tone="emerald" /><StatCard icon={XCircle} label="Rejected / Sent Back" value="Unavailable" tone="slate" /></div><SectionCard title="Pending Approval Queue" subtitle="Approval backend is not connected in the current application." icon={ClipboardCheck}><p className="p-4 text-xs italic text-slate-400">No live approval records are available.</p></SectionCard></div>;
 }
 
 function NotificationsPage() {
@@ -288,29 +378,82 @@ function AIPage() {
   return <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Ask RAJIV AI" subtitle="Use the existing RAJIV AI assistant from the top bar or classic CRM workspace." icon={Sparkles}><div className="p-5"><p className="text-xs italic text-slate-400">This dashboard page has no connected AI request handler.</p></div></SectionCard><SectionCard title="AI-Assisted Workflows" icon={Zap}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable until workflow backends are connected.</p></div></SectionCard></div>;
 }
 
-function AdminPage() {
-  const cards=[['Organization','Companies, departments, designations',Building2],['Users & Access','Users, roles, company access',UserCog],['Permissions','View, create, edit, approve, assign, export',KeyRound],['Hierarchy','Reporting managers and delegation',Network],['Workflow','Stages, approval rules, numbering',Workflow],['Notifications','Routing and escalation rules',Bell],['Integrations','GST, e-invoice, e-way bill, Tally, SAP',Zap],['Audit Log','Immutable business activity history',History]];
-  return <div className="space-y-4"><SectionCard title="Administration" subtitle="Only existing CRM administration is operational in the classic workspace." icon={Settings}><div className="p-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3">{cards.map(([a,b,I])=><UnavailableAction key={a} className="text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-800"><div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-sky-600"><I size={17}/></div><h3 className="text-xs font-black mt-3">{a}</h3><p className="text-[10px] text-slate-400 mt-1 leading-4">{b}</p></UnavailableAction>)}</div></SectionCard><SectionCard title="Authorization Model" subtitle="Existing authorization is available in the classic CRM workspace." icon={ShieldCheck}><div className="p-4"><p className="text-xs italic text-slate-400">Open the classic CRM workspace to manage existing roles and assignments.</p></div></SectionCard></div>;
+function AdminPage({ onOpenClassic, data = {} }) {
+  const cards = [
+    ['Organization', 'Companies, departments, designations', Building2, false],
+    ['Users & Access', 'Users, roles, company access', UserCog, true],
+    ['Permissions', 'View, create, edit, approve, assign, export', KeyRound, false],
+    ['Hierarchy', 'Reporting managers and delegation', Network, false],
+    ['Workflow', 'Stages, approval rules, numbering', Workflow, false],
+    ['Notifications', 'Routing and escalation rules', Bell, false],
+    ['Integrations', 'GST, e-invoice, e-way bill, Tally, SAP', Zap, false],
+    ['Audit Log', 'Immutable business activity history', History, false]
+  ];
+  return (
+    <div className="space-y-4">
+      <SectionCard title="Administration" subtitle="System controls and user access management." icon={Settings}>
+        <div className="p-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3">
+          {cards.map(([a, b, I, isLive]) => isLive ? (
+            <button key={a} onClick={() => { data?.openAdminPanel?.(); onOpenClassic?.(); }} className="text-left p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 bg-sky-50/50 dark:bg-sky-950/20 hover:border-sky-500 transition cursor-pointer">
+              <div className="h-9 w-9 rounded-xl bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-300"><I size={17} /></div>
+              <h3 className="text-xs font-black mt-3 text-sky-900 dark:text-sky-200">{a}</h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-4">{b}</p>
+            </button>
+          ) : (
+            <UnavailableAction key={a} className="text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400"><I size={17} /></div>
+              <h3 className="text-xs font-black mt-3">{a}</h3>
+              <p className="text-[10px] text-slate-400 mt-1 leading-4">{b}</p>
+            </UnavailableAction>
+          ))}
+        </div>
+      </SectionCard>
+      <SectionCard title="Authorization Model" subtitle="Existing user authorization management." icon={ShieldCheck}>
+        <div className="p-4 flex items-center justify-between">
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Manage active team member profiles, roles, and approval requests.</p>
+          <button onClick={() => { data?.openAdminPanel?.(); onOpenClassic?.(); }} className="os-primary cursor-pointer"><UserCog size={14} /> Open User Control Panel</button>
+        </div>
+      </SectionCard>
+    </div>
+  );
 }
 
 export default function BusinessOSWorkspace() {
   const crm = useCrm();
   const {
-    isDarkMode, setIsDarkMode, onSignOut, operatingCompanies, activeOperatingCompany,
+    isDarkMode, setIsDarkMode, onSignOut, operatingCompanies = [], activeOperatingCompany,
     setActiveOperatingCompanyId, currentUser, tenantRole, userRole, setIsAiChatOpen,
-    companies, works, tasks, taskAssignees, reminders, missingData, projectAssignments,
-    stageDefinitions, profiles, issues, logs, setIsSidebarOpen,
+    companies = [], works = [], tasks = [], taskAssignees = [], reminders = [], missingData = [],
+    projectAssignments = [], stageDefinitions = [], profiles = [], issues = [], logs = [],
+    setIsSidebarOpen, searchQuery, handleSearch, searchResults, jumpToSearchResult, setSearchQuery,
+    openNewWorkModal, openStageManager, setIsProjectTeamModalOpen, openNewTask,
+    openGlobalReminderModal, setIsAdminPanelOpen, fetchProfiles, navigateToContext
   } = crm;
+
   const [page, setPage] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 800 : false);
-  const [search, setSearch] = useState('');
   const [previewRole, setPreviewRole] = useState(null);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showClassic, setShowClassic] = useState(false);
+
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        if (setSearchQuery) setSearchQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [setSearchQuery]);
+
   const effectiveRole = previewRole || (tenantRole || 'TEAM').toUpperCase();
   const role = roleMeta[effectiveRole]?.label || effectiveRole;
   const companyName = activeOperatingCompany?.name || 'All Companies';
+
   const dashboardData = {
     companies: companies || [],
     works: works || [],
@@ -322,16 +465,28 @@ export default function BusinessOSWorkspace() {
     stageDefinitions: stageDefinitions || [],
     profiles: profiles || [],
     issues: issues || [],
-    logs: logs || []
+    logs: logs || [],
+    openNewWorkModal,
+    openStageManager,
+    setIsProjectTeamModalOpen,
+    openNewTask,
+    openGlobalReminderModal,
+    navigateToContext,
+    openAdminPanel: () => {
+      if (setIsAdminPanelOpen) setIsAdminPanelOpen(true);
+      if (fetchProfiles) fetchProfiles();
+    }
   };
 
-  const filteredNav = useMemo(() => navSections.map(section => ({ ...section, items: section.items.filter(([id]) => {
-    if (effectiveRole === 'VIEWER' && ['admin','accounts','hr'].includes(id)) return false;
-    if (['SALES'].includes(effectiveRole) && !['dashboard','my-work','approvals','notifications','crm','sales','documents','reports','ai'].includes(id)) return false;
-    if (effectiveRole === 'ACCOUNTANT' && ['hr','inventory','admin'].includes(id)) return false;
-    if (effectiveRole === 'HR' && ['sales','procurement','inventory'].includes(id)) return false;
-    return true;
-  }) })).filter(s=>s.items.length), [effectiveRole]);
+  const filteredNav = useMemo(() => navSections.map(section => ({
+    ...section, items: section.items.filter(([id]) => {
+      if (effectiveRole === 'VIEWER' && ['admin', 'accounts', 'hr'].includes(id)) return false;
+      if (['SALES'].includes(effectiveRole) && !['dashboard', 'my-work', 'approvals', 'notifications', 'crm', 'sales', 'documents', 'reports', 'ai'].includes(id)) return false;
+      if (effectiveRole === 'ACCOUNTANT' && ['hr', 'inventory', 'admin'].includes(id)) return false;
+      if (effectiveRole === 'HR' && ['sales', 'procurement', 'inventory'].includes(id)) return false;
+      return true;
+    })
+  })).filter(s => s.items.length), [effectiveRole]);
 
   const go = (next) => {
     setPage(next);
@@ -342,7 +497,7 @@ export default function BusinessOSWorkspace() {
   };
 
   if (showClassic) {
-    return <div className="h-full w-full"><button onClick={()=>setShowClassic(false)} className="fixed top-3 left-3 z-[100] os-primary shadow-xl"><ArrowDownRight size={14} className="rotate-90"/> Back to Business OS</button><CrmWorkspace /></div>;
+    return <div className="h-full w-full"><button onClick={() => setShowClassic(false)} className="fixed top-3 left-3 z-[100] os-primary shadow-xl cursor-pointer"><ArrowDownRight size={14} className="rotate-90" /> Back to Business OS</button><CrmWorkspace /></div>;
   }
 
   const meta = pageMeta[page] || pageMeta.dashboard;
@@ -350,53 +505,129 @@ export default function BusinessOSWorkspace() {
   return <div className={`business-os ${isDarkMode ? 'dark' : ''}`}>
     {!sidebarCollapsed && <div className="os-sidebar-backdrop" onClick={() => setSidebarCollapsed(true)} />}
     <aside className={`os-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-      <div className="os-brand"><div className="os-logo"><FlameIcon/></div>{!sidebarCollapsed && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
+      <div className="os-brand"><div className="os-logo"><FlameIcon /></div>{!sidebarCollapsed && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
       <div className="os-sidebar-scroll">
-        {filteredNav.map(section=><div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id,label,Icon])=><button key={id} title={sidebarCollapsed?label:''} onClick={()=>id === 'crm' ? setShowClassic(true) : go(id)} className={`os-nav-item ${page===id?'active':''}`}><Icon size={17}/>{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id==='notifications' && <span className="os-nav-count">Unavailable</span>}</button>)}</div>)}
+        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => id === 'crm' ? setShowClassic(true) : go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className="os-nav-count">Unavailable</span>}</button>)}</div>)}
       </div>
-      <div className="os-sidebar-bottom"><button onClick={()=>setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed?<PanelLeftOpen size={17}/>:<PanelLeftClose size={17}/>} {!sidebarCollapsed && <span>Collapse</span>}</button></div>
+      <div className="os-sidebar-bottom"><button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />} {!sidebarCollapsed && <span>Collapse</span>}</button></div>
     </aside>
 
     <main className="os-main">
       <header className="os-topbar">
         <div className="flex items-center gap-2 min-w-0">
-          <button onClick={()=>setSidebarCollapsed(prev => !prev)} className="os-mobile-menu"><Menu size={18}/></button>
+          <button onClick={() => setSidebarCollapsed(prev => !prev)} className="os-mobile-menu"><Menu size={18} /></button>
           <div className="relative">
-            <button onClick={()=>setShowCompanyMenu(!showCompanyMenu)} className="os-company-switch"><BriefcaseBusiness size={15}/><span className="max-w-[190px] truncate">{companyName}</span><ChevronDown size={13}/></button>
-            {showCompanyMenu && <div className="os-popover left-0 top-11 w-72"> <div className="os-popover-label">Operating company context</div><button onClick={()=>{setActiveOperatingCompanyId(null);setShowCompanyMenu(false)}} className="os-company-option"><div><b>ALL COMPANIES</b><small>Consolidated authorized view</small></div>{!activeOperatingCompany && <Check size={14}/>}</button>{operatingCompanies.map(c=><button key={c.id} onClick={()=>{setActiveOperatingCompanyId(c.id);setShowCompanyMenu(false)}} className="os-company-option"><div><b>{c.name}</b><small>Operating company</small></div>{activeOperatingCompany?.id===c.id && <Check size={14}/>}</button>)}</div>}
+            <button onClick={() => setShowCompanyMenu(!showCompanyMenu)} className="os-company-switch"><BriefcaseBusiness size={15} /><span className="max-w-[190px] truncate">{companyName}</span><ChevronDown size={13} /></button>
+            {showCompanyMenu && <div className="os-popover left-0 top-11 w-72"> <div className="os-popover-label">Operating company context</div><button onClick={() => { setActiveOperatingCompanyId(null); setShowCompanyMenu(false) }} className="os-company-option"><div><b>ALL COMPANIES</b><small>Consolidated authorized view</small></div>{!activeOperatingCompany && <Check size={14} />}</button>{operatingCompanies.map(c => <button key={c.id} onClick={() => { setActiveOperatingCompanyId(c.id); setShowCompanyMenu(false) }} className="os-company-option"><div><b>{c.name}</b><small>Operating company</small></div>{activeOperatingCompany?.id === c.id && <Check size={14} />}</button>)}</div>}
           </div>
-          <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800"/><div className="hidden lg:block text-[10px] text-slate-400 truncate">{meta[0]}</div>
+          <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" /><div className="hidden lg:block text-[10px] text-slate-400 truncate">{meta[0]}</div>
         </div>
-        <div className="os-global-search"><Search size={15}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customers, projects, PO, invoice, employee..."/><kbd>⌘ K</kbd></div>
+
+        {/* Global Search connected to CrmContext */}
+        <div className="os-global-search relative" ref={searchContainerRef}>
+          <Search size={15} className="shrink-0 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery || ''}
+            onChange={handleSearch}
+            placeholder="Search PO, WO, or project title..."
+          />
+          {searchQuery ? (
+            <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500 text-xs px-1">
+              <X size={13} />
+            </button>
+          ) : (
+            <kbd>⌘ K</kbd>
+          )}
+
+          {searchResults && searchResults.length > 0 && (
+            <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-2xl shadow-2xl border overflow-hidden z-50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b flex justify-between items-center ${isDarkMode ? 'bg-slate-950/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                <span>Matching Projects ({searchResults.length})</span>
+                <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500"><X size={12} /></button>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {searchResults.map((result) => (
+                  <button
+                    key={result.id}
+                    onClick={() => {
+                      jumpToSearchResult(result);
+                      handleSearch({ target: { value: '' } });
+                      setShowClassic(true);
+                    }}
+                    className={`w-full text-left px-3 py-2 border-b last:border-0 transition flex flex-col gap-1 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/60' : 'border-slate-100 hover:bg-sky-50/70'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText size={14} className="text-sky-500 shrink-0" />
+                      <span className={`text-xs font-semibold truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{result.title}</span>
+                    </div>
+                    <div className="flex gap-1.5 pl-5">
+                      {result.po_number && <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold border ${isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>PO: {result.po_number}</span>}
+                      {result.wo_number && <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold border ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-200'}`}>WO: {result.wo_number}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-1.5">
-          <button onClick={()=>setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15}/><span className="hidden xl:inline">AI</span></button>
-          <button onClick={()=>go('notifications')} className="os-top-action relative"><Bell size={16}/><span className="os-notification-dot">5</span></button>
-          <button onClick={()=>setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[11px]">{isDarkMode?'☀':'◐'}</span></button>
-          {effectiveRole==='OWNER' || effectiveRole==='ADMIN' ? <div className="relative hidden md:block"><button onClick={()=>setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13}/> {previewRole?'Preview: ':''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r,l])=><button key={r} onClick={()=>{setPreviewRole(r);setPage(r==='OWNER'||r==='MANAGER'?'dashboard':'my-work')}} className={`os-company-option ${previewRole===r?'selected':''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole===r&&<Check size={13}/>}</button>)}<button onClick={()=>setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div>:null}
-          <div className="relative"><button onClick={()=>setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13}/></button>{showProfile&&<div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><UnavailableAction className="os-company-option"><UserRound size={15}/><b>My Profile</b></UnavailableAction><button onClick={()=>go('admin')} className="os-company-option"><Settings size={15}/><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15}/><b>Sign out</b></button></div>}</div>
+          <button onClick={() => setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15} /><span className="hidden xl:inline">AI</span></button>
+          <button onClick={() => go('notifications')} className="os-top-action relative"><Bell size={16} /></button>
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[11px]">{isDarkMode ? '☀' : '◐'}</span></button>
+          {effectiveRole === 'OWNER' || effectiveRole === 'ADMIN' ? <div className="relative hidden md:block"><button onClick={() => setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13} /> {previewRole ? 'Preview: ' : ''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r, l]) => <button key={r} onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work') }} className={`os-company-option ${previewRole === r ? 'selected' : ''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole === r && <Check size={13} />}</button>)}<button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div> : null}
+          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><UnavailableAction className="os-company-option"><UserRound size={15} /><b>My Profile</b></UnavailableAction><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
         </div>
       </header>
 
       <div className="os-content custom-scrollbar">
-        <div className="os-page-head"><div><div className="os-breadcrumb">RAJIV BUSINESS OS <ChevronRight size={11}/> {meta[0]}</div><h1>{meta[0]}</h1><p>{meta[1]}</p></div><div className="flex gap-2"><UnavailableAction className="os-secondary"><CalendarDays size={14}/> Today</UnavailableAction><UnavailableAction className="os-primary"><Plus size={14}/> Create</UnavailableAction></div></div>
-        {page==='dashboard' && <Dashboard role={effectiveRole} onNavigate={go} onOpenClassic={() => setShowClassic(true)} companyName={companyName} companies={operatingCompanies || []} data={dashboardData}/>}
+        <div className="os-page-head">
+          <div>
+            <div className="os-breadcrumb">RAJIV BUSINESS OS <ChevronRight size={11} /> {meta[0]}</div>
+            <h1>{meta[0]}</h1>
+            <p>{meta[1]}</p>
+          </div>
+          <div className="flex gap-2 relative">
+            <UnavailableAction className="os-secondary"><CalendarDays size={14} /> Today</UnavailableAction>
+            <div className="relative">
+              <button onClick={() => setShowCreateMenu(!showCreateMenu)} className="os-primary flex items-center gap-1.5 cursor-pointer">
+                <Plus size={14} /> Create <ChevronDown size={12} />
+              </button>
+              {showCreateMenu && (
+                <div className={`absolute right-0 top-10 w-52 z-50 p-1.5 rounded-2xl shadow-2xl border transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                  <button onClick={() => { openNewWorkModal?.(); setShowClassic(true); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
+                    <Briefcase size={14} className="text-sky-500" /><span>New Project</span>
+                  </button>
+                  <button onClick={() => { openNewTask?.(); setShowClassic(true); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
+                    <ListChecks size={14} className="text-emerald-500" /><span>New 7F Task</span>
+                  </button>
+                  <button onClick={() => { openGlobalReminderModal?.(); setShowClassic(true); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
+                    <Bell size={14} className="text-amber-500" /><span>New Reminder</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {page === 'dashboard' && <Dashboard role={effectiveRole} onNavigate={go} onOpenClassic={() => setShowClassic(true)} companyName={companyName} companies={operatingCompanies || []} data={dashboardData} />}
         {page === 'my-work' && (
           <MyWorkPage onNavigate={go} onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
         )}
-        {page==='approvals' && <ApprovalsPage/>}
-        {page==='notifications' && <NotificationsPage/>}
-        {['crm','sales','procurement','inventory','accounts','hr'].includes(page) && <DataModulePage module={page} onNavigate={go}/>} 
+        {page === 'approvals' && <ApprovalsPage />}
+        {page === 'notifications' && <NotificationsPage />}
+        {['crm', 'sales', 'procurement', 'inventory', 'accounts', 'hr'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
         {page === 'projects' && (
           <ProjectsPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
         )}
-        {page==='documents' && <DocumentsPage/>}
-        {page==='reports' && <ReportsPage/>}
-        {page==='ai' && <AIPage/>}
-        {page==='admin' && <AdminPage/>}
+        {page === 'documents' && <DocumentsPage />}
+        {page === 'reports' && <ReportsPage />}
+        {page === 'ai' && <AIPage />}
+        {page === 'admin' && <AdminPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />}
       </div>
-      <button className="os-ai-fab" onClick={()=>setIsAiChatOpen?.(true)}><Sparkles size={17}/><span>RAJIV AI</span></button>
+      <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
     </main>
   </div>;
 }
 
-function FlameIcon(){return <span className="text-white font-black text-xs">R</span>}
+function FlameIcon() { return <span className="text-white font-black text-xs">R</span> }
