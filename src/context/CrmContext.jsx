@@ -1854,23 +1854,41 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   }
 
   async function submitReminder(e) {
-    e.preventDefault(); 
+    e.preventDefault();
     if (!reminderForm.content.trim()) return;
-    
-    const payload = { 
-      content: reminderForm.content, 
-      target_date: reminderForm.target_date || null, 
-      company_id: reminderForm.company_id || null, 
-      unit_id: reminderForm.unit_id || null, 
-      work_id: reminderForm.work_id || null, 
-      log_id: reminderForm.log_id || null, 
-      stage_name: reminderForm.stage_name || null 
+
+    const payload = {
+      tenant_id: tenantId || null,
+      tenant_company_id: activeOperatingCompanyId || null,
+      content: reminderForm.content.trim(),
+      target_date: reminderForm.target_date || null,
+      company_id: reminderForm.company_id || null,
+      unit_id: reminderForm.unit_id || null,
+      work_id: reminderForm.work_id || null,
+      log_id: reminderForm.log_id || null,
+      stage_name: reminderForm.stage_name || null
     };
-    
-    const { data } = await supabase.from('reminders').insert([payload]).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
-    if (data) { 
-      setReminders([data[0], ...(reminders || [])]); 
-      setIsReminderModalOpen(false); 
+
+    const { data, error } = await supabase
+      .from('reminders')
+      .insert([payload])
+      .select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+
+    if (error) {
+      console.error('[Supabase Mutation Error - reminders]:', error);
+      let errorMsg = error.message;
+      if (error.message?.includes('row-level security') || error.code === '42501') {
+        errorMsg = "Permission denied to save scheduled task.";
+      }
+      showToast(`Failed to save scheduled task: ${errorMsg}`);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      setReminders([data[0], ...(reminders || [])]);
+      setIsReminderModalOpen(false);
+      showToast("Scheduled task saved successfully.");
+      fetchReminders(activeOperatingCompanyId);
     }
   }
 
@@ -2440,7 +2458,11 @@ USER REQUEST: ${trimmedMsg}`;
     }
   }
 
-  function openNewWorkModal() { 
+  function openNewWorkModal() {
+    if (!activeUnitId) {
+      showToast('Select a Client Unit before creating a project.');
+      return;
+    }
     setEditingWorkId(null);
     setWorkForm({ title: '', po_number: '', wo_number: '', boq_url: '', po_file_url: '', wo_file_url: '' }); 
     setBoqFile(null); 
@@ -2467,7 +2489,10 @@ USER REQUEST: ${trimmedMsg}`;
   
   async function submitWork(e) {
     e.preventDefault(); 
-    if (!activeUnitId) return; 
+    if (!activeUnitId) {
+      showToast('Select a Client Unit before creating a project.');
+      return;
+    }
 
     // --- 1. STRICT DATA VALIDATION ---
     const trimmedTitle = workForm.title?.trim() || '';
@@ -2475,7 +2500,7 @@ USER REQUEST: ${trimmedMsg}`;
     const trimmedWO = workForm.wo_number?.trim() || '';
 
     if (!trimmedTitle) {
-      alert("Validation Error: System / Title cannot be empty.");
+      showToast('Validation Error: System / Title cannot be empty.');
       return;
     }
 
@@ -2483,7 +2508,7 @@ USER REQUEST: ${trimmedMsg}`;
     if (trimmedPO) {
       const isDuplicatePO = works.some(w => w.po_number === trimmedPO && w.id !== editingWorkId);
       if (isDuplicatePO) {
-        alert(`Duplicate Found: The PO Number "${trimmedPO}" is already assigned to another project. Please use a unique PO Number.`);
+        showToast(`Duplicate Found: The PO Number "${trimmedPO}" is already assigned to another project.`);
         return;
       }
     }
@@ -2492,7 +2517,7 @@ USER REQUEST: ${trimmedMsg}`;
     if (trimmedWO) {
       const isDuplicateWO = works.some(w => w.wo_number === trimmedWO && w.id !== editingWorkId);
       if (isDuplicateWO) {
-        alert(`Duplicate Found: The WO Number "${trimmedWO}" is already assigned to another project. Please use a unique WO Number.`);
+        showToast(`Duplicate Found: The WO Number "${trimmedWO}" is already assigned to another project.`);
         return;
       }
     }
@@ -2549,20 +2574,43 @@ USER REQUEST: ${trimmedMsg}`;
           title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl
         }).eq('id', editingWorkId).select();
         data = fallbackRes.data;
+        error = fallbackRes.error;
       }
-      if (data && data.length > 0) { 
+      if (error) {
+        console.error('[Supabase Mutation Error - works update]:', error);
+        let errorMsg = error.message;
+        if (error.message?.includes('row-level security') || error.code === '42501') {
+          errorMsg = "Permission denied to update project.";
+        }
+        showToast(`Failed to save project: ${errorMsg}`);
+        setIsWorkUploading(false);
+        return;
+      }
+      if (data && data.length > 0) {
         const updatedWork = { ...data[0], po_file_url: finalPoFileUrl, wo_file_url: finalWoFileUrl };
-        setWorks(works.map(w => w.id === editingWorkId ? updatedWork : w)); 
-        setIsWorkModalOpen(false); 
+        setWorks(works.map(w => w.id === editingWorkId ? updatedWork : w));
+        setIsWorkModalOpen(false);
         fetchMissingData();
-      } 
-    } else { 
-      let { data, error } = await supabase.from('works').insert([{ unit_id: activeUnitId, company_id: activeCompanyId, ...payload }]).select(); 
+        showToast("Project updated successfully.");
+      }
+    } else {
+      let { data, error } = await supabase.from('works').insert([{ unit_id: activeUnitId, company_id: activeCompanyId, tenant_company_id: activeOperatingCompanyId || null, tenant_id: tenantId || null, ...payload }]).select();
       if (error && (error.message?.includes('po_file_url') || error.message?.includes('wo_file_url') || error.code === 'PGRST204')) {
-        const fallbackRes = await supabase.from('works').insert([{ 
-          unit_id: activeUnitId, company_id: activeCompanyId, title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl 
+        const fallbackRes = await supabase.from('works').insert([{
+          unit_id: activeUnitId, company_id: activeCompanyId, tenant_company_id: activeOperatingCompanyId || null, tenant_id: tenantId || null, title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl
         }]).select();
         data = fallbackRes.data;
+        error = fallbackRes.error;
+      }
+      if (error) {
+        console.error('[Supabase Mutation Error - works insert]:', error);
+        let errorMsg = error.message;
+        if (error.message?.includes('row-level security') || error.code === '42501') {
+          errorMsg = "Permission denied to create project.";
+        }
+        showToast(`Failed to create project: ${errorMsg}`);
+        setIsWorkUploading(false);
+        return;
       }
       if (data && data.length > 0) { 
         const newWork = { ...data[0], po_file_url: finalPoFileUrl, wo_file_url: finalWoFileUrl };
@@ -2570,6 +2618,7 @@ USER REQUEST: ${trimmedMsg}`;
         setActiveWorkId(newWork.id); 
         setIsWorkModalOpen(false); 
         fetchMissingData();
+        showToast("Project created successfully.");
       } 
     }
     setIsWorkUploading(false);
