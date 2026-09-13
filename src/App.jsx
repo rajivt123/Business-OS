@@ -5,6 +5,7 @@ import { CrmProvider } from './context/CrmContext'
 import { EmployeeProvider } from './context/EmployeeContext'
 import { HrPolicyProvider } from './context/HrPolicyContext'
 import { RecruitmentProvider } from './context/RecruitmentContext'
+import { ApprovalProvider } from './context/ApprovalContext'
 import { Sun, Moon, KeyRound, Mail, Lock, ArrowLeft, CheckCircle, ShieldCheck, Flame } from 'lucide-react'
 
 export default function App() {
@@ -383,7 +384,9 @@ export default function App() {
         <EmployeeProvider>
           <HrPolicyProvider>
             <RecruitmentProvider>
-              <BusinessOSWorkspace />
+              <ApprovalProvider>
+                <BusinessOSWorkspace />
+              </ApprovalProvider>
             </RecruitmentProvider>
           </HrPolicyProvider>
         </EmployeeProvider>

@@ -17,6 +17,8 @@ import EmployeeWorkspace from './hr/EmployeeWorkspace';
 import HrPolicyCenter from './hr/HrPolicyCenter';
 import RecruitmentWorkspace from './hr/RecruitmentWorkspace';
 import PublicApplicationForm from './hr/PublicApplicationForm';
+import ApprovalCenter from './ApprovalCenter';
+import EmployeeChangeRequests from './hr/EmployeeChangeRequests';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -807,7 +809,7 @@ export default function BusinessOSWorkspace() {
         {page === 'my-work' && (
           <MyWorkPage onNavigate={go} onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
         )}
-        {page === 'approvals' && <ApprovalsPage />}
+        {page === 'approvals' && <ApprovalCenter />}
         {page === 'notifications' && (
           <NotificationsPage
             notifications={notifications}
@@ -856,19 +858,28 @@ export default function BusinessOSWorkspace() {
               >
                 <ShieldCheck size={14} /> Policy Center
               </button>
+              <button
+                type="button"
+                onClick={() => setHrSubTab('change_requests')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'change_requests'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <ClipboardCheck size={14} /> Profile Requests
+              </button>
               <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
                 Attendance (future)
               </button>
               <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
                 Leave (future)
               </button>
-              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
-                Requests (future)
-              </button>
             </div>
             {hrSubTab === 'master' && <EmployeeWorkspace />}
             {hrSubTab === 'recruitment' && <RecruitmentWorkspace />}
             {hrSubTab === 'policy' && <HrPolicyCenter />}
+            {hrSubTab === 'change_requests' && <EmployeeChangeRequests />}
           </div>
         )}
 
