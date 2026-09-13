@@ -39,14 +39,14 @@ export function HrPolicyProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Management permission check
+  // Management permission check aligned with existing Business OS role architecture (OWNER / ADMIN / MANAGER)
   const isManagementOrAdmin = useMemo(() => {
     const r = (userRole || '').toLowerCase();
     const tr = (tenantRole || '').toLowerCase();
-    return r === 'admin' || tr === 'admin' || r === 'hr' || r === 'management' || r === 'owner';
+    const allowedRoles = ['owner', 'admin', 'manager'];
+    return allowedRoles.includes(r) || allowedRoles.includes(tr);
   }, [userRole, tenantRole]);
 
-  // Fetch functions per company
   const fetchPolicySets = useCallback(async (opCoId) => {
     setIsLoading(true);
     try {
@@ -172,9 +172,16 @@ export function HrPolicyProvider({ children }) {
     }
   }, []);
 
-  // Main load effect
+  // Main load effect (resets policy state on operating company switch to ensure strict company isolation)
   useEffect(() => {
     if (authUserId) {
+      setActivePolicySetId(null);
+      setLeavePolicyRules([]);
+      setAttendancePolicies([]);
+      setWeeklyOffPolicies([]);
+      setOvertimePolicies([]);
+      setCompOffPolicies([]);
+
       fetchPolicySets(activeOperatingCompanyId);
       fetchCategories(activeOperatingCompanyId);
       fetchWorkLocations(activeOperatingCompanyId);

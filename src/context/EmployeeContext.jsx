@@ -39,11 +39,12 @@ export function EmployeeProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Role permissions check
+  // Role permissions check aligned with existing Business OS role model (OWNER / ADMIN / MANAGER)
   const isManagementOrAdmin = useMemo(() => {
     const r = (userRole || '').toLowerCase();
     const tr = (tenantRole || '').toLowerCase();
-    return r === 'admin' || tr === 'admin' || r === 'hr' || r === 'management' || r === 'owner';
+    const allowedRoles = ['owner', 'admin', 'manager'];
+    return allowedRoles.includes(r) || allowedRoles.includes(tr);
   }, [userRole, tenantRole]);
 
   // Data fetching functions
