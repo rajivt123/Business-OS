@@ -10,6 +10,7 @@ import { AttendanceProvider } from './context/AttendanceContext'
 import { LeaveProvider } from './context/LeaveContext'
 import { PayrollProvider } from './context/PayrollContext'
 import { SalesProvider } from './context/SalesContext'
+import { ProcurementProvider } from './context/ProcurementContext'
 import { Sun, Moon, KeyRound, Mail, Lock, ArrowLeft, CheckCircle, ShieldCheck, Flame } from 'lucide-react'
 
 export default function App() {
@@ -393,7 +394,9 @@ export default function App() {
                   <LeaveProvider>
                     <PayrollProvider>
                       <SalesProvider>
-                        <BusinessOSWorkspace />
+                        <ProcurementProvider>
+                          <BusinessOSWorkspace />
+                        </ProcurementProvider>
                       </SalesProvider>
                     </PayrollProvider>
                   </LeaveProvider>
