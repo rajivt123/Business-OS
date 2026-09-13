@@ -11,7 +11,7 @@ import {
   MoreHorizontal, Eye, Pencil, Send, Upload, Download, CheckCircle2, XCircle, ClockArrowUp,
   TriangleAlert, Factory, MapPin, Briefcase, UserCog, Network, KeyRound, History, Layers3,
 } from 'lucide-react';
-import { useCrm } from '../context/CrmContext';
+import { useCrm, getUserDisplayName } from '../context/CrmContext';
 import CrmWorkspace from './CrmWorkspace';
 
 const roleMeta = {
@@ -226,11 +226,11 @@ function ManagerDashboard({ onNavigate, onOpenClassic, data = {} }) {
   const assignments = data?.projectAssignments || [];
   const missingData = data?.missingData || [];
   const profiles = data?.profiles || [];
+  const tenantMembers = data?.tenantMembers || [];
   const stageDefinitions = data?.stageDefinitions || [];
 
   const projectRows = works.map(work => {
     const lead = assignments.find(assignment => assignment.work_id === work.id && assignment.status === 'active' && assignment.project_role === 'lead');
-    const profile = profiles.find(item => item.id === lead?.user_id);
     const stage = stageDefinitions.find(item => item.work_id === work.id && item.status === 'active');
     return [
       <button
@@ -245,7 +245,7 @@ function ManagerDashboard({ onNavigate, onOpenClassic, data = {} }) {
       stage?.name || 'In Progress',
       'Unavailable',
       <Badge tone="slate">Unavailable</Badge>,
-      profile?.email || (lead ? `User (${lead.user_id.slice(0, 6)}...)` : 'Unassigned')
+      lead ? getUserDisplayName(lead.user_id, profiles, tenantMembers) : 'Unassigned'
     ];
   });
 
@@ -302,12 +302,12 @@ function ProjectsPage({ onOpenClassic, data = {} }) {
   const clientCompanies = data?.companies || [];
   const projectAssignments = data?.projectAssignments || [];
   const profiles = data?.profiles || [];
+  const tenantMembers = data?.tenantMembers || [];
 
   const projectRows = works.map(work => {
     const client = clientCompanies.find(c => c.id === work.company_id);
     const stage = stageDefinitions.find(item => item.work_id === work.id && item.status === 'active');
     const lead = projectAssignments.find(a => a.work_id === work.id && a.status === 'active' && a.project_role === 'lead');
-    const profile = profiles.find(p => p.id === lead?.user_id);
     return [
       <button
         onClick={() => {
@@ -322,7 +322,7 @@ function ProjectsPage({ onOpenClassic, data = {} }) {
       stage?.name || 'In Progress',
       'Unavailable',
       <Badge tone="slate">Unavailable</Badge>,
-      profile?.email || (lead ? `User (${lead.user_id.slice(0, 6)}...)` : 'Unassigned')
+      lead ? getUserDisplayName(lead.user_id, profiles, tenantMembers) : 'Unassigned'
     ];
   });
 

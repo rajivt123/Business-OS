@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { X, AlertCircle, Bell, Trash2, RotateCcw, History, Paperclip, Loader2, ChevronUp, ChevronDown, Plus, ShieldCheck, ArrowRightLeft, CalendarClock, Search, Users, UserPlus, UserCheck, UserX, UserMinus, Lock, Copy, Check, Database, AlertTriangle, Download, ExternalLink, Eye, FileText, FileSpreadsheet } from 'lucide-react'
-import { useCrm } from '../context/CrmContext'
+import { useCrm, getUserDisplayName } from '../context/CrmContext'
 
 export default function Modals() {
   const {
@@ -19,7 +19,7 @@ export default function Modals() {
     moveLogModal, setMoveLogModal, handleMoveLogStage, activeWorkId, works,
     editReminderModal, setEditReminderModal, editReminderForm, setEditReminderForm, handleSaveReminderEdit,
     docPreviewModal, closeDocPreview,
-    isProjectTeamModalOpen, setIsProjectTeamModalOpen, projectAssignments, isAssignmentsLoading, assignUserToProject, endProjectAssignment, tenantMembers, fetchTenantMembers, tenantId
+    isProjectTeamModalOpen, setIsProjectTeamModalOpen, projectAssignments, isAssignmentsLoading, assignUserToProject, endProjectAssignment, tenantMembers, isFetchingTenantMembers, fetchTenantMembers, tenantId
   } = useCrm()
 
   const [promptInput, setPromptInput] = useState('')
@@ -56,6 +56,7 @@ export default function Modals() {
           isDarkMode={isDarkMode}
           setIsAdminPanelOpen={setIsAdminPanelOpen}
           profiles={profiles}
+          tenantMembers={tenantMembers}
           isFetchingProfiles={isFetchingProfiles}
           currentUser={currentUser}
           handleUpdateUserRole={handleUpdateUserRole}
@@ -84,6 +85,7 @@ export default function Modals() {
           profiles={profiles}
           fetchProfiles={fetchProfiles}
           tenantMembers={tenantMembers}
+          isFetchingTenantMembers={isFetchingTenantMembers}
           fetchTenantMembers={fetchTenantMembers}
           tenantId={tenantId}
           tenantRole={tenantRole}
@@ -602,11 +604,14 @@ function StageAssignmentModal({
 
   const eligibleUsers = activeProjectTeam
     .map(a => {
-      const member = (tenantMembers || []).find(m => m.user_id === a.user_id);
-      const profile = (profiles || []).find(p => p.id === a.user_id);
+      const tm = (tenantMembers || []).find(m =>
+        m.user_id && String(m.user_id).trim().toLowerCase() === String(a.user_id).trim().toLowerCase()
+      );
+      const email = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email ||
+        getUserDisplayName(a.user_id, profiles, tenantMembers);
       return {
         user_id: a.user_id,
-        email: profile?.email || member?.email || `User (${a.user_id.slice(0, 8)}...)`,
+        email,
         project_role: a.project_role
       };
     })
@@ -760,23 +765,31 @@ function StageAssignmentModal({
             ) : (
               <div className="space-y-2">
                 {activeRows.map(row => {
-                  const profile = (profiles || []).find(p => p.id === row.user_id);
-                  const assigner = (profiles || []).find(p => p.id === row.assigned_by);
+                  const tm = (tenantMembers || []).find(m =>
+                    m.user_id && String(m.user_id).trim().toLowerCase() === String(row.user_id).trim().toLowerCase()
+                  );
+                  const assignerTm = (tenantMembers || []).find(m =>
+                    m.user_id && String(m.user_id).trim().toLowerCase() === String(row.assigned_by).trim().toLowerCase()
+                  );
+                  const userDisplayName = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email ||
+                    getUserDisplayName(row.user_id, profiles, tenantMembers);
+                  const assignerDisplayName = assignerTm?.email || assignerTm?.user_email || assignerTm?.invited_email || assignerTm?.member_email ||
+                    getUserDisplayName(row.assigned_by, profiles, tenantMembers);
                   const roleLabel = row.stage_role.charAt(0).toUpperCase() + row.stage_role.slice(1);
 
                   return (
                     <div key={row.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'}`}>
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0">
-                          {(profile?.email || 'U').charAt(0).toUpperCase()}
+                          {(userDisplayName || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <div className={`text-xs font-bold truncate ${tText}`}>
-                            {profile?.email || `User (${row.user_id.slice(0, 8)}...)`}
+                          <div className={`text-xs font-bold truncate ${tText}`} title={userDisplayName}>
+                            {userDisplayName}
                           </div>
                           <div className={`text-[10px] ${tMuted}`}>
                             {roleLabel} • Assigned {new Date(row.assigned_at).toLocaleDateString()}
-                            {assigner?.email ? ` by ${assigner.email.split('@')[0]}` : ''}
+                            {row.assigned_by ? ` by ${assignerDisplayName}` : ''}
                           </div>
                         </div>
                       </div>
@@ -809,16 +822,24 @@ function StageAssignmentModal({
               {showHistory && (
                 <div className="space-y-2 mt-2">
                   {endedRows.map(row => {
-                    const profile = (profiles || []).find(p => p.id === row.user_id);
-                    const assigner = (profiles || []).find(p => p.id === row.assigned_by);
+                    const tm = (tenantMembers || []).find(m =>
+                      m.user_id && String(m.user_id).trim().toLowerCase() === String(row.user_id).trim().toLowerCase()
+                    );
+                    const assignerTm = (tenantMembers || []).find(m =>
+                      m.user_id && String(m.user_id).trim().toLowerCase() === String(row.assigned_by).trim().toLowerCase()
+                    );
+                    const userDisplayName = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email ||
+                      getUserDisplayName(row.user_id, profiles, tenantMembers);
+                    const assignerDisplayName = assignerTm?.email || assignerTm?.user_email || assignerTm?.invited_email || assignerTm?.member_email ||
+                      getUserDisplayName(row.assigned_by, profiles, tenantMembers);
                     return (
                       <div key={row.id} className={`p-3 rounded-xl border text-[10px] opacity-75 ${isDarkMode ? 'bg-slate-950/40 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                         <div className="flex justify-between gap-2 font-bold">
-                          <span className="truncate">{profile?.email || row.user_id}</span>
+                          <span className="truncate" title={userDisplayName}>{userDisplayName}</span>
                           <span>{row.stage_role} • Ended</span>
                         </div>
                         <div className="flex justify-between gap-2 mt-1">
-                          <span>Assigned {new Date(row.assigned_at).toLocaleDateString()} {assigner?.email ? `by ${assigner.email}` : ''}</span>
+                          <span>Assigned {new Date(row.assigned_at).toLocaleDateString()} {row.assigned_by ? `by ${assignerDisplayName}` : ''}</span>
                           <span>Ended {row.ended_at ? new Date(row.ended_at).toLocaleDateString() : '—'}</span>
                         </div>
                       </div>
@@ -836,7 +857,7 @@ function StageAssignmentModal({
 
 function AdminControlPanelModal({
   tModal, tText, tMuted, customScrollbar, isDarkMode, setIsAdminPanelOpen,
-  profiles, isFetchingProfiles, currentUser, handleUpdateUserRole, handleApproveUser, handleTerminateUser, handleAdminCreateUser
+  profiles, tenantMembers, isFetchingProfiles, currentUser, handleUpdateUserRole, handleApproveUser, handleTerminateUser, handleAdminCreateUser
 }) {
   const [activeTab, setActiveTab] = useState('all') // 'all' | 'pending'
   const [searchQuery, setSearchQuery] = useState('')
@@ -1051,8 +1072,8 @@ function AdminControlPanelModal({
                   {/* Info */}
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <p className={`text-xs sm:text-sm font-bold truncate max-w-[200px] sm:max-w-md ${tText}`} title={profile.email}>
-                        {profile.email || `User ID: ${profile.id.slice(0, 10)}...`}
+                      <p className={`text-xs sm:text-sm font-bold truncate max-w-[200px] sm:max-w-md ${tText}`} title={profile.email || profile.id}>
+                        {getUserDisplayName(profile, profiles, tenantMembers, currentUser)}
                       </p>
                       {isSelf && (
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-purple-600 text-white shadow-xs flex items-center gap-1 shrink-0">
@@ -1411,7 +1432,7 @@ function ProjectTeamModal({
   tModal, tText, tMuted, tInput, customScrollbar, isDarkMode,
   setIsProjectTeamModalOpen, activeWorkId, works, projectAssignments,
   isAssignmentsLoading, assignUserToProject, endProjectAssignment, profiles, fetchProfiles,
-  tenantMembers, fetchTenantMembers, tenantId, tenantRole, userRole, currentUser
+  tenantMembers, isFetchingTenantMembers, fetchTenantMembers, tenantId, tenantRole, userRole, currentUser
 }) {
   const activeWork = (works || []).find(w => w.id === activeWorkId);
   const activeAssignments = (projectAssignments || []).filter(a => a.status === 'active');
@@ -1423,25 +1444,34 @@ function ProjectTeamModal({
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    if (fetchProfiles && (!profiles || profiles.length === 0)) {
-      fetchProfiles();
-    }
-    if (fetchTenantMembers && (!tenantMembers || tenantMembers.length === 0)) {
-      fetchTenantMembers(tenantId);
-    }
+    if (fetchProfiles) fetchProfiles();
+    if (fetchTenantMembers) fetchTenantMembers(tenantId);
   }, [tenantId]);
 
   // Derive active team users from tenant_memberships (authoritative active tenant members).
   // Exclude: terminated/inactive members, current Admin/user, and users already actively assigned to this project.
   const eligibleTeammates = (tenantMembers || [])
-    .filter(m => m.status === 'active' || !m.status)
+    .filter(m => (m.status === 'active' || !m.status) && (m.user_id || m.id))
     .map(member => {
-      // Find matching profile for display info (email)
-      const userProfile = (profiles || []).find(p => p.id === member.user_id || (p.email && member.email && p.email.toLowerCase() === member.email.toLowerCase()));
+      const targetUserId = member.user_id || member.id;
+      const normId = String(targetUserId).trim().toLowerCase();
+      const tm = (tenantMembers || []).find(m =>
+        (m.user_id && String(m.user_id).trim().toLowerCase() === normId) ||
+        (m.id && String(m.id).trim().toLowerCase() === normId)
+      );
+      const profileObj = (profiles || []).find(p =>
+        (p.id && String(p.id).trim().toLowerCase() === normId) ||
+        (p.user_id && String(p.user_id).trim().toLowerCase() === normId)
+      );
+      const email = member.email || member.user_email || member.invited_email || member.member_email ||
+        (Array.isArray(member.profiles) ? member.profiles[0]?.email : member.profiles?.email) ||
+        tm?.email || (Array.isArray(tm?.profiles) ? tm?.profiles[0]?.email : tm?.profiles?.email) ||
+        profileObj?.email || profileObj?.user_email ||
+        getUserDisplayName(targetUserId, profiles, tenantMembers);
       return {
-        user_id: member.user_id, // Authoritative Auth User ID from tenant_memberships
-        email: userProfile?.email || member.email || `User (${member.user_id.slice(0, 8)}...)`,
-        role: member.role || userProfile?.role || 'Team'
+        user_id: targetUserId, // Authoritative Auth User ID from tenant_memberships
+        email,
+        role: member.role || 'Team'
       };
     })
     .filter(u => {
@@ -1505,6 +1535,7 @@ function ProjectTeamModal({
                 <span className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${isDarkMode ? 'text-purple-300' : 'text-purple-900'}`}>
                   <UserPlus size={14} /> Assign Teammate to Project
                 </span>
+                {isFetchingTenantMembers && <Loader2 size={13} className="animate-spin text-purple-500" />}
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
@@ -1516,7 +1547,7 @@ function ProjectTeamModal({
                     onChange={e => setSelectedUserId(e.target.value)}
                     className={`w-full rounded-xl p-2.5 text-xs font-semibold border outline-none ${tInput}`}
                   >
-                    <option value="">-- Select Teammate --</option>
+                    <option value="">{isFetchingTenantMembers ? '-- Loading Teammates... --' : '-- Select Teammate --'}</option>
                     {eligibleTeammates.map(u => (
                       <option key={u.user_id} value={u.user_id}>
                         {u.email || u.user_id} ({u.role || 'Team'})
@@ -1556,17 +1587,45 @@ function ProjectTeamModal({
               <span className={`text-[11px] font-extrabold uppercase tracking-wider ${tMuted}`}>
                 Active Team Members ({activeAssignments.length})
               </span>
-              {isAssignmentsLoading && <Loader2 size={13} className="animate-spin text-sky-500" />}
+              {(isAssignmentsLoading || isFetchingTenantMembers) && <Loader2 size={13} className="animate-spin text-sky-500" />}
             </div>
 
             {activeAssignments.length === 0 ? (
               <div className={`text-center py-6 border border-dashed rounded-2xl text-xs ${tMuted}`}>
-                No active team members assigned to this project yet.
+                {isFetchingTenantMembers || isAssignmentsLoading ? 'Loading team members...' : 'No active team members assigned to this project yet.'}
               </div>
             ) : (
               activeAssignments.map(assignment => {
-                const userProfile = (profiles || []).find(p => p.id === assignment.user_id);
-                const assignerProfile = (profiles || []).find(p => p.id === assignment.assigned_by);
+                const normAssigneeId = String(assignment.user_id || '').trim().toLowerCase();
+                const normAssignerId = String(assignment.assigned_by || '').trim().toLowerCase();
+
+                const tm = (tenantMembers || []).find(m =>
+                  (m.user_id && String(m.user_id).trim().toLowerCase() === normAssigneeId) ||
+                  (m.id && String(m.id).trim().toLowerCase() === normAssigneeId)
+                );
+                const assignerTm = (tenantMembers || []).find(m =>
+                  (m.user_id && String(m.user_id).trim().toLowerCase() === normAssignerId) ||
+                  (m.id && String(m.id).trim().toLowerCase() === normAssignerId)
+                );
+
+                const assigneeProfile = (profiles || []).find(p =>
+                  (p.id && String(p.id).trim().toLowerCase() === normAssigneeId) ||
+                  (p.user_id && String(p.user_id).trim().toLowerCase() === normAssigneeId)
+                );
+                const assignerProfile = (profiles || []).find(p =>
+                  (p.id && String(p.id).trim().toLowerCase() === normAssignerId) ||
+                  (p.user_id && String(p.user_id).trim().toLowerCase() === normAssignerId)
+                );
+
+                const userDisplayName = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email ||
+                  (Array.isArray(tm?.profiles) ? tm?.profiles[0]?.email : tm?.profiles?.email) ||
+                  assigneeProfile?.email || assigneeProfile?.user_email ||
+                  getUserDisplayName(assignment.user_id, profiles, tenantMembers);
+                const assignerDisplayName = assignerTm?.email || assignerTm?.user_email || assignerTm?.invited_email || assignerTm?.member_email ||
+                  (Array.isArray(assignerTm?.profiles) ? assignerTm?.profiles[0]?.email : assignerTm?.profiles?.email) ||
+                  assignerProfile?.email || assignerProfile?.user_email ||
+                  getUserDisplayName(assignment.assigned_by, profiles, tenantMembers);
+
                 const roleBadge = assignment.project_role === 'lead'
                   ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
                   : assignment.project_role === 'reviewer'
@@ -1581,19 +1640,19 @@ function ProjectTeamModal({
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs text-white shrink-0 ${
                         assignment.project_role === 'lead' ? 'bg-gradient-to-tr from-purple-600 to-indigo-600' : 'bg-gradient-to-tr from-sky-500 to-indigo-500'
                       }`}>
-                        {(userProfile?.email || 'U').charAt(0).toUpperCase()}
+                        {(userDisplayName || 'U').charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold truncate ${tText}`} title={userProfile?.email || assignment.user_id}>
-                            {userProfile?.email || `User (${assignment.user_id.slice(0, 8)}...)`}
+                          <span className={`text-xs font-bold truncate ${tText}`} title={userDisplayName}>
+                            {userDisplayName}
                           </span>
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${roleBadge}`}>
                             {roleDisplay}
                           </span>
                         </div>
                         <p className={`text-[10px] ${tMuted} mt-0.5`}>
-                          Assigned: {new Date(assignment.assigned_at).toLocaleDateString()} by {assignerProfile?.email ? assignerProfile.email.split('@')[0] : 'System/Admin'}
+                          Assigned: {new Date(assignment.assigned_at).toLocaleDateString()} by {assignerDisplayName}
                         </p>
                       </div>
                     </div>
@@ -1629,20 +1688,47 @@ function ProjectTeamModal({
               {showHistory && (
                 <div className="space-y-2 mt-2 pt-1">
                   {endedAssignments.map(assignment => {
-                    const userProfile = (profiles || []).find(p => p.id === assignment.user_id);
-                    const assignerProfile = (profiles || []).find(p => p.id === assignment.assigned_by);
+                    const normAssigneeId = String(assignment.user_id || '').trim().toLowerCase();
+                    const normAssignerId = String(assignment.assigned_by || '').trim().toLowerCase();
+
+                    const tm = (tenantMembers || []).find(m =>
+                      (m.user_id && String(m.user_id).trim().toLowerCase() === normAssigneeId) ||
+                      (m.id && String(m.id).trim().toLowerCase() === normAssigneeId)
+                    );
+                    const assignerTm = (tenantMembers || []).find(m =>
+                      (m.user_id && String(m.user_id).trim().toLowerCase() === normAssignerId) ||
+                      (m.id && String(m.id).trim().toLowerCase() === normAssignerId)
+                    );
+
+                    const assigneeProfile = (profiles || []).find(p =>
+                      (p.id && String(p.id).trim().toLowerCase() === normAssigneeId) ||
+                      (p.user_id && String(p.user_id).trim().toLowerCase() === normAssigneeId)
+                    );
+                    const assignerProfile = (profiles || []).find(p =>
+                      (p.id && String(p.id).trim().toLowerCase() === normAssignerId) ||
+                      (p.user_id && String(p.user_id).trim().toLowerCase() === normAssignerId)
+                    );
+
+                    const userDisplayName = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email ||
+                      (Array.isArray(tm?.profiles) ? tm?.profiles[0]?.email : tm?.profiles?.email) ||
+                      assigneeProfile?.email || assigneeProfile?.user_email ||
+                      getUserDisplayName(assignment.user_id, profiles, tenantMembers);
+                    const assignerDisplayName = assignerTm?.email || assignerTm?.user_email || assignerTm?.invited_email || assignerTm?.member_email ||
+                      (Array.isArray(assignerTm?.profiles) ? assignerTm?.profiles[0]?.email : assignerTm?.profiles?.email) ||
+                      assignerProfile?.email || assignerProfile?.user_email ||
+                      getUserDisplayName(assignment.assigned_by, profiles, tenantMembers);
                     const roleDisplay = assignment.project_role === 'lead' ? 'Lead' : assignment.project_role === 'reviewer' ? 'Reviewer' : 'Member';
 
                     return (
                       <div key={assignment.id} className={`p-3 rounded-2xl border text-xs opacity-75 ${isDarkMode ? 'bg-slate-950/40 border-slate-800/80 text-slate-400' : 'bg-slate-100/70 border-slate-200 text-slate-600'}`}>
                         <div className="flex justify-between font-bold mb-1">
-                          <span className="truncate">{userProfile?.email || assignment.user_id}</span>
+                          <span className="truncate" title={userDisplayName}>{userDisplayName}</span>
                           <span className="px-1.5 py-0.2 rounded text-[9px] uppercase font-bold border border-slate-700 bg-slate-800 text-slate-400">
                             {roleDisplay} (Ended)
                           </span>
                         </div>
                         <div className="flex justify-between text-[10px] opacity-75">
-                          <span>Assigned: {new Date(assignment.assigned_at).toLocaleDateString()} by {assignerProfile?.email || 'Admin'}</span>
+                          <span>Assigned: {new Date(assignment.assigned_at).toLocaleDateString()} by {assignerDisplayName}</span>
                           <span>Ended: {assignment.ended_at ? new Date(assignment.ended_at).toLocaleDateString() : 'N/A'}</span>
                         </div>
                       </div>

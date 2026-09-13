@@ -26,6 +26,64 @@ export function normalizeRole(tenantRole, profileRole) {
   return 'guest';
 }
 
+export function getUserDisplayName(userOrId, profiles = [], tenantMembers = [], currentUser = null) {
+  if (!userOrId) return 'Unknown User';
+
+  if (typeof userOrId === 'object' && userOrId !== null) {
+    const directEmail = userOrId.email || userOrId.user_email || userOrId.invited_email || userOrId.member_email || userOrId.email_address;
+    if (directEmail && String(directEmail).trim()) return String(directEmail).trim();
+  }
+
+  const rawId = typeof userOrId === 'string' ? userOrId : (userOrId?.id || userOrId?.user_id);
+  if (!rawId) return 'Unknown User';
+  const normId = String(rawId).trim().toLowerCase();
+  const obj = typeof userOrId === 'object' ? userOrId : null;
+
+  // 1. Prioritize tenantMembers directly (authoritative tenant email source: match m.user_id === normId or m.id === normId)
+  const matchedTenantMember = (tenantMembers || []).find(m =>
+    (m.user_id && String(m.user_id).trim().toLowerCase() === normId) ||
+    (m.id && String(m.id).trim().toLowerCase() === normId)
+  ) || (tenantMembers || []).find(m =>
+    m.email && obj?.email && String(m.email).trim().toLowerCase() === String(obj.email).trim().toLowerCase()
+  );
+
+  // 2. Profile lookup fallback
+  const matchedProfile = (profiles || []).find(p =>
+    (p.id && String(p.id).trim().toLowerCase() === normId) ||
+    (p.user_id && String(p.user_id).trim().toLowerCase() === normId)
+  );
+
+  // 3. Current user lookup fallback
+  const normCurrentId = String(currentUser?.id || currentUser?.user_id || '').trim().toLowerCase();
+  const matchedCurrentUser = (currentUser && normCurrentId && normCurrentId === normId) ? currentUser : null;
+
+  const tenantMember = matchedTenantMember;
+  const profile = matchedProfile || obj;
+  const currUser = matchedCurrentUser;
+
+  // MVP DISPLAY RULE: EMAIL ONLY
+  const email =
+    tenantMember?.email || tenantMember?.user_email || tenantMember?.email_address || tenantMember?.invited_email || tenantMember?.member_email ||
+    (Array.isArray(tenantMember?.profiles) ? tenantMember?.profiles[0]?.email : tenantMember?.profiles?.email) ||
+    tenantMember?.user?.email ||
+    profile?.email || profile?.user_email || profile?.email_address ||
+    currUser?.email || currUser?.user_metadata?.email ||
+    obj?.email || obj?.user_email || obj?.email_address;
+
+  if (email && String(email).trim()) return String(email).trim();
+
+  // If tenantMembers and profiles are not yet populated (loading state before fetch completes), return 'Loading...'
+  if ((!tenantMembers || tenantMembers.length === 0) && (!profiles || profiles.length === 0)) {
+    return 'Loading...';
+  }
+
+  // Truncated UUID fallback (only when data has loaded and email is genuinely missing)
+  if (typeof rawId === 'string' && rawId.length >= 8) {
+    return `User (${rawId.slice(0, 8)}...)`;
+  }
+  return String(rawId);
+}
+
 export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsDarkMode, onSignOut }) {
   // --- Authenticated Context State ---
   const [session, setSession] = useState(sessionProp || null);
@@ -798,7 +856,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
     setIsFetchingTenantMembers(true);
     try {
-      const { data, error } = await supabase
+      const { data: rawMembers, error } = await supabase
         .from('tenant_memberships')
         .select('*')
         .eq('tenant_id', tId)
@@ -806,11 +864,35 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         .order('created_at', { ascending: false });
 
       if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
+
       if (error) {
         console.error('[Supabase Query Error - tenant_memberships]:', error);
         setTenantMembers([]);
-      } else if (data) {
-        setTenantMembers(data);
+      } else if (rawMembers && rawMembers.length > 0) {
+        const userIds = rawMembers.map(m => m.user_id || m.id).filter(Boolean);
+        const { data: profData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', userIds);
+
+        const profMap = new Map();
+        (profData || []).forEach(p => {
+          if (p.id) profMap.set(String(p.id).trim().toLowerCase(), p.email || p.user_email);
+          if (p.user_id) profMap.set(String(p.user_id).trim().toLowerCase(), p.email || p.user_email);
+        });
+
+        const mergedMembers = rawMembers.map(m => {
+          const uid = String(m.user_id || m.id || '').trim().toLowerCase();
+          const email = m.email || m.user_email || m.invited_email || m.member_email || profMap.get(uid);
+          return {
+            ...m,
+            email: email || m.email
+          };
+        });
+
+        setTenantMembers(mergedMembers);
+      } else {
+        setTenantMembers([]);
       }
     } catch (err) {
       console.error('[Fetch Tenant Members Error]:', err);
@@ -1530,6 +1612,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     setTaskAssignees([]);
     setTaskAssigneeForm({ user_id: '', role: 'assignee' });
     setIsTaskEditorOpen(true);
+    fetchProjectAssignments(activeWorkId);
   }
 
   function openEditTask(task) {
@@ -1545,6 +1628,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     setTaskAssigneeForm({ user_id: '', role: 'assignee' });
     setIsTaskEditorOpen(true);
     fetchTaskAssignees(task.id);
+    fetchProjectAssignments(task.work_id || activeWorkId);
   }
 
   function closeTaskEditor() {
@@ -1558,11 +1642,11 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     const title = taskForm.title.trim();
     const targetWork = (works || []).find(work => work.id === activeWorkId);
     if (!title || !targetWork || !tenantId) {
-      alert('Task title, project, and tenant context are required.');
+      showToast('Task title, project, and tenant context are required.');
       return { success: false };
     }
     if (!canManageTask(activeWorkId)) {
-      alert('Only Managers or the active Project Lead can manage tasks.');
+      showToast('Only Managers or the active Project Lead can manage tasks.');
       return { success: false };
     }
 
@@ -1570,21 +1654,47 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       ? (stageDefinitions || []).find(stage => stage.id === taskForm.stage_id && stage.work_id === activeWorkId)
       : null;
     if (taskForm.stage_id && !selectedStage) {
-      alert('Selected stage does not belong to the active project.');
+      showToast('Selected stage does not belong to the active project.');
       return { success: false };
+    }
+
+    const targetOpCoId =
+      targetWork?.tenant_company_id ||
+      (companies || []).find(c => c.id === targetWork?.company_id)?.tenant_company_id ||
+      activeOperatingCompanyId ||
+      (operatingCompanies || [])[0]?.id ||
+      null;
+
+    if (!targetOpCoId) {
+      showToast('Failed to save task: Could not resolve operating company context.');
+      return { success: false };
+    }
+
+    let parsedDueDate = null;
+    if (taskForm.due_date) {
+      const d = new Date(taskForm.due_date);
+      if (!isNaN(d.getTime())) {
+        parsedDueDate = d.toISOString();
+      }
     }
 
     const payload = {
       tenant_id: tenantId,
-      tenant_company_id: targetWork.tenant_company_id || activeOperatingCompanyId,
+      tenant_company_id: targetOpCoId,
       work_id: activeWorkId,
       stage_id: selectedStage?.id || null,
       title,
       description: taskForm.description.trim() || null,
       status: taskForm.status,
       priority: taskForm.priority,
-      due_date: taskForm.due_date ? new Date(taskForm.due_date).toISOString() : null
+      due_date: parsedDueDate
     };
+
+    console.log('[saveTask Diagnostic Request]:', {
+      table: 'tasks',
+      payload,
+      created_by: currentUser?.id || session?.user?.id || null
+    });
 
     try {
       let response;
@@ -1598,39 +1708,45 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
           due_date: payload.due_date
         }).eq('id', editingTaskId).eq('tenant_id', tenantId).eq('work_id', activeWorkId).select('*');
       } else {
-        response = await supabase.from('tasks').insert([{ ...payload, created_by: currentUser?.id }]).select('*');
+        response = await supabase.from('tasks').insert([{ ...payload, created_by: currentUser?.id || session?.user?.id || null }]).select('*');
       }
 
       if (response.error) {
         console.error('[Supabase Mutation Error - tasks]:', response.error);
-        alert(`Failed to save task: ${response.error.message}`);
+        let errorMsg = response.error.message;
+        if (response.error.message?.includes('row-level security') || response.error.code === '42501') {
+          errorMsg = "Permission denied to save task.";
+        }
+        showToast(`Failed to save task: ${errorMsg}`);
         return { success: false, error: response.error };
       }
 
       await fetchTasks(activeWorkId, activeOperatingCompanyId);
-      if (!editingTaskId && response.data?.[0]) {
-        setEditingTaskId(response.data[0].id);
-        await fetchTaskAssignees(response.data[0].id);
-      }
       showToast(editingTaskId ? 'Task updated.' : 'Task created.');
+      closeTaskEditor();
       return { success: true, data: response.data?.[0] };
     } catch (err) {
-      console.error('[Save Task Error]:', err);
-      alert(`Failed to save task: ${err.message || err}`);
+      console.error('[Save Task Exception]:', err);
+      showToast(`Failed to save task: ${err.message || err}`);
       return { success: false, error: err };
     }
   }
 
   function getEligibleTaskAssignees(taskId = editingTaskId) {
     const task = (tasks || []).find(item => item.id === taskId);
-    const activeMembers = getActiveProjectAssignments(task?.work_id || activeWorkId);
+    const targetWorkId = task?.work_id || activeWorkId;
+    const activeMembers = getActiveProjectAssignments(targetWorkId);
     return activeMembers
       .map(member => {
-        const profile = (profiles || []).find(item => item.id === member.user_id);
-        const tenantMember = (tenantMembers || []).find(item => item.user_id === member.user_id);
+        const tm = (tenantMembers || []).find(m =>
+          (m.user_id && String(m.user_id).trim().toLowerCase() === String(member.user_id).trim().toLowerCase()) ||
+          (m.id && String(m.id).trim().toLowerCase() === String(member.user_id).trim().toLowerCase())
+        );
+        const email = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email ||
+          getUserDisplayName(member.user_id, profiles, tenantMembers);
         return {
           user_id: member.user_id,
-          email: profile?.email || tenantMember?.email || `User (${member.user_id.slice(0, 8)}...)`,
+          email,
           project_role: member.project_role
         };
       })
@@ -1857,9 +1973,28 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     e.preventDefault();
     if (!reminderForm.content.trim()) return;
 
+    const selectedWork = (modalWorks || []).find(w => w.id === reminderForm.work_id) || (works || []).find(w => w.id === reminderForm.work_id);
+    const selectedCompany = (companies || []).find(c => c.id === reminderForm.company_id);
+    const activeWorkObj = (works || []).find(w => w.id === activeWorkId);
+    const activeCompanyObj = (companies || []).find(c => c.id === activeCompanyId);
+
+    const resolvedTenantCompanyId =
+      selectedWork?.tenant_company_id ||
+      selectedCompany?.tenant_company_id ||
+      activeWorkObj?.tenant_company_id ||
+      activeCompanyObj?.tenant_company_id ||
+      activeOperatingCompanyId ||
+      (operatingCompanies || [])[0]?.id ||
+      null;
+
+    if (!resolvedTenantCompanyId) {
+      showToast("Failed to save scheduled task: Could not resolve operating company context. Please select a company.");
+      return;
+    }
+
     const payload = {
       tenant_id: tenantId || null,
-      tenant_company_id: activeOperatingCompanyId || null,
+      tenant_company_id: resolvedTenantCompanyId,
       content: reminderForm.content.trim(),
       target_date: reminderForm.target_date || null,
       company_id: reminderForm.company_id || null,
@@ -2798,6 +2933,7 @@ USER REQUEST: ${trimmedMsg}`;
     editReminderModal, setEditReminderModal, editReminderForm, setEditReminderForm, openEditReminderModal, handleSaveReminderEdit,
     refreshAllData, toastMessage, showToast,
     
+    getUserDisplayName: (userOrId, p, tm, cu) => getUserDisplayName(userOrId, (p && p.length) ? p : profiles, (tm && tm.length) ? tm : tenantMembers, cu || currentUser),
     navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
     handleAddIssue, toggleIssueStatus, handleAddLog, startEditingLog, saveLogEdit, handleDeleteLog, handleRestoreLog, handlePermanentDeleteLog, handleAddCompany, handleAddUnit, handleRenameCompany, handleDeleteCompany, handleRenameUnit, handleDeleteUnit,
     openNewWorkModal, openEditWorkModal, submitWork, handleDeleteWork, openStageManager, updateStageName, moveStage, removeStage, addNewStage, saveStages, handleSearch, jumpToSearchResult, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,

@@ -13,7 +13,7 @@ export default function TaskPanel() {
     setTaskForm, taskAssignees, isTaskAssigneesLoading, taskAssigneeForm,
     setTaskAssigneeForm, openNewTask, openEditTask, closeTaskEditor, saveTask,
     getEligibleTaskAssignees, assignUserToTask, endTaskAssignment, stageDefinitions,
-    profiles
+    profiles, tenantMembers, getUserDisplayName
   } = useCrm();
 
   const [taskMode, setTaskMode] = useState('7f');
@@ -136,10 +136,54 @@ export default function TaskPanel() {
 
             {taskForm.title && (
               <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between mb-2"><h4 className={`text-[10px] uppercase tracking-wider font-black ${tMuted}`}>Assignees</h4>{isTaskAssigneesLoading && <span className="text-[10px] text-sky-500">Loading...</span>}</div>
-                <div className="grid grid-cols-[1fr_110px_auto] gap-2 mb-3"><select className={`min-w-0 ${inputClass}`} value={taskAssigneeForm.user_id} onChange={event => setTaskAssigneeForm({ ...taskAssigneeForm, user_id: event.target.value })}><option value="">Project member</option>{taskCandidates.map(candidate => <option key={candidate.user_id} value={candidate.user_id}>{candidate.email}</option>)}</select><select className={inputClass} value={taskAssigneeForm.role} onChange={event => setTaskAssigneeForm({ ...taskAssigneeForm, role: event.target.value })}>{['assignee', 'accountable', 'reviewer'].map(role => <option key={role} value={role}>{role}</option>)}</select><button onClick={() => assignUserToTask({ userId: taskAssigneeForm.user_id, role: taskAssigneeForm.role }).then(result => result?.success && setTaskAssigneeForm({ user_id: '', role: 'assignee' }))} disabled={!taskAssigneeForm.user_id} className="rounded-xl bg-indigo-600 text-white px-2.5 disabled:opacity-40"><UserPlus size={13} /></button></div>
-                {activeTaskAssignees.map(assignment => { const profile = (profiles || []).find(item => item.id === assignment.user_id); return <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2 rounded-lg border mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}><span className={`text-[10px] truncate ${tText}`}>{profile?.email || assignment.user_id} <b className="text-sky-500">({assignment.role})</b></span><button onClick={() => endTaskAssignment(assignment.id)} className="text-rose-500 p-1" title="End assignment"><UserMinus size={13} /></button></div>; })}
-                {endedTaskAssignees.length > 0 && <div className="mt-3 space-y-1.5"><p className={`text-[10px] uppercase tracking-wider font-black ${tMuted}`}>Assignment history</p>{endedTaskAssignees.map(assignment => { const profile = (profiles || []).find(item => item.id === assignment.user_id); return <div key={assignment.id} className={`p-2 rounded-lg border text-[10px] ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}><div className="flex justify-between gap-2"><span className="truncate">{profile?.email || assignment.user_id}</span><span>{assignment.role}</span></div><div className="mt-1">Assigned {assignment.assigned_at ? new Date(assignment.assigned_at).toLocaleDateString() : '—'} · Ended {assignment.ended_at ? new Date(assignment.ended_at).toLocaleDateString() : '—'}</div></div>; })}</div>}
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className={`text-[10px] uppercase tracking-wider font-black ${tMuted}`}>Assignees</h4>
+                  {isTaskAssigneesLoading && <span className="text-[10px] text-sky-500">Loading...</span>}
+                </div>
+                <div className="grid grid-cols-[1fr_110px_auto] gap-2 mb-3">
+                  <select className={`min-w-0 ${inputClass}`} value={taskAssigneeForm.user_id} onChange={event => setTaskAssigneeForm({ ...taskAssigneeForm, user_id: event.target.value })}>
+                    <option value="">Project member</option>
+                    {taskCandidates.map(candidate => {
+                      const tm = (tenantMembers || []).find(m => m.user_id && String(m.user_id).trim().toLowerCase() === String(candidate.user_id).trim().toLowerCase());
+                      const email = candidate.email || tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email || getUserDisplayName(candidate.user_id, profiles, tenantMembers);
+                      return <option key={candidate.user_id} value={candidate.user_id}>{email}</option>;
+                    })}
+                  </select>
+                  <select className={inputClass} value={taskAssigneeForm.role} onChange={event => setTaskAssigneeForm({ ...taskAssigneeForm, role: event.target.value })}>
+                    {['assignee', 'accountable', 'reviewer'].map(role => <option key={role} value={role}>{role}</option>)}
+                  </select>
+                  <button onClick={() => assignUserToTask({ userId: taskAssigneeForm.user_id, role: taskAssigneeForm.role }).then(result => result?.success && setTaskAssigneeForm({ user_id: '', role: 'assignee' }))} disabled={!taskAssigneeForm.user_id} className="rounded-xl bg-indigo-600 text-white px-2.5 disabled:opacity-40">
+                    <UserPlus size={13} />
+                  </button>
+                </div>
+                {activeTaskAssignees.map(assignment => {
+                  const tm = (tenantMembers || []).find(m => m.user_id && String(m.user_id).trim().toLowerCase() === String(assignment.user_id).trim().toLowerCase());
+                  const displayName = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email || getUserDisplayName(assignment.user_id, profiles, tenantMembers);
+                  return (
+                    <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2 rounded-lg border mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                      <span className={`text-[10px] truncate ${tText}`}>{displayName} <b className="text-sky-500">({assignment.role})</b></span>
+                      <button onClick={() => endTaskAssignment(assignment.id)} className="text-rose-500 p-1" title="End assignment"><UserMinus size={13} /></button>
+                    </div>
+                  );
+                })}
+                {endedTaskAssignees.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    <p className={`text-[10px] uppercase tracking-wider font-black ${tMuted}`}>Assignment history</p>
+                    {endedTaskAssignees.map(assignment => {
+                      const tm = (tenantMembers || []).find(m => m.user_id && String(m.user_id).trim().toLowerCase() === String(assignment.user_id).trim().toLowerCase());
+                      const displayName = tm?.email || tm?.user_email || tm?.invited_email || tm?.member_email || getUserDisplayName(assignment.user_id, profiles, tenantMembers);
+                      return (
+                        <div key={assignment.id} className={`p-2 rounded-lg border text-[10px] ${isDarkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+                          <div className="flex justify-between gap-2">
+                            <span className="truncate">{displayName}</span>
+                            <span>{assignment.role}</span>
+                          </div>
+                          <div className="mt-1">Assigned {assignment.assigned_at ? new Date(assignment.assigned_at).toLocaleDateString() : '—'} · Ended {assignment.ended_at ? new Date(assignment.ended_at).toLocaleDateString() : '—'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 {taskCandidates.length === 0 && <p className="text-[10px] text-amber-600 mt-2">No active project members are eligible.</p>}
               </div>
             )}

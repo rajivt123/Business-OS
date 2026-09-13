@@ -11,7 +11,7 @@ export default function CenterPanel() {
     reminders, openNewWorkModal, openEditWorkModal, handleDeleteWork, openMoveLogModal,
     startEditingLog, saveLogEdit, handleDeleteLog, openReminderForLog, handleAddLog, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
     openDocPreview,
-    projectAssignments, setIsProjectTeamModalOpen, getActiveProjectAssignments
+    projectAssignments, setIsProjectTeamModalOpen, getActiveProjectAssignments, tenantMembers, getUserDisplayName
   } = useCrm()
 
   const activeCompany = (companies || []).find(c => c.id === activeCompanyId)
@@ -184,8 +184,8 @@ export default function CenterPanel() {
                      ) : (
                        <div className="flex items-center gap-1 max-w-[280px] overflow-x-auto">
                          {activeAssignments.slice(0, 3).map(assignment => {
-                           const profile = (profiles || []).find(p => p.id === assignment.user_id);
-                           const userLabel = profile?.email ? profile.email.split('@')[0] : `User (${assignment.user_id.slice(0, 6)})`;
+                           const displayName = getUserDisplayName ? getUserDisplayName(assignment.user_id, profiles, tenantMembers) : assignment.user_id;
+                           const userLabel = displayName.includes('@') ? displayName.split('@')[0] : displayName;
                            const roleLabel = assignment.project_role === 'lead' ? 'Lead' : assignment.project_role === 'reviewer' ? 'Reviewer' : 'Member';
                            const badgeStyle = assignment.project_role === 'lead'
                              ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 font-bold'
@@ -194,7 +194,7 @@ export default function CenterPanel() {
                              : 'bg-sky-500/15 text-sky-400 border-sky-500/30 font-bold';
 
                            return (
-                             <span key={assignment.id} className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${badgeStyle}`} title={`${profile?.email || assignment.user_id} - ${roleLabel}`}>
+                             <span key={assignment.id} className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${badgeStyle}`} title={`${displayName} - ${roleLabel}`}>
                                <span>{userLabel}</span>
                                <span className="text-[9px] opacity-75">({roleLabel})</span>
                              </span>
