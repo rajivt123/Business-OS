@@ -14,6 +14,7 @@ import {
 import { useCrm, getUserDisplayName } from '../context/CrmContext';
 import CrmWorkspace from './CrmWorkspace';
 import EmployeeWorkspace from './hr/EmployeeWorkspace';
+import HrPolicyCenter from './hr/HrPolicyCenter';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -568,6 +569,7 @@ export default function BusinessOSWorkspace() {
   } = crm;
 
   const [page, setPage] = useState('dashboard');
+  const [hrSubTab, setHrSubTab] = useState('master');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 800 : false);
   const [previewRole, setPreviewRole] = useState(null);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
@@ -809,7 +811,48 @@ export default function BusinessOSWorkspace() {
           />
         )}
         {['crm', 'sales', 'procurement', 'inventory', 'accounts'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
-        {page === 'hr' && <EmployeeWorkspace />}
+        {page === 'hr' && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setHrSubTab('master')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'master'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Users size={14} /> Employee Master
+              </button>
+              <button
+                type="button"
+                onClick={() => setHrSubTab('policy')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'policy'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <ShieldCheck size={14} /> Policy Center
+              </button>
+              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
+                Recruitment (future)
+              </button>
+              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
+                Attendance (future)
+              </button>
+              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
+                Leave (future)
+              </button>
+              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
+                Requests (future)
+              </button>
+            </div>
+            {hrSubTab === 'master' && <EmployeeWorkspace />}
+            {hrSubTab === 'policy' && <HrPolicyCenter />}
+          </div>
+        )}
         {page === 'projects' && (
           <ProjectsPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
         )}
