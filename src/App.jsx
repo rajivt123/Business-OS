@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import BusinessOSWorkspace from './components/BusinessOSWorkspace'
 import { CrmProvider } from './context/CrmContext'
+import { EmployeeProvider } from './context/EmployeeContext'
 import { Sun, Moon, KeyRound, Mail, Lock, ArrowLeft, CheckCircle, ShieldCheck, Flame } from 'lucide-react'
 
 export default function App() {
@@ -377,7 +378,9 @@ export default function App() {
   return (
     <div className={`h-screen w-screen overflow-hidden flex flex-col font-sans transition-colors duration-200 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
       <CrmProvider session={session} isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} onSignOut={() => supabase.auth.signOut()}>
-        <BusinessOSWorkspace />
+        <EmployeeProvider>
+          <BusinessOSWorkspace />
+        </EmployeeProvider>
       </CrmProvider>
     </div>
   )

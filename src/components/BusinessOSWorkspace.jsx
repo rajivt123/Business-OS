@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCrm, getUserDisplayName } from '../context/CrmContext';
 import CrmWorkspace from './CrmWorkspace';
+import EmployeeWorkspace from './hr/EmployeeWorkspace';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -807,7 +808,8 @@ export default function BusinessOSWorkspace() {
             onNotificationClick={handleNotificationClick}
           />
         )}
-        {['crm', 'sales', 'procurement', 'inventory', 'accounts', 'hr'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
+        {['crm', 'sales', 'procurement', 'inventory', 'accounts'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
+        {page === 'hr' && <EmployeeWorkspace />}
         {page === 'projects' && (
           <ProjectsPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
         )}
