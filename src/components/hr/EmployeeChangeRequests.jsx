@@ -186,6 +186,7 @@ export default function EmployeeChangeRequests({ targetEmployee = null, onClose 
                         req.status === 'approved' ? 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300' :
                         req.status === 'pending_approval' ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300' :
                         req.status === 'returned' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300' :
+                        req.status === 'cancelled' ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
                         'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
                       }`}>
                         {req.status}

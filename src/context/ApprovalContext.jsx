@@ -476,8 +476,8 @@ export function ApprovalProvider({ children }) {
         return { success: false, error: `Cannot withdraw request in '${targetReq.status}' status.` };
       }
 
-      await supabase.from('approval_requests').update({ status: 'withdrawn', updated_at: new Date().toISOString() }).eq('id', requestId);
-      await recordAction({ requestId, action: 'withdrawn', fromStatus: targetReq.status, toStatus: 'withdrawn', comments: 'Withdrawn by requester.' });
+      await supabase.from('approval_requests').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', requestId);
+      await recordAction({ requestId, action: 'withdrawn', fromStatus: targetReq.status, toStatus: 'cancelled', comments: 'Withdrawn by requester.' });
 
       await fetchRequests(activeOperatingCompanyId);
       return { success: true };
