@@ -9,7 +9,7 @@ import {
   X, Zap, BookOpen, Banknote, CalendarCheck2, Boxes, Calculator, Contact, Landmark, UserRound,
   ClipboardList, FileSpreadsheet, Workflow, CircleUserRound, SlidersHorizontal, ChevronUp,
   MoreHorizontal, Eye, Pencil, Send, Upload, Download, CheckCircle2, XCircle, ClockArrowUp,
-  TriangleAlert, Factory, MapPin, Briefcase, UserCog, Network, KeyRound, History, Layers3,
+  TriangleAlert, Factory, MapPin, Briefcase, UserCog, Network, KeyRound, History, Layers3, Palmtree
 } from 'lucide-react';
 import { useCrm, getUserDisplayName } from '../context/CrmContext';
 import CrmWorkspace from './CrmWorkspace';
@@ -19,6 +19,10 @@ import RecruitmentWorkspace from './hr/RecruitmentWorkspace';
 import PublicApplicationForm from './hr/PublicApplicationForm';
 import ApprovalCenter from './ApprovalCenter';
 import EmployeeChangeRequests from './hr/EmployeeChangeRequests';
+import AttendanceWorkspace from './hr/AttendanceWorkspace';
+import LeaveWorkspace from './hr/LeaveWorkspace';
+import PayrollWorkspace from './hr/PayrollWorkspace';
+import SalesWorkspace from './sales/SalesWorkspace';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -821,7 +825,8 @@ export default function BusinessOSWorkspace() {
             onNotificationClick={handleNotificationClick}
           />
         )}
-        {['crm', 'sales', 'procurement', 'inventory', 'accounts'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
+        {page === 'sales' && <SalesWorkspace />}
+        {['crm', 'procurement', 'inventory', 'accounts'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
         {page === 'hr' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
@@ -869,17 +874,47 @@ export default function BusinessOSWorkspace() {
               >
                 <ClipboardCheck size={14} /> Profile Requests
               </button>
-              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
-                Attendance (future)
+              <button
+                type="button"
+                onClick={() => setHrSubTab('attendance')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'attendance'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Clock3 size={14} /> Attendance
               </button>
-              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
-                Leave (future)
+              <button
+                type="button"
+                onClick={() => setHrSubTab('leave')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'leave'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Palmtree size={14} /> Leave Management
+              </button>
+              <button
+                type="button"
+                onClick={() => setHrSubTab('payroll')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'payroll'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Banknote size={14} /> Payroll
               </button>
             </div>
             {hrSubTab === 'master' && <EmployeeWorkspace />}
             {hrSubTab === 'recruitment' && <RecruitmentWorkspace />}
             {hrSubTab === 'policy' && <HrPolicyCenter />}
             {hrSubTab === 'change_requests' && <EmployeeChangeRequests />}
+            {hrSubTab === 'attendance' && <AttendanceWorkspace />}
+            {hrSubTab === 'leave' && <LeaveWorkspace />}
+            {hrSubTab === 'payroll' && <PayrollWorkspace />}
           </div>
         )}
 

@@ -6,6 +6,10 @@ import { EmployeeProvider } from './context/EmployeeContext'
 import { HrPolicyProvider } from './context/HrPolicyContext'
 import { RecruitmentProvider } from './context/RecruitmentContext'
 import { ApprovalProvider } from './context/ApprovalContext'
+import { AttendanceProvider } from './context/AttendanceContext'
+import { LeaveProvider } from './context/LeaveContext'
+import { PayrollProvider } from './context/PayrollContext'
+import { SalesProvider } from './context/SalesContext'
 import { Sun, Moon, KeyRound, Mail, Lock, ArrowLeft, CheckCircle, ShieldCheck, Flame } from 'lucide-react'
 
 export default function App() {
@@ -385,7 +389,15 @@ export default function App() {
           <HrPolicyProvider>
             <RecruitmentProvider>
               <ApprovalProvider>
-                <BusinessOSWorkspace />
+                <AttendanceProvider>
+                  <LeaveProvider>
+                    <PayrollProvider>
+                      <SalesProvider>
+                        <BusinessOSWorkspace />
+                      </SalesProvider>
+                    </PayrollProvider>
+                  </LeaveProvider>
+                </AttendanceProvider>
               </ApprovalProvider>
             </RecruitmentProvider>
           </HrPolicyProvider>
