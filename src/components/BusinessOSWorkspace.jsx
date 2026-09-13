@@ -15,6 +15,8 @@ import { useCrm, getUserDisplayName } from '../context/CrmContext';
 import CrmWorkspace from './CrmWorkspace';
 import EmployeeWorkspace from './hr/EmployeeWorkspace';
 import HrPolicyCenter from './hr/HrPolicyCenter';
+import RecruitmentWorkspace from './hr/RecruitmentWorkspace';
+import PublicApplicationForm from './hr/PublicApplicationForm';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -570,6 +572,13 @@ export default function BusinessOSWorkspace() {
 
   const [page, setPage] = useState('dashboard');
   const [hrSubTab, setHrSubTab] = useState('master');
+  const [publicApplyToken, setPublicApplyToken] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('apply_token') || '';
+    }
+    return '';
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 800 : false);
   const [previewRole, setPreviewRole] = useState(null);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
@@ -827,6 +836,17 @@ export default function BusinessOSWorkspace() {
               </button>
               <button
                 type="button"
+                onClick={() => setHrSubTab('recruitment')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  hrSubTab === 'recruitment'
+                    ? 'bg-sky-500 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Briefcase size={14} /> Recruitment
+              </button>
+              <button
+                type="button"
                 onClick={() => setHrSubTab('policy')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   hrSubTab === 'policy'
@@ -835,9 +855,6 @@ export default function BusinessOSWorkspace() {
                 }`}
               >
                 <ShieldCheck size={14} /> Policy Center
-              </button>
-              <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
-                Recruitment (future)
               </button>
               <button type="button" disabled className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 opacity-50 cursor-not-allowed">
                 Attendance (future)
@@ -850,7 +867,17 @@ export default function BusinessOSWorkspace() {
               </button>
             </div>
             {hrSubTab === 'master' && <EmployeeWorkspace />}
+            {hrSubTab === 'recruitment' && <RecruitmentWorkspace />}
             {hrSubTab === 'policy' && <HrPolicyCenter />}
+          </div>
+        )}
+
+        {/* Public Candidate Application Modal Overlay */}
+        {publicApplyToken && (
+          <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+            <div className="w-full max-w-3xl my-8">
+              <PublicApplicationForm token={publicApplyToken} onClose={() => setPublicApplyToken('')} />
+            </div>
           </div>
         )}
         {page === 'projects' && (
