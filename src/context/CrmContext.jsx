@@ -220,6 +220,10 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [tenantMembers, setTenantMembers] = useState([]);
   const [isFetchingTenantMembers, setIsFetchingTenantMembers] = useState(false);
 
+  // Notifications State (Phase 3)
+  const [notifications, setNotifications] = useState([]);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+
   // Navigation State
   const [pendingNav, setPendingNav] = useState(null);
 
@@ -267,6 +271,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setActiveIssueId(null);
       setLogs([]);
       setReminders([]);
+      setNotifications([]);
       setMissingData([]);
       setProjectAssignments([]);
       setTasks([]);
@@ -308,6 +313,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     setSession(currentSession);
     setCurrentUser(currentSession.user);
     setAuthLoading(true);
+    console.log('[NOTIF TRACE 2] auth resolved:', currentSession.user.id);
 
     try {
       // Step 2: Load Active Tenant Membership from public.tenant_memberships
@@ -398,6 +404,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       await Promise.all([
         fetchCompanies(resolvedOpCoId, generation),
         fetchReminders(resolvedOpCoId, generation),
+        fetchNotifications(resolvedOpCoId, generation),
         fetchMissingData(resolvedOpCoId, generation),
         fetchProfiles(generation),
         fetchTenantMembers(resolvedTenantId, generation)
@@ -447,6 +454,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   };
 
   useEffect(() => {
+    console.log('[NOTIF TRACE 1] CrmContext mounted');
     const initialAuthEventGeneration = authEventGenerationRef.current;
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       if (authEventGenerationRef.current !== initialAuthEventGeneration) return;
@@ -480,6 +488,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setStageAssignmentTargetId(null);
       fetchCompanies(activeOperatingCompanyId);
       fetchReminders(activeOperatingCompanyId);
+      fetchNotifications(activeOperatingCompanyId);
       fetchMissingData(activeOperatingCompanyId);
     }
   }, [activeOperatingCompanyId]);
@@ -808,6 +817,16 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     setTaskAssignees([]);
     fetchTasks(activeWorkId, activeOperatingCompanyId);
   }, [session?.user?.id, tenantId, activeWorkId, activeOperatingCompanyId]);
+
+  // Notifications Lifecycle Effect: Re-fetch when authenticated user ID changes, clear on logout
+  useEffect(() => {
+    const authUserId = session?.user?.id || currentUser?.id;
+    if (!authUserId) {
+      setNotifications([]);
+      return;
+    }
+    fetchNotifications(authUserId);
+  }, [session?.user?.id, currentUser?.id]);
 
   // --- Database Fetches ---
   async function fetchCompanies(targetOpCoId, authGeneration) {
@@ -1315,6 +1334,19 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
 
       await fetchStageAssignments(targetWorkId);
       showToast('User assigned to stage successfully.');
+      if (userId && userId !== (currentUser?.id || session?.user?.id)) {
+        createNotification({
+          recipientId: userId,
+          actorId: currentUser?.id || session?.user?.id,
+          tenantId,
+          tenantCompanyId: opCoId,
+          type: 'stage_assigned',
+          title: 'Assigned to Pipeline Stage',
+          message: `You have been assigned as ${stageRole} to stage on project "${targetWork?.title || 'Project'}".`,
+          entityType: 'stage_assignment',
+          entityId: data?.[0]?.id || targetWorkId
+        });
+      }
       return { success: true, data: data?.[0] };
     } catch (err) {
       console.error('[Assign Stage User Error]:', err);
@@ -1469,6 +1501,19 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       if (data && data.length > 0) {
         showToast("User assigned to project successfully!");
         await fetchProjectAssignments(targetWorkId);
+        if (userId && userId !== (currentUser?.id || session?.user?.id)) {
+          createNotification({
+            recipientId: userId,
+            actorId: currentUser?.id || session?.user?.id,
+            tenantId,
+            tenantCompanyId: targetOpCoId,
+            type: 'project_assigned',
+            title: 'Assigned to Project',
+            message: `You have been assigned as ${projectRole} to project "${targetWork?.title || 'Project'}".`,
+            entityType: 'work',
+            entityId: targetWorkId
+          });
+        }
         return { success: true, data: data[0] };
       }
     } catch (err) {
@@ -1794,16 +1839,36 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
 
     const targetWork = (works || []).find(work => work.id === task.work_id);
+    const assignedUserId = userId;
+    const authenticatedUserId = currentUser?.id || session?.user?.id;
+    const targetTenantCompanyId = task.tenant_company_id || targetWork?.tenant_company_id || activeOperatingCompanyId;
+
+    console.log('[TASK ASSIGN TRACE 1] assignment requested', {
+      taskId: task.id,
+      assignedUserId,
+      role
+    });
+
+    const assignPayload = {
+      tenant_id: task.tenant_id || tenantId,
+      tenant_company_id: targetTenantCompanyId,
+      task_id: task.id,
+      user_id: assignedUserId,
+      role,
+      status: 'active',
+      assigned_by: authenticatedUserId
+    };
+
+    console.log('[TASK ASSIGN TRACE 2] inserting task_assignee', assignPayload);
+
     try {
-      const { data, error } = await supabase.from('task_assignees').insert([{
-        tenant_id: tenantId,
-        tenant_company_id: targetWork?.tenant_company_id || activeOperatingCompanyId,
-        task_id: task.id,
-        user_id: userId,
-        role,
-        status: 'active',
-        assigned_by: currentUser?.id
-      }]).select();
+      const { data, error } = await supabase.from('task_assignees').insert([assignPayload]).select();
+      
+      console.log('[TASK ASSIGN TRACE 3] task_assignee result', {
+        data,
+        error
+      });
+
       if (error) {
         console.error('[Supabase Mutation Error - task_assignees]:', error);
         alert(`Failed to assign task user: ${error.message}`);
@@ -1811,6 +1876,51 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       }
       await fetchTaskAssignees(task.id);
       showToast('Task assignee added.');
+
+      // AFTER and ONLY AFTER task_assignees INSERT succeeds, execute notification INSERT
+      if (assignedUserId && assignedUserId !== authenticatedUserId) {
+        const notifPayload = {
+          tenant_id: task.tenant_id || tenantId,
+          tenant_company_id: targetTenantCompanyId,
+          recipient_id: assignedUserId,
+          actor_id: authenticatedUserId,
+          type: 'task_assigned',
+          title: 'New Task Assigned',
+          message: `You have been assigned a task: ${task.title}`,
+          entity_type: 'task',
+          entity_id: task.id,
+          is_read: false
+        };
+
+        console.log('[TASK NOTIF TRACE 1] creating notification', {
+          recipient_id: assignedUserId,
+          actor_id: authenticatedUserId,
+          task_id: task.id,
+          tenant_company_id: targetTenantCompanyId
+        });
+
+        const { data: notifData, error: notifError } = await supabase
+          .from('notifications')
+          .insert([notifPayload])
+          .select();
+
+        console.log('[TASK NOTIF TRACE 2] notification result', {
+          data: notifData,
+          error: notifError
+        });
+
+        if (notifError) {
+          console.error('[Supabase Mutation Error - notification insert failed]:', {
+            message: notifError.message,
+            details: notifError.details,
+            hint: notifError.hint,
+            code: notifError.code
+          });
+        }
+      } else if (assignedUserId === authenticatedUserId) {
+        console.log('[NOTIF EVENT] skipped self-assignment notification for actor:', authenticatedUserId);
+      }
+
       return { success: true, data: data?.[0] };
     } catch (err) {
       console.error('[Assign Task User Error]:', err);
@@ -1851,6 +1961,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   async function fetchReminders(targetOpCoId, authGeneration) {
     if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    const userId = currentUser?.id || session?.user?.id;
+
     let query = supabase
       .from('reminders')
       .select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`)
@@ -1860,13 +1972,157 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       query = query.eq('tenant_company_id', opCoId);
     }
 
+    if (userId) {
+      query = query.or(`created_by.eq.${userId},created_by.is.null`);
+    }
+
     const { data, error } = await query;
     if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     if (error) {
       console.error('[Supabase Query Error - reminders]:', error);
+      showToast(`Failed to fetch personal reminders: ${error.message}`);
       return;
     }
     if (data) setReminders(data);
+  }
+
+  // --- Notifications Functions (Phase 3) ---
+  async function fetchNotifications(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    const authUserId = currentUser?.id || session?.user?.id;
+
+    console.log('[NOTIF TRACE 3] fetchNotifications called:', { opCoId, authGeneration, authUserId });
+
+    if (!authUserId) {
+      console.warn('[NOTIFICATIONS DEBUG] No authenticated user yet');
+      setNotifications([]);
+      return;
+    }
+
+    console.log('[NOTIF TRACE 4] querying recipient:', authUserId, 'opCoId:', opCoId);
+
+    setIsNotificationsLoading(true);
+    try {
+      let query = supabase
+        .from('notifications')
+        .select('*')
+        .eq('recipient_id', authUserId)
+        .order('created_at', { ascending: false });
+
+      if (opCoId) {
+        query = query.eq('tenant_company_id', opCoId);
+      }
+
+      const { data, error } = await query;
+
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
+
+      console.log('[NOTIF TRACE 5] query result:', { count: data?.length, error, data });
+
+      if (error) {
+        console.warn('[Supabase Query Notice - notifications]:', error.message);
+        setNotifications([]);
+      } else if (data) {
+        console.log('[NOTIF TRACE 6] setting notifications:', data?.length);
+        setNotifications(data);
+      }
+    } catch (err) {
+      console.warn('[Fetch Notifications Notice]:', err);
+      setNotifications([]);
+    } finally {
+      setIsNotificationsLoading(false);
+    }
+  }
+
+  async function markNotificationAsRead(notificationId) {
+    if (!notificationId) return;
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('id', notificationId)
+        .select();
+
+      if (error) {
+        console.error('[Supabase Mutation Error - mark notification read]:', error);
+        showToast(`Failed to mark notification as read: ${error.message}`);
+        return { success: false, error };
+      }
+      setNotifications(prev => (prev || []).map(n => n.id === notificationId ? { ...n, is_read: true, read_at: new Date().toISOString() } : n));
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.error('[Mark Notification Read Error]:', err);
+      return { success: false, error: err };
+    }
+  }
+
+  async function markAllNotificationsAsRead() {
+    const userId = currentUser?.id || session?.user?.id;
+    if (!userId) return;
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('recipient_id', userId)
+        .eq('is_read', false);
+
+      if (error) {
+        console.error('[Supabase Mutation Error - mark all notifications read]:', error);
+        showToast(`Failed to mark notifications as read: ${error.message}`);
+        return { success: false, error };
+      }
+      setNotifications(prev => (prev || []).map(n => ({ ...n, is_read: true, read_at: new Date().toISOString() })));
+      return { success: true };
+    } catch (err) {
+      console.error('[Mark All Notifications Read Error]:', err);
+      return { success: false, error: err };
+    }
+  }
+
+  async function createNotification({
+    recipientId,
+    actorId,
+    tenantId: overrideTenantId,
+    tenantCompanyId: overrideTenantCompanyId,
+    type,
+    title,
+    message,
+    entityType,
+    entityId
+  }) {
+    if (!recipientId) return { success: false, reason: 'No recipientId provided' };
+
+    const actor = actorId || currentUser?.id || session?.user?.id || null;
+    const tId = overrideTenantId || tenantId || null;
+    const tcId = overrideTenantCompanyId || activeOperatingCompanyId || null;
+
+    const payload = {
+      recipient_id: recipientId,
+      actor_id: actor,
+      tenant_id: tId,
+      tenant_company_id: tcId,
+      type: type || 'system',
+      title: title || 'Notification',
+      message: message || '',
+      entity_type: entityType || null,
+      entity_id: entityId || null,
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      const { data, error } = await supabase.from('notifications').insert([payload]).select();
+      if (error) {
+        console.warn('[Supabase Notification Trigger Notice]:', error.message);
+        return { success: false, error };
+      }
+      console.log('[NOTIF EVENT] notification inserted:', data?.[0]);
+      return { success: true, data: data?.[0] };
+    } catch (err) {
+      console.warn('[Notification Trigger Exception]:', err);
+      return { success: false, error: err };
+    }
   }
 
   async function fetchMissingData(targetOpCoId, authGeneration) {
@@ -1995,6 +2251,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     const payload = {
       tenant_id: tenantId || null,
       tenant_company_id: resolvedTenantCompanyId,
+      created_by: currentUser?.id || session?.user?.id || null,
       content: reminderForm.content.trim(),
       target_date: reminderForm.target_date || null,
       company_id: reminderForm.company_id || null,
@@ -2027,21 +2284,36 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
   }
 
-  async function toggleReminder(id, currentStatus) { 
-    const { data } = await supabase.from('reminders').update({ is_completed: !currentStatus }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`); 
-    if (data) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
+  async function toggleReminder(id, currentStatus) {
+    const { data, error } = await supabase.from('reminders').update({ is_completed: !currentStatus }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+    if (error) {
+      console.error('[Supabase Mutation Error - toggle reminder]:', error);
+      showToast(`Failed to update task: ${error.message}`);
+      return;
+    }
+    if (data && data.length > 0) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
   }
 
-  async function handleDeleteReminder(id) { 
+  async function handleDeleteReminder(id) {
     const confirmed = await showConfirm("Move this task to the Recycle Bin?");
-    if (!confirmed) return; 
-    const { data } = await supabase.from('reminders').update({ is_deleted: true }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`); 
-    if (data) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
+    if (!confirmed) return;
+    const { data, error } = await supabase.from('reminders').update({ is_deleted: true }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+    if (error) {
+      console.error('[Supabase Mutation Error - delete reminder]:', error);
+      showToast(`Failed to move task to Recycle Bin: ${error.message}`);
+      return;
+    }
+    if (data && data.length > 0) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
   }
 
-  async function handleRestoreReminder(id) { 
-    const { data } = await supabase.from('reminders').update({ is_deleted: false }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`); 
-    if (data) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
+  async function handleRestoreReminder(id) {
+    const { data, error } = await supabase.from('reminders').update({ is_deleted: false }).eq('id', id).select(`*, companies!fk_reminders_company_scoped(name), units!fk_reminders_unit_scoped(name), works!fk_reminders_work_scoped(title, po_number, wo_number)`);
+    if (error) {
+      console.error('[Supabase Mutation Error - restore reminder]:', error);
+      showToast(`Failed to restore task: ${error.message}`);
+      return;
+    }
+    if (data && data.length > 0) setReminders((reminders || []).map(r => r.id === id ? data[0] : r));
   }
 
   async function handlePermanentDeleteReminder(id) { 
@@ -2049,7 +2321,12 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     const confirmed = await showConfirm("Permanently delete this task?");
     if (!confirmed) return; 
     const { error } = await supabase.from('reminders').delete().eq('id', id); 
-    if (!error) setReminders((reminders || []).filter(r => r.id !== id));
+    if (error) {
+      console.error('[Supabase Mutation Error - permanent delete reminder]:', error);
+      showToast(`Failed to permanently delete task: ${error.message}`);
+      return;
+    }
+    setReminders((reminders || []).filter(r => r.id !== id));
   }
 
   // --- Issues Handlers ---
@@ -2921,6 +3198,15 @@ USER REQUEST: ${trimmedMsg}`;
     tenantMembers,
     isFetchingTenantMembers,
     fetchTenantMembers,
+
+    // Notifications (Phase 3)
+    notifications,
+    isNotificationsLoading,
+    unreadNotificationsCount: (notifications || []).filter(n => !n.is_read).length,
+    fetchNotifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    createNotification,
 
     isDarkMode, setIsDarkMode, onSignOut, userRole, isSidebarOpen, setIsSidebarOpen, companies, activeCompanyId, setActiveCompanyId, units, activeUnitId, setActiveUnitId, works, activeWorkId, setActiveWorkId,
     fontSize, setFontSize, increaseFontSize, decreaseFontSize, docPreviewModal, openDocPreview, closeDocPreview,

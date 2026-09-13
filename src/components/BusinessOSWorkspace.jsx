@@ -370,8 +370,142 @@ function ApprovalsPage() {
   return <div className="space-y-4"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={ClipboardCheck} label="Pending" value="Unavailable" tone="amber" /><StatCard icon={Clock3} label="Due Today" value="Unavailable" tone="rose" /><StatCard icon={CheckCircle2} label="Approved This Month" value="Unavailable" tone="emerald" /><StatCard icon={XCircle} label="Rejected / Sent Back" value="Unavailable" tone="slate" /></div><SectionCard title="Pending Approval Queue" subtitle="Approval backend is not connected in the current application." icon={ClipboardCheck}><p className="p-4 text-xs italic text-slate-400">No live approval records are available.</p></SectionCard></div>;
 }
 
-function NotificationsPage() {
-  return <div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Notifications" subtitle="Notification backend is not connected in the current application." icon={Bell}><p className="p-4 text-xs italic text-slate-400">No live notifications are available.</p></SectionCard><SectionCard title="Notification Rules" subtitle="Future configurable routing" icon={Workflow}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable until notification routing is backed by real records.</p></div></SectionCard></div>;
+function NotificationsPage({ notifications = [], isLoading = false, onMarkRead, onMarkAllRead, profiles = [], tenantMembers = [], onNotificationClick }) {
+  console.log('[NOTIF TRACE 7] NotificationsPage render:', notifications?.length);
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const getTypeBadgeTone = (type) => {
+    switch (type) {
+      case 'task_assigned':
+      case 'task_reassigned':
+        return 'blue';
+      case 'project_assigned':
+        return 'violet';
+      case 'stage_assigned':
+        return 'amber';
+      case 'task_completed':
+        return 'green';
+      case 'task_status_changed':
+        return 'slate';
+      case 'task_due':
+      case 'task_overdue':
+        return 'red';
+      default:
+        return 'blue';
+    }
+  };
+
+  const formatTime = (isoString) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return isoString;
+    }
+  };
+
+  return (
+    <div className="grid xl:grid-cols-[1.6fr_1fr] gap-4">
+      <SectionCard
+        title="Notifications"
+        subtitle={unreadCount > 0 ? `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}` : "All caught up"}
+        icon={Bell}
+        action={
+          unreadCount > 0 ? (
+            <button
+              onClick={onMarkAllRead}
+              className="os-link flex items-center gap-1.5 hover:text-sky-600 transition text-xs font-bold"
+            >
+              <CheckCircle2 size={14} /> Mark all as read
+            </button>
+          ) : null
+        }
+      >
+        {isLoading ? (
+          <div className="p-6 text-center text-xs text-slate-400 italic">Loading notifications...</div>
+        ) : notifications.length === 0 ? (
+          <div className="p-6 text-center text-xs text-slate-400 italic">No notifications found.</div>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {notifications.map((n) => {
+              const actorName = n.actor_id ? getUserDisplayName(n.actor_id, profiles, tenantMembers) : null;
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => onNotificationClick?.(n)}
+                  className={`p-4 transition flex items-start gap-3.5 cursor-pointer ${
+                    !n.is_read
+                      ? 'bg-sky-50/40 dark:bg-sky-950/20 font-medium'
+                      : 'hover:bg-slate-50/50 dark:hover:bg-slate-900/30'
+                  }`}
+                >
+                  <div className="mt-1 flex-shrink-0">
+                    {!n.is_read ? (
+                      <span className="h-2.5 w-2.5 rounded-full bg-sky-500 block" title="Unread" />
+                    ) : (
+                      <span className="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-700 block" title="Read" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className={`text-xs font-extrabold truncate ${!n.is_read ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
+                        {n.title}
+                      </h4>
+                      <Badge tone={getTypeBadgeTone(n.type)}>
+                        {n.type?.replace('_', ' ') || 'system'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      {n.message}
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
+                      {actorName && <span>By: {actorName}</span>}
+                      <span>{formatTime(n.created_at)}</span>
+                    </div>
+                  </div>
+                  {!n.is_read && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMarkRead?.(n.id);
+                      }}
+                      className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline shrink-0 self-center px-2 py-1 rounded bg-sky-100/60 dark:bg-sky-900/40"
+                      title="Mark as read"
+                    >
+                      Read
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Notification Settings" subtitle="Preferences & channel routing" icon={Workflow}>
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Real-time notifications are automatically sent when you are assigned to project teams, pipeline stages, or 7F tasks.
+          </p>
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700 dark:text-slate-300">Task Assignments</span>
+              <span className="text-emerald-600 font-extrabold">Active</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700 dark:text-slate-300">Project Assignments</span>
+              <span className="text-emerald-600 font-extrabold">Active</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700 dark:text-slate-300">Stage Assignments</span>
+              <span className="text-emerald-600 font-extrabold">Active</span>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+    </div>
+  );
 }
 
 function AIPage() {
@@ -425,6 +559,8 @@ export default function BusinessOSWorkspace() {
     setActiveOperatingCompanyId, currentUser, tenantRole, userRole, setIsAiChatOpen,
     companies = [], works = [], tasks = [], taskAssignees = [], reminders = [], missingData = [],
     projectAssignments = [], stageDefinitions = [], profiles = [], issues = [], logs = [],
+    notifications = [], isNotificationsLoading = false, unreadNotificationsCount = 0,
+    markNotificationAsRead, markAllNotificationsAsRead, tenantMembers = [],
     setIsSidebarOpen, searchQuery, handleSearch, searchResults, jumpToSearchResult, setSearchQuery,
     openNewWorkModal, openStageManager, setIsProjectTeamModalOpen, openNewTask,
     openGlobalReminderModal, setIsAdminPanelOpen, fetchProfiles, navigateToContext
@@ -466,6 +602,7 @@ export default function BusinessOSWorkspace() {
     profiles: profiles || [],
     issues: issues || [],
     logs: logs || [],
+    notifications: notifications || [],
     openNewWorkModal,
     openStageManager,
     setIsProjectTeamModalOpen,
@@ -488,6 +625,39 @@ export default function BusinessOSWorkspace() {
     })
   })).filter(s => s.items.length), [effectiveRole]);
 
+  const handleNotificationClick = (n) => {
+    if (!n) return;
+    if (!n.is_read) {
+      markNotificationAsRead?.(n.id);
+    }
+
+    if (n.entity_type === 'task' && n.entity_id) {
+      const task = (tasks || []).find(t => t.id === n.entity_id);
+      if (task) {
+        const targetWork = (works || []).find(w => w.id === task.work_id);
+        if (targetWork) {
+          navigateToContext?.(targetWork.company_id, targetWork.unit_id, targetWork.id);
+        }
+        setShowClassic(true);
+        if (crm?.openEditTask) {
+          crm.openEditTask(task);
+        }
+        return;
+      }
+    }
+
+    if ((n.entity_type === 'project' || n.entity_type === 'work') && n.entity_id) {
+      const targetWork = (works || []).find(w => w.id === n.entity_id);
+      if (targetWork) {
+        navigateToContext?.(targetWork.company_id, targetWork.unit_id, targetWork.id);
+        setShowClassic(true);
+        return;
+      }
+    }
+
+    setShowClassic(true);
+  };
+
   const go = (next) => {
     setPage(next);
     setShowClassic(false);
@@ -507,7 +677,7 @@ export default function BusinessOSWorkspace() {
     <aside className={`os-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <div className="os-brand"><div className="os-logo"><FlameIcon /></div>{!sidebarCollapsed && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
       <div className="os-sidebar-scroll">
-        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => id === 'crm' ? setShowClassic(true) : go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className="os-nav-count">Unavailable</span>}</button>)}</div>)}
+        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => id === 'crm' ? setShowClassic(true) : go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className={`os-nav-count ${unreadNotificationsCount > 0 ? 'bg-rose-500 text-white' : ''}`}>{unreadNotificationsCount > 0 ? unreadNotificationsCount : 0}</span>}</button>)}</div>)}
       </div>
       <div className="os-sidebar-bottom"><button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />} {!sidebarCollapsed && <span>Collapse</span>}</button></div>
     </aside>
@@ -574,7 +744,14 @@ export default function BusinessOSWorkspace() {
 
         <div className="flex items-center gap-1.5">
           <button onClick={() => setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15} /><span className="hidden xl:inline">AI</span></button>
-          <button onClick={() => go('notifications')} className="os-top-action relative"><Bell size={16} /></button>
+          <button onClick={() => go('notifications')} className="os-top-action relative" title="Notifications">
+            <Bell size={16} />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-slate-900">
+                {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[11px]">{isDarkMode ? '☀' : '◐'}</span></button>
           {effectiveRole === 'OWNER' || effectiveRole === 'ADMIN' ? <div className="relative hidden md:block"><button onClick={() => setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13} /> {previewRole ? 'Preview: ' : ''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r, l]) => <button key={r} onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work') }} className={`os-company-option ${previewRole === r ? 'selected' : ''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole === r && <Check size={13} />}</button>)}<button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div> : null}
           <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><UnavailableAction className="os-company-option"><UserRound size={15} /><b>My Profile</b></UnavailableAction><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
@@ -615,7 +792,17 @@ export default function BusinessOSWorkspace() {
           <MyWorkPage onNavigate={go} onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
         )}
         {page === 'approvals' && <ApprovalsPage />}
-        {page === 'notifications' && <NotificationsPage />}
+        {page === 'notifications' && (
+          <NotificationsPage
+            notifications={notifications}
+            isLoading={isNotificationsLoading}
+            onMarkRead={markNotificationAsRead}
+            onMarkAllRead={markAllNotificationsAsRead}
+            profiles={profiles}
+            tenantMembers={tenantMembers}
+            onNotificationClick={handleNotificationClick}
+          />
+        )}
         {['crm', 'sales', 'procurement', 'inventory', 'accounts', 'hr'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
         {page === 'projects' && (
           <ProjectsPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
