@@ -17,9 +17,12 @@ export default function Modals() {
     isStageAssignmentModalOpen, stageAssignmentTargetId, closeStageAssignmentModal, stageAssignments, isStageAssignmentsLoading, assignUserToStage, endStageAssignment, getStageAssignments,
     isAdminPanelOpen, setIsAdminPanelOpen, profiles, isFetchingProfiles, fetchProfiles, currentUser, handleUpdateUserRole, handleApproveUser, handleTerminateUser, handleAdminCreateUser,
     moveLogModal, setMoveLogModal, handleMoveLogStage, activeWorkId, works,
-    editReminderModal, setEditReminderModal, editReminderForm, setEditReminderForm, handleSaveReminderEdit,
     docPreviewModal, closeDocPreview,
-    isProjectTeamModalOpen, setIsProjectTeamModalOpen, projectAssignments, isAssignmentsLoading, assignUserToProject, endProjectAssignment, tenantMembers, isFetchingTenantMembers, fetchTenantMembers, tenantId
+    isProjectTeamModalOpen, setIsProjectTeamModalOpen, projectAssignments, isAssignmentsLoading, assignUserToProject, endProjectAssignment, tenantMembers, isFetchingTenantMembers, fetchTenantMembers, tenantId,
+    units, contacts, enquiries, followUps,
+    isContactModalOpen, setIsContactModalOpen, editingContact, contactForm, setContactForm, saveContact,
+    isEnquiryModalOpen, setIsEnquiryModalOpen, editingEnquiry, enquiryForm, setEnquiryForm, saveEnquiry,
+    isFollowUpModalOpen, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, saveFollowUp
   } = useCrm()
 
   const [promptInput, setPromptInput] = useState('')
@@ -38,6 +41,66 @@ export default function Modals() {
 
   return (
     <>
+      {/* CONTACT MODAL */}
+      {isContactModalOpen && (
+        <ContactModal
+          tModal={tModal}
+          tText={tText}
+          tMuted={tMuted}
+          tInput={tInput}
+          isDarkMode={isDarkMode}
+          setIsContactModalOpen={setIsContactModalOpen}
+          editingContact={editingContact}
+          contactForm={contactForm}
+          setContactForm={setContactForm}
+          saveContact={saveContact}
+          companies={companies}
+          units={units}
+        />
+      )}
+
+      {/* ENQUIRY MODAL */}
+      {isEnquiryModalOpen && (
+        <EnquiryModal
+          tModal={tModal}
+          tText={tText}
+          tMuted={tMuted}
+          tInput={tInput}
+          isDarkMode={isDarkMode}
+          setIsEnquiryModalOpen={setIsEnquiryModalOpen}
+          editingEnquiry={editingEnquiry}
+          enquiryForm={enquiryForm}
+          setEnquiryForm={setEnquiryForm}
+          saveEnquiry={saveEnquiry}
+          companies={companies}
+          contacts={contacts}
+          tenantMembers={tenantMembers}
+          profiles={profiles}
+          getUserDisplayName={getUserDisplayName}
+        />
+      )}
+
+      {/* FOLLOW-UP MODAL */}
+      {isFollowUpModalOpen && (
+        <FollowUpModal
+          tModal={tModal}
+          tText={tText}
+          tMuted={tMuted}
+          tInput={tInput}
+          isDarkMode={isDarkMode}
+          setIsFollowUpModalOpen={setIsFollowUpModalOpen}
+          editingFollowUp={editingFollowUp}
+          followUpForm={followUpForm}
+          setFollowUpForm={setFollowUpForm}
+          saveFollowUp={saveFollowUp}
+          companies={companies}
+          enquiries={enquiries}
+          tenantMembers={tenantMembers}
+          profiles={profiles}
+          getUserDisplayName={getUserDisplayName}
+        />
+      )}
+
       {/* INSTANT DOCUMENT PREVIEW MODAL */}
       <DocPreviewModal
         docPreviewModal={docPreviewModal}
@@ -1740,6 +1803,510 @@ function ProjectTeamModal({
           )}
 
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactModal({
+  tModal, tText, tMuted, tInput, isDarkMode, setIsContactModalOpen, editingContact, contactForm, setContactForm, saveContact, companies, units
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const companyUnits = (units || []).filter(u => u.company_id === contactForm.company_id);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    await saveContact(contactForm);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className={`${tModal} border p-6 rounded-2xl w-full max-w-lg shadow-2xl my-auto`}>
+        <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+          <h3 className={`text-base font-extrabold flex items-center gap-2 ${tText}`}>
+            <Users size={18} className="text-sky-500" />
+            {editingContact ? 'Edit Contact' : 'Create New Contact'}
+          </h3>
+          <button onClick={() => setIsContactModalOpen(false)} className={`${tMuted} hover:text-rose-500 transition`}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          <div>
+            <label className={`block font-bold mb-1 ${tMuted}`}>Contact Name *</label>
+            <input
+              type="text"
+              required
+              value={contactForm.name || ''}
+              onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+              placeholder="e.g. John Doe"
+              className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Customer / Client Company *</label>
+              <select
+                required
+                value={contactForm.company_id || ''}
+                onChange={(e) => setContactForm({ ...contactForm, company_id: e.target.value, unit_id: '' })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">Select Customer...</option>
+                {(companies || []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Client Unit (Optional)</label>
+              <select
+                value={contactForm.unit_id || ''}
+                onChange={(e) => setContactForm({ ...contactForm, unit_id: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">All Units / General</option>
+                {companyUnits.map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Email</label>
+              <input
+                type="email"
+                value={contactForm.email || ''}
+                onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                placeholder="john@company.com"
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Phone</label>
+              <input
+                type="text"
+                value={contactForm.phone || ''}
+                onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
+                placeholder="+91 9876543210"
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Designation</label>
+              <input
+                type="text"
+                value={contactForm.designation || ''}
+                onChange={(e) => setContactForm({ ...contactForm, designation: e.target.value })}
+                placeholder="Purchase Manager"
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Department</label>
+              <input
+                type="text"
+                value={contactForm.department || ''}
+                onChange={(e) => setContactForm({ ...contactForm, department: e.target.value })}
+                placeholder="Procurement"
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="is_primary"
+              checked={Boolean(contactForm.is_primary)}
+              onChange={(e) => setContactForm({ ...contactForm, is_primary: e.target.checked })}
+              className="rounded text-sky-600 focus:ring-sky-500"
+            />
+            <label htmlFor="is_primary" className={`font-bold cursor-pointer select-none ${tText}`}>
+              Mark as Primary Contact for this Customer
+            </label>
+          </div>
+
+          <div>
+            <label className={`block font-bold mb-1 ${tMuted}`}>Notes</label>
+            <textarea
+              rows={2}
+              value={contactForm.notes || ''}
+              onChange={(e) => setContactForm({ ...contactForm, notes: e.target.value })}
+              placeholder="Additional details..."
+              className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setIsContactModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {submitting && <Loader2 size={13} className="animate-spin" />}
+              <span>{editingContact ? 'Save Changes' : 'Create Contact'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EnquiryModal({
+  tModal, tText, tMuted, tInput, isDarkMode, setIsEnquiryModalOpen, editingEnquiry, enquiryForm, setEnquiryForm, saveEnquiry, companies, contacts, tenantMembers, profiles, getUserDisplayName
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const companyContacts = (contacts || []).filter(c => c.company_id === enquiryForm.company_id);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    await saveEnquiry(enquiryForm);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className={`${tModal} border p-6 rounded-2xl w-full max-w-lg shadow-2xl my-auto`}>
+        <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+          <h3 className={`text-base font-extrabold flex items-center gap-2 ${tText}`}>
+            <FileText size={18} className="text-indigo-500" />
+            {editingEnquiry ? 'Edit Sales Enquiry' : 'Create Sales Enquiry'}
+          </h3>
+          <button onClick={() => setIsEnquiryModalOpen(false)} className={`${tMuted} hover:text-rose-500 transition`}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          <div>
+            <label className={`block font-bold mb-1 ${tMuted}`}>Enquiry Title *</label>
+            <input
+              type="text"
+              required
+              value={enquiryForm.title || ''}
+              onChange={(e) => setEnquiryForm({ ...enquiryForm, title: e.target.value })}
+              placeholder="e.g. Supply of HVAC Control System 200 Units"
+              className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Customer Company *</label>
+              <select
+                required
+                value={enquiryForm.company_id || ''}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, company_id: e.target.value, contact_id: '' })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">Select Customer...</option>
+                {(companies || []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Customer Contact (Optional)</label>
+              <select
+                value={enquiryForm.contact_id || ''}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, contact_id: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">Select Contact Person...</option>
+                {companyContacts.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} {c.designation ? `(${c.designation})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Status</label>
+              <select
+                value={enquiryForm.status || 'new'}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, status: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="new">New</option>
+                <option value="contacted">Contacted</option>
+                <option value="proposal">Proposal</option>
+                <option value="negotiation">Negotiation</option>
+                <option value="won">Won</option>
+                <option value="lost">Lost</option>
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Priority</label>
+              <select
+                value={enquiryForm.priority || 'medium'}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, priority: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Lead Source</label>
+              <select
+                value={enquiryForm.source || 'website'}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, source: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="website">Website</option>
+                <option value="referral">Referral</option>
+                <option value="exhibition">Exhibition</option>
+                <option value="cold_call">Cold Call</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Assigned Sales Rep</label>
+              <select
+                value={enquiryForm.assigned_to || ''}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, assigned_to: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">Unassigned</option>
+                {(tenantMembers || []).map(tm => {
+                  const uId = tm.user_id || tm.id;
+                  const dName = getUserDisplayName(uId, profiles, tenantMembers);
+                  return <option key={uId} value={uId}>{dName}</option>;
+                })}
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Enquiry Date</label>
+              <input
+                type="date"
+                value={enquiryForm.enquiry_date || ''}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, enquiry_date: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Next Follow-up</label>
+              <input
+                type="date"
+                value={enquiryForm.next_followup_date || ''}
+                onChange={(e) => setEnquiryForm({ ...enquiryForm, next_followup_date: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={`block font-bold mb-1 ${tMuted}`}>Description / Scope Details</label>
+            <textarea
+              rows={3}
+              value={enquiryForm.description || ''}
+              onChange={(e) => setEnquiryForm({ ...enquiryForm, description: e.target.value })}
+              placeholder="Requirement summary, budget range, specifications..."
+              className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setIsEnquiryModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {submitting && <Loader2 size={13} className="animate-spin" />}
+              <span>{editingEnquiry ? 'Save Changes' : 'Create Enquiry'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function FollowUpModal({
+  tModal, tText, tMuted, tInput, isDarkMode, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, saveFollowUp, companies, enquiries, tenantMembers, profiles, getUserDisplayName
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const companyEnquiries = (enquiries || []).filter(e => e.company_id === followUpForm.company_id);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    await saveFollowUp(followUpForm);
+    setSubmitting(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className={`${tModal} border p-6 rounded-2xl w-full max-w-lg shadow-2xl my-auto`}>
+        <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200 dark:border-slate-800">
+          <h3 className={`text-base font-extrabold flex items-center gap-2 ${tText}`}>
+            <CalendarClock size={18} className="text-amber-500" />
+            {editingFollowUp ? 'Edit Follow-up Activity' : 'Schedule New Follow-up'}
+          </h3>
+          <button onClick={() => setIsFollowUpModalOpen(false)} className={`${tMuted} hover:text-rose-500 transition`}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Customer Company *</label>
+              <select
+                required
+                value={followUpForm.company_id || ''}
+                onChange={(e) => setFollowUpForm({ ...followUpForm, company_id: e.target.value, enquiry_id: '' })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">Select Customer...</option>
+                {(companies || []).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Linked Enquiry (Optional)</label>
+              <select
+                value={followUpForm.enquiry_id || ''}
+                onChange={(e) => setFollowUpForm({ ...followUpForm, enquiry_id: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="">General Follow-up / None</option>
+                {companyEnquiries.map(enq => (
+                  <option key={enq.id} value={enq.id}>{enq.title}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Activity Type *</label>
+              <select
+                required
+                value={followUpForm.activity_type || 'call'}
+                onChange={(e) => setFollowUpForm({ ...followUpForm, activity_type: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="call">Phone Call</option>
+                <option value="meeting">In-Person Meeting</option>
+                <option value="email">Email Follow-up</option>
+                <option value="site_visit">Site Visit</option>
+                <option value="quote_sent">Quote / Proposal Follow-up</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Due Date & Time *</label>
+              <input
+                type="datetime-local"
+                required
+                value={followUpForm.due_date || ''}
+                onChange={(e) => setFollowUpForm({ ...followUpForm, due_date: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+              />
+            </div>
+
+            <div>
+              <label className={`block font-bold mb-1 ${tMuted}`}>Status</label>
+              <select
+                value={followUpForm.status || 'pending'}
+                onChange={(e) => setFollowUpForm({ ...followUpForm, status: e.target.value })}
+                className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+              >
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className={`block font-bold mb-1 ${tMuted}`}>Assigned User</label>
+            <select
+              value={followUpForm.assigned_to || ''}
+              onChange={(e) => setFollowUpForm({ ...followUpForm, assigned_to: e.target.value })}
+              className={`w-full p-2.5 rounded-xl border outline-none font-semibold ${tInput}`}
+            >
+              <option value="">Assign User...</option>
+              {(tenantMembers || []).map(tm => {
+                const uId = tm.user_id || tm.id;
+                const dName = getUserDisplayName(uId, profiles, tenantMembers);
+                return <option key={uId} value={uId}>{dName}</option>;
+              })}
+            </select>
+          </div>
+
+          <div>
+            <label className={`block font-bold mb-1 ${tMuted}`}>Activity Notes / Minutes</label>
+            <textarea
+              rows={3}
+              value={followUpForm.notes || ''}
+              onChange={(e) => setFollowUpForm({ ...followUpForm, notes: e.target.value })}
+              placeholder="Action items, discussion outcome, agenda..."
+              className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setIsFollowUpModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {submitting && <Loader2 size={13} className="animate-spin" />}
+              <span>{editingFollowUp ? 'Save Changes' : 'Schedule Follow-up'}</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

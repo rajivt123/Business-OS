@@ -700,7 +700,7 @@ export default function BusinessOSWorkspace() {
             type="text"
             value={searchQuery || ''}
             onChange={handleSearch}
-            placeholder="Search PO, WO, or project title..."
+            placeholder="Search customers, units, projects, contacts, enquiries..."
           />
           {searchQuery ? (
             <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500 text-xs px-1">
@@ -713,28 +713,32 @@ export default function BusinessOSWorkspace() {
           {searchResults && searchResults.length > 0 && (
             <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-2xl shadow-2xl border overflow-hidden z-50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
               <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b flex justify-between items-center ${isDarkMode ? 'bg-slate-950/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                <span>Matching Projects ({searchResults.length})</span>
+                <span>Search Results ({searchResults.length})</span>
                 <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500"><X size={12} /></button>
               </div>
-              <div className="max-h-64 overflow-y-auto">
-                {searchResults.map((result) => (
+              <div className="max-h-72 overflow-y-auto">
+                {searchResults.map((result, idx) => (
                   <button
-                    key={result.id}
+                    key={result.id || idx}
                     onClick={() => {
                       jumpToSearchResult(result);
                       handleSearch({ target: { value: '' } });
                       setShowClassic(true);
                     }}
-                    className={`w-full text-left px-3 py-2 border-b last:border-0 transition flex flex-col gap-1 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/60' : 'border-slate-100 hover:bg-sky-50/70'}`}
+                    className={`w-full text-left px-3 py-2 border-b last:border-0 transition flex items-center justify-between gap-2 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/60' : 'border-slate-100 hover:bg-sky-50/70'}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <FileText size={14} className="text-sky-500 shrink-0" />
-                      <span className={`text-xs font-semibold truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{result.title}</span>
+                      <div className="truncate">
+                        <span className={`text-xs font-semibold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{result.label || result.title || result.name}</span>
+                        <span className="text-[10px] text-slate-400 truncate block">{result.subtext || result.po_number || ''}</span>
+                      </div>
                     </div>
-                    <div className="flex gap-1.5 pl-5">
-                      {result.po_number && <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold border ${isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>PO: {result.po_number}</span>}
-                      {result.wo_number && <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold border ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-white text-slate-600 border-slate-200'}`}>WO: {result.wo_number}</span>}
-                    </div>
+                    {result.result_type && (
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+                        {result.result_type}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

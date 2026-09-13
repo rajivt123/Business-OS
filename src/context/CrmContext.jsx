@@ -186,6 +186,31 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [modalUnits, setModalUnits] = useState([]);
   const [modalWorks, setModalWorks] = useState([]);
 
+  // --- Contacts, Enquiries, Follow-ups State (Phase P0) ---
+  const [contacts, setContacts] = useState([]);
+  const [isContactsLoading, setIsContactsLoading] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState(null);
+  const [contactForm, setContactForm] = useState({
+    name: '', company_id: '', unit_id: '', email: '', phone: '', designation: '', department: '', is_primary: false, notes: ''
+  });
+
+  const [enquiries, setEnquiries] = useState([]);
+  const [isEnquiriesLoading, setIsEnquiriesLoading] = useState(false);
+  const [isEnquiryModalOpen, setIsEnquiryModalOpen] = useState(false);
+  const [editingEnquiry, setEditingEnquiry] = useState(null);
+  const [enquiryForm, setEnquiryForm] = useState({
+    title: '', company_id: '', contact_id: '', description: '', source: 'website', status: 'new', priority: 'medium', assigned_to: '', enquiry_date: new Date().toISOString().slice(0, 10), next_followup_date: ''
+  });
+
+  const [followUps, setFollowUps] = useState([]);
+  const [isFollowUpsLoading, setIsFollowUpsLoading] = useState(false);
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [editingFollowUp, setEditingFollowUp] = useState(null);
+  const [followUpForm, setFollowUpForm] = useState({
+    activity_type: 'call', company_id: '', enquiry_id: '', due_date: new Date().toISOString().slice(0, 16), notes: '', assigned_to: '', status: 'pending'
+  });
+
   // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -407,7 +432,10 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         fetchNotifications(resolvedOpCoId, generation),
         fetchMissingData(resolvedOpCoId, generation),
         fetchProfiles(generation),
-        fetchTenantMembers(resolvedTenantId, generation)
+        fetchTenantMembers(resolvedTenantId, generation),
+        fetchContacts(resolvedOpCoId, generation),
+        fetchEnquiries(resolvedOpCoId, generation),
+        fetchFollowUps(resolvedOpCoId, generation)
       ]);
     } catch (err) {
       console.error('[AuthContext Initialization Error]:', err);
@@ -490,6 +518,9 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       fetchReminders(activeOperatingCompanyId);
       fetchNotifications(activeOperatingCompanyId);
       fetchMissingData(activeOperatingCompanyId);
+      fetchContacts(activeOperatingCompanyId);
+      fetchEnquiries(activeOperatingCompanyId);
+      fetchFollowUps(activeOperatingCompanyId);
     }
   }, [activeOperatingCompanyId]);
 
@@ -584,6 +615,9 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     if (docPreviewModal?.isOpen) { closeDocPreview(); return true; }
     if (confirmModal?.isOpen) { closeConfirm(false); return true; }
     if (promptModal?.isOpen) { closePrompt(null); return true; }
+    if (isContactModalOpen) { setIsContactModalOpen(false); return true; }
+    if (isEnquiryModalOpen) { setIsEnquiryModalOpen(false); return true; }
+    if (isFollowUpModalOpen) { setIsFollowUpModalOpen(false); return true; }
     if (isProjectTeamModalOpen) { setIsProjectTeamModalOpen(false); return true; }
     if (isStageAssignmentModalOpen) { closeStageAssignmentModal(); return true; }
     if (editReminderModal?.isOpen) { setEditReminderModal({ isOpen: false, reminder: null }); return true; }
@@ -635,7 +669,10 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       await Promise.all([
         fetchCompanies(),
         fetchReminders(),
-        fetchMissingData()
+        fetchMissingData(),
+        fetchContacts(),
+        fetchEnquiries(),
+        fetchFollowUps()
       ]);
       if (activeCompanyId) {
         const { data: unitData } = await supabase.from('units').select('*').eq('company_id', activeCompanyId).order('created_at', { ascending: true });
@@ -851,6 +888,492 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         return data.length > 0 ? data[0].id : null;
       });
     } 
+  }
+
+  // --- CRM P0 Database Operations (Contacts, Enquiries, Follow-ups) ---
+
+  async function fetchContacts(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return [];
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    setIsContactsLoading(true);
+    try {
+      let query = supabase
+        .from('contacts')
+        .select('*, company:companies(id, name), unit:units(id, name)')
+        .order('created_at', { ascending: false });
+
+      if (tenantId) query = query.eq('tenant_id', tenantId);
+      if (opCoId) query = query.eq('tenant_company_id', opCoId);
+
+      const { data, error } = await query;
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return [];
+      if (error) {
+        console.error('[Supabase Query Error - contacts]:', error);
+        showToast(`Failed to load contacts: ${error.message}`);
+        setContacts([]);
+        return [];
+      }
+      setContacts(data || []);
+      return data || [];
+    } catch (err) {
+      console.error('[Fetch Contacts Error]:', err);
+      showToast(`Fetch contacts error: ${err.message || err}`);
+      setContacts([]);
+      return [];
+    } finally {
+      setIsContactsLoading(false);
+    }
+  }
+
+  async function saveContact(contactData) {
+    if (!contactData.name || !contactData.company_id) {
+      const msg = 'Contact name and customer company are required.';
+      showToast(msg);
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId || contactData.tenant_company_id || null,
+      company_id: contactData.company_id,
+      unit_id: contactData.unit_id || null,
+      name: contactData.name.trim(),
+      email: contactData.email ? contactData.email.trim() : null,
+      phone: contactData.phone ? contactData.phone.trim() : null,
+      designation: contactData.designation ? contactData.designation.trim() : null,
+      department: contactData.department ? contactData.department.trim() : null,
+      is_primary: Boolean(contactData.is_primary),
+      notes: contactData.notes ? contactData.notes.trim() : null,
+      created_by: currentUser?.id || null,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      let result;
+      if (contactData.id) {
+        result = await supabase
+          .from('contacts')
+          .update(payload)
+          .eq('id', contactData.id)
+          .select('*, company:companies(id, name), unit:units(id, name)');
+      } else {
+        result = await supabase
+          .from('contacts')
+          .insert([payload])
+          .select('*, company:companies(id, name), unit:units(id, name)');
+      }
+
+      if (result.error) {
+        console.error('[Supabase Save Contact Error]:', result.error);
+        showToast(`Error saving contact: ${result.error.message}`);
+        alert(`Error saving contact: ${result.error.message}`);
+        return { success: false, error: result.error };
+      }
+
+      showToast(contactData.id ? 'Contact updated successfully!' : 'Contact created successfully!');
+      setIsContactModalOpen(false);
+      await fetchContacts();
+      return { success: true, data: result.data?.[0] };
+    } catch (err) {
+      console.error('[Save Contact Exception]:', err);
+      showToast(`Save contact failed: ${err.message || err}`);
+      alert(`Save contact failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  async function handleDeleteContact(contactId) {
+    if (!contactId) return;
+    const confirmed = await showConfirm('Are you sure you want to delete this contact?');
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', contactId);
+
+      if (error) {
+        console.error('[Supabase Delete Contact Error]:', error);
+        showToast(`Error deleting contact: ${error.message}`);
+        alert(`Error deleting contact: ${error.message}`);
+        return { success: false, error };
+      }
+      showToast('Contact deleted successfully');
+      await fetchContacts();
+      return { success: true };
+    } catch (err) {
+      console.error('[Delete Contact Exception]:', err);
+      showToast(`Delete contact failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  function openNewContactModal(initialCompanyId = null, initialUnitId = null) {
+    setEditingContact(null);
+    setContactForm({
+      name: '',
+      company_id: initialCompanyId || activeCompanyId || (companies[0]?.id || ''),
+      unit_id: initialUnitId || activeUnitId || '',
+      email: '',
+      phone: '',
+      designation: '',
+      department: '',
+      is_primary: false,
+      notes: ''
+    });
+    setIsContactModalOpen(true);
+  }
+
+  function openEditContactModal(contact) {
+    setEditingContact(contact);
+    setContactForm({
+      id: contact.id,
+      name: contact.name || '',
+      company_id: contact.company_id || '',
+      unit_id: contact.unit_id || '',
+      email: contact.email || '',
+      phone: contact.phone || '',
+      designation: contact.designation || '',
+      department: contact.department || '',
+      is_primary: Boolean(contact.is_primary),
+      notes: contact.notes || ''
+    });
+    setIsContactModalOpen(true);
+  }
+
+  async function fetchEnquiries(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return [];
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    setIsEnquiriesLoading(true);
+    try {
+      let query = supabase
+        .from('enquiries')
+        .select('*, company:companies(id, name), contact:contacts(id, name, email, phone)')
+        .order('created_at', { ascending: false });
+
+      if (tenantId) query = query.eq('tenant_id', tenantId);
+      if (opCoId) query = query.eq('tenant_company_id', opCoId);
+
+      const { data, error } = await query;
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return [];
+      if (error) {
+        console.error('[Supabase Query Error - enquiries]:', error);
+        showToast(`Failed to load enquiries: ${error.message}`);
+        setEnquiries([]);
+        return [];
+      }
+      setEnquiries(data || []);
+      return data || [];
+    } catch (err) {
+      console.error('[Fetch Enquiries Error]:', err);
+      showToast(`Fetch enquiries error: ${err.message || err}`);
+      setEnquiries([]);
+      return [];
+    } finally {
+      setIsEnquiriesLoading(false);
+    }
+  }
+
+  async function saveEnquiry(enquiryData) {
+    if (!enquiryData.title || !enquiryData.company_id) {
+      const msg = 'Enquiry title and customer company are required.';
+      showToast(msg);
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId || enquiryData.tenant_company_id || null,
+      company_id: enquiryData.company_id,
+      contact_id: enquiryData.contact_id || null,
+      title: enquiryData.title.trim(),
+      description: enquiryData.description ? enquiryData.description.trim() : null,
+      source: enquiryData.source || 'website',
+      status: enquiryData.status || 'new',
+      priority: enquiryData.priority || 'medium',
+      assigned_to: enquiryData.assigned_to || currentUser?.id || null,
+      enquiry_date: enquiryData.enquiry_date || new Date().toISOString(),
+      next_followup_date: enquiryData.next_followup_date || null,
+      created_by: currentUser?.id || null,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      let result;
+      if (enquiryData.id) {
+        result = await supabase
+          .from('enquiries')
+          .update(payload)
+          .eq('id', enquiryData.id)
+          .select('*, company:companies(id, name), contact:contacts(id, name, email, phone)');
+      } else {
+        result = await supabase
+          .from('enquiries')
+          .insert([payload])
+          .select('*, company:companies(id, name), contact:contacts(id, name, email, phone)');
+      }
+
+      if (result.error) {
+        console.error('[Supabase Save Enquiry Error]:', result.error);
+        showToast(`Error saving enquiry: ${result.error.message}`);
+        alert(`Error saving enquiry: ${result.error.message}`);
+        return { success: false, error: result.error };
+      }
+
+      showToast(enquiryData.id ? 'Enquiry updated successfully!' : 'Enquiry created successfully!');
+      setIsEnquiryModalOpen(false);
+      await fetchEnquiries();
+      return { success: true, data: result.data?.[0] };
+    } catch (err) {
+      console.error('[Save Enquiry Exception]:', err);
+      showToast(`Save enquiry failed: ${err.message || err}`);
+      alert(`Save enquiry failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  async function handleDeleteEnquiry(enquiryId) {
+    if (!enquiryId) return;
+    const confirmed = await showConfirm('Are you sure you want to delete this enquiry?');
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('enquiries')
+        .delete()
+        .eq('id', enquiryId);
+
+      if (error) {
+        console.error('[Supabase Delete Enquiry Error]:', error);
+        showToast(`Error deleting enquiry: ${error.message}`);
+        alert(`Error deleting enquiry: ${error.message}`);
+        return { success: false, error };
+      }
+      showToast('Enquiry deleted successfully');
+      await fetchEnquiries();
+      return { success: true };
+    } catch (err) {
+      console.error('[Delete Enquiry Exception]:', err);
+      showToast(`Delete enquiry failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  function openNewEnquiryModal(initialCompanyId = null, initialContactId = null) {
+    setEditingEnquiry(null);
+    setEnquiryForm({
+      title: '',
+      company_id: initialCompanyId || activeCompanyId || (companies[0]?.id || ''),
+      contact_id: initialContactId || '',
+      description: '',
+      source: 'website',
+      status: 'new',
+      priority: 'medium',
+      assigned_to: currentUser?.id || '',
+      enquiry_date: new Date().toISOString().slice(0, 10),
+      next_followup_date: ''
+    });
+    setIsEnquiryModalOpen(true);
+  }
+
+  function openEditEnquiryModal(enquiry) {
+    setEditingEnquiry(enquiry);
+    setEnquiryForm({
+      id: enquiry.id,
+      title: enquiry.title || '',
+      company_id: enquiry.company_id || '',
+      contact_id: enquiry.contact_id || '',
+      description: enquiry.description || '',
+      source: enquiry.source || 'website',
+      status: enquiry.status || 'new',
+      priority: enquiry.priority || 'medium',
+      assigned_to: enquiry.assigned_to || '',
+      enquiry_date: enquiry.enquiry_date ? enquiry.enquiry_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      next_followup_date: enquiry.next_followup_date ? enquiry.next_followup_date.slice(0, 10) : ''
+    });
+    setIsEnquiryModalOpen(true);
+  }
+
+  async function fetchFollowUps(targetOpCoId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return [];
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    setIsFollowUpsLoading(true);
+    try {
+      let query = supabase
+        .from('follow_ups')
+        .select('*, enquiry:enquiries(id, title), company:companies(id, name)')
+        .order('due_date', { ascending: true });
+
+      if (tenantId) query = query.eq('tenant_id', tenantId);
+      if (opCoId) query = query.eq('tenant_company_id', opCoId);
+
+      const { data, error } = await query;
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return [];
+      if (error) {
+        console.error('[Supabase Query Error - follow_ups]:', error);
+        showToast(`Failed to load follow-ups: ${error.message}`);
+        setFollowUps([]);
+        return [];
+      }
+      setFollowUps(data || []);
+      return data || [];
+    } catch (err) {
+      console.error('[Fetch Follow-ups Error]:', err);
+      showToast(`Fetch follow-ups error: ${err.message || err}`);
+      setFollowUps([]);
+      return [];
+    } finally {
+      setIsFollowUpsLoading(false);
+    }
+  }
+
+  async function saveFollowUp(followUpData) {
+    if (!followUpData.activity_type || !followUpData.due_date || !followUpData.company_id) {
+      const msg = 'Activity type, due date, and customer company are required.';
+      showToast(msg);
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId || followUpData.tenant_company_id || null,
+      company_id: followUpData.company_id,
+      enquiry_id: followUpData.enquiry_id || null,
+      assigned_to: followUpData.assigned_to || currentUser?.id || null,
+      activity_type: followUpData.activity_type || 'call',
+      due_date: followUpData.due_date,
+      notes: followUpData.notes ? followUpData.notes.trim() : null,
+      status: followUpData.status || 'pending',
+      completed_at: followUpData.status === 'completed' ? (followUpData.completed_at || new Date().toISOString()) : null,
+      created_by: currentUser?.id || null,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      let result;
+      if (followUpData.id) {
+        result = await supabase
+          .from('follow_ups')
+          .update(payload)
+          .eq('id', followUpData.id)
+          .select('*, enquiry:enquiries(id, title), company:companies(id, name)');
+      } else {
+        result = await supabase
+          .from('follow_ups')
+          .insert([payload])
+          .select('*, enquiry:enquiries(id, title), company:companies(id, name)');
+      }
+
+      if (result.error) {
+        console.error('[Supabase Save Follow-up Error]:', result.error);
+        showToast(`Error saving follow-up: ${result.error.message}`);
+        alert(`Error saving follow-up: ${result.error.message}`);
+        return { success: false, error: result.error };
+      }
+
+      showToast(followUpData.id ? 'Follow-up updated successfully!' : 'Follow-up created successfully!');
+      setIsFollowUpModalOpen(false);
+      await fetchFollowUps();
+      return { success: true, data: result.data?.[0] };
+    } catch (err) {
+      console.error('[Save Follow-up Exception]:', err);
+      showToast(`Save follow-up failed: ${err.message || err}`);
+      alert(`Save follow-up failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  async function toggleFollowUpStatus(followUpId, currentStatus) {
+    if (!followUpId) return;
+    const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+    const completedAt = newStatus === 'completed' ? new Date().toISOString() : null;
+
+    try {
+      const { error } = await supabase
+        .from('follow_ups')
+        .update({
+          status: newStatus,
+          completed_at: completedAt,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', followUpId);
+
+      if (error) {
+        console.error('[Supabase Toggle Follow-up Error]:', error);
+        showToast(`Failed to update follow-up: ${error.message}`);
+        return { success: false, error };
+      }
+
+      showToast(`Follow-up marked as ${newStatus}`);
+      await fetchFollowUps();
+      return { success: true };
+    } catch (err) {
+      console.error('[Toggle Follow-up Exception]:', err);
+      showToast(`Toggle follow-up failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  async function handleDeleteFollowUp(followUpId) {
+    if (!followUpId) return;
+    const confirmed = await showConfirm('Are you sure you want to delete this follow-up?');
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('follow_ups')
+        .delete()
+        .eq('id', followUpId);
+
+      if (error) {
+        console.error('[Supabase Delete Follow-up Error]:', error);
+        showToast(`Error deleting follow-up: ${error.message}`);
+        alert(`Error deleting follow-up: ${error.message}`);
+        return { success: false, error };
+      }
+      showToast('Follow-up deleted successfully');
+      await fetchFollowUps();
+      return { success: true };
+    } catch (err) {
+      console.error('[Delete Follow-up Exception]:', err);
+      showToast(`Delete follow-up failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  function openNewFollowUpModal(initialCompanyId = null, initialEnquiryId = null) {
+    setEditingFollowUp(null);
+    const tom = new Date();
+    tom.setDate(tom.getDate() + 1);
+    setFollowUpForm({
+      activity_type: 'call',
+      company_id: initialCompanyId || activeCompanyId || (companies[0]?.id || ''),
+      enquiry_id: initialEnquiryId || '',
+      due_date: tom.toISOString().slice(0, 16),
+      notes: '',
+      assigned_to: currentUser?.id || '',
+      status: 'pending'
+    });
+    setIsFollowUpModalOpen(true);
+  }
+
+  function openEditFollowUpModal(followUp) {
+    setEditingFollowUp(followUp);
+    setFollowUpForm({
+      id: followUp.id,
+      activity_type: followUp.activity_type || 'call',
+      company_id: followUp.company_id || '',
+      enquiry_id: followUp.enquiry_id || '',
+      due_date: followUp.due_date ? new Date(followUp.due_date).toISOString().slice(0, 16) : '',
+      notes: followUp.notes || '',
+      assigned_to: followUp.assigned_to || '',
+      status: followUp.status || 'pending'
+    });
+    setIsFollowUpModalOpen(true);
   }
 
   async function fetchProfiles(authGeneration) {
@@ -3046,20 +3569,56 @@ USER REQUEST: ${trimmedMsg}`;
   }
 
   async function handleSearch(e) { 
-    const query = e.target.value; 
+    const query = typeof e === 'string' ? e : e?.target?.value || ''; 
     setSearchQuery(query); 
-    if (query.length < 2) { 
+    if (query.trim().length < 2) { 
       setSearchResults([]); 
       return;
     } 
-    const { data } = await supabase.from('works').select('id, title, wo_number, po_number, company_id, unit_id').or(`wo_number.ilike.%${query}%,po_number.ilike.%${query}%,title.ilike.%${query}%`).limit(5); 
-    if (data) setSearchResults(data);
+    const q = query.trim();
+    try {
+      const [compRes, unitRes, workRes, contRes, enqRes] = await Promise.all([
+        supabase.from('companies').select('id, name').ilike('name', `%${q}%`).limit(3),
+        supabase.from('units').select('id, name, company_id').ilike('name', `%${q}%`).limit(3),
+        supabase.from('works').select('id, title, wo_number, po_number, company_id, unit_id').or(`wo_number.ilike.%${q}%,po_number.ilike.%${q}%,title.ilike.%${q}%`).limit(5),
+        supabase.from('contacts').select('id, name, email, phone, company_id, unit_id').or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).limit(3),
+        supabase.from('enquiries').select('id, title, status, company_id, contact_id').or(`title.ilike.%${q}%,description.ilike.%${q}%`).limit(3)
+      ]);
+
+      const combined = [
+        ...(compRes.data || []).map(item => ({ ...item, result_type: 'company', label: item.name, subtext: 'Customer Company' })),
+        ...(unitRes.data || []).map(item => ({ ...item, result_type: 'unit', label: item.name, subtext: 'Client Unit' })),
+        ...(workRes.data || []).map(item => ({ ...item, result_type: 'project', label: item.title, subtext: item.po_number ? `PO: ${item.po_number}` : (item.wo_number ? `WO: ${item.wo_number}` : 'Project') })),
+        ...(contRes.data || []).map(item => ({ ...item, result_type: 'contact', label: item.name, subtext: item.email || item.phone || 'Contact' })),
+        ...(enqRes.data || []).map(item => ({ ...item, result_type: 'enquiry', label: item.title, subtext: `Enquiry (${item.status || 'new'})` }))
+      ];
+
+      setSearchResults(combined);
+    } catch (err) {
+      console.error('[Search Error]:', err);
+    }
   }
 
   async function jumpToSearchResult(result) { 
     setSearchQuery(''); 
     setSearchResults([]); 
-    navigateToContext(result.company_id, result.unit_id, result.id);
+    if (!result) return;
+    if (result.result_type === 'company') {
+      setActiveCompanyId(result.id);
+    } else if (result.result_type === 'unit') {
+      navigateToContext(result.company_id, result.id, null);
+    } else if (result.result_type === 'project') {
+      navigateToContext(result.company_id, result.unit_id, result.id);
+    } else if (result.result_type === 'contact') {
+      if (result.company_id) setActiveCompanyId(result.company_id);
+      if (result.unit_id) setActiveUnitId(result.unit_id);
+      setCenterView('contacts');
+    } else if (result.result_type === 'enquiry') {
+      if (result.company_id) setActiveCompanyId(result.company_id);
+      setCenterView('enquiries');
+    } else {
+      navigateToContext(result.company_id, result.unit_id, result.id);
+    }
   }
 
   function openMoveLogModal(log) {
@@ -3219,6 +3778,11 @@ USER REQUEST: ${trimmedMsg}`;
     editReminderModal, setEditReminderModal, editReminderForm, setEditReminderForm, openEditReminderModal, handleSaveReminderEdit,
     refreshAllData, toastMessage, showToast,
     
+    // CRM P0 Exports (Contacts, Enquiries, Follow-ups)
+    contacts, isContactsLoading, isContactModalOpen, setIsContactModalOpen, editingContact, contactForm, setContactForm, fetchContacts, saveContact, handleDeleteContact, openNewContactModal, openEditContactModal,
+    enquiries, isEnquiriesLoading, isEnquiryModalOpen, setIsEnquiryModalOpen, editingEnquiry, enquiryForm, setEnquiryForm, fetchEnquiries, saveEnquiry, handleDeleteEnquiry, openNewEnquiryModal, openEditEnquiryModal,
+    followUps, isFollowUpsLoading, isFollowUpModalOpen, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, fetchFollowUps, saveFollowUp, toggleFollowUpStatus, handleDeleteFollowUp, openNewFollowUpModal, openEditFollowUpModal,
+
     getUserDisplayName: (userOrId, p, tm, cu) => getUserDisplayName(userOrId, (p && p.length) ? p : profiles, (tm && tm.length) ? tm : tenantMembers, cu || currentUser),
     navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
     handleAddIssue, toggleIssueStatus, handleAddLog, startEditingLog, saveLogEdit, handleDeleteLog, handleRestoreLog, handlePermanentDeleteLog, handleAddCompany, handleAddUnit, handleRenameCompany, handleDeleteCompany, handleRenameUnit, handleDeleteUnit,
