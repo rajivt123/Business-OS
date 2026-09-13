@@ -99,9 +99,9 @@ export default function ApprovalCenter() {
   const checkMakerChecker = (request) => {
     if (!request) return { isMaker: false, reason: '' };
 
-    // Find subject employee's user_id if available
+    // Find subject employee's linked_user_id / user_id if available
     const subjectEmp = employees.find(e => e.id === request.subject_employee_id);
-    const subjectUserId = subjectEmp?.user_id;
+    const subjectUserId = subjectEmp?.linked_user_id || subjectEmp?.user_id;
 
     if (request.requested_by === authUserId) {
       return { isMaker: true, reason: 'Maker-Checker Rule: You are the requester of this approval item and cannot approve it.' };

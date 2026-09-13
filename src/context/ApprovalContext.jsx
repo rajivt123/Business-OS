@@ -18,7 +18,7 @@ export function ApprovalProvider({ children }) {
   } = crmContext;
 
   const employeeContext = useEmployee() || {};
-  const { employees = [], saveEmployee } = employeeContext;
+  const { employees = [], fetchEmployees } = employeeContext;
 
   const authUserId = session?.user?.id || currentUser?.id;
 
@@ -249,7 +249,8 @@ export function ApprovalProvider({ children }) {
       }
 
       const subjectEmp = employees.find(e => e.id === targetReq.subject_employee_id);
-      if (subjectEmp && subjectEmp.user_id && subjectEmp.user_id === authUserId) {
+      const subjectUserId = subjectEmp?.linked_user_id || subjectEmp?.user_id;
+      if (subjectEmp && subjectUserId && subjectUserId === authUserId) {
         return { success: false, error: 'Maker-Checker Violation: You cannot approve a request concerning yourself.' };
       }
 
@@ -350,82 +351,45 @@ export function ApprovalProvider({ children }) {
     }
   };
 
-  // 5. Apply Employee Change Payload with Snapshot Conflict Detection
+  // 5. Apply Employee Change Payload via Atomic RPC
   const applyEmployeeChange = async (targetReq) => {
     try {
+      const requestId = targetReq.id || targetReq;
+      const { data, error } = await supabase.rpc('apply_employee_change_request_atomic', {
+        p_approval_request_id: requestId
+      });
+
+      if (error) {
+        console.error('Error invoking apply_employee_change_request_atomic RPC:', error);
+        return { success: false, error: error.message };
+      }
+
+      if (!data || !data.success) {
+        const errorMsg = data?.error || 'Failed to apply employee change via atomic RPC.';
+        return { success: false, conflict: data?.code === 'SNAPSHOT_CONFLICT', error: errorMsg };
+      }
+
+      // Refresh Employee Master and Approval Center state after successful RPC application
+      if (fetchEmployees) {
+        await fetchEmployees(activeOperatingCompanyId);
+      }
+      await fetchRequests(activeOperatingCompanyId);
+
+      // Send UI notification
       const subjectEmp = employees.find(e => e.id === targetReq.subject_employee_id);
-      if (!subjectEmp) {
-        throw new Error('Target employee record not found in Employee Master.');
-      }
-
-      const snapshot = typeof targetReq.current_snapshot === 'string' ? JSON.parse(targetReq.current_snapshot) : targetReq.current_snapshot;
-      const payload = typeof targetReq.payload === 'string' ? JSON.parse(targetReq.payload) : targetReq.payload;
-
-      // Snapshot Conflict Check: Ensure current Employee Master values match snapshot
-      let conflictDetected = false;
-      const conflictKeys = [];
-
-      if (snapshot && typeof snapshot === 'object') {
-        for (const [key, expectedVal] of Object.entries(snapshot)) {
-          if (subjectEmp[key] !== undefined && String(subjectEmp[key] || '') !== String(expectedVal || '')) {
-            conflictDetected = true;
-            conflictKeys.push(`${key} (Expected: "${expectedVal}", Live: "${subjectEmp[key]}")`);
-          }
-        }
-      }
-
-      if (conflictDetected) {
-        // STOP automatic application! Set status = 'failed'
-        const conflictMsg = `Snapshot Conflict: Live Employee Master data changed since request submission. Conflicts: ${conflictKeys.join(', ')}`;
-        await supabase.from('approval_requests').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', targetReq.id);
-        await recordAction({ requestId: targetReq.id, action: 'failed', fromStatus: 'approved', toStatus: 'failed', comments: conflictMsg });
-
-        if (createNotification) {
-          createNotification({
-            title: `Application Failed: ${targetReq.request_number}`,
-            message: conflictMsg,
-            entity_type: 'approval_request',
-            entity_id: targetReq.id,
-            tenant_company_id: activeOperatingCompanyId
-          });
-        }
-        return { success: false, error: conflictMsg };
-      }
-
-      // Snapshot matches! Apply payload to Employee Master
-      const updatedEmpPayload = {
-        ...subjectEmp,
-        ...payload,
-        id: subjectEmp.id,
-        tenant_company_id: activeOperatingCompanyId || subjectEmp.tenant_company_id
-      };
-
-      if (!saveEmployee) {
-        throw new Error('EmployeeContext saveEmployee method is unavailable.');
-      }
-
-      const saveRes = await saveEmployee(updatedEmpPayload);
-      if (!saveRes.success) {
-        throw new Error(saveRes.error || 'Failed to update Employee Master.');
-      }
-
-      // Mark request as applied
-      await supabase.from('approval_requests').update({ status: 'applied', updated_at: new Date().toISOString() }).eq('id', targetReq.id);
-      await recordAction({ requestId: targetReq.id, action: 'applied', fromStatus: 'approved', toStatus: 'applied', comments: 'Successfully applied to Employee Master.' });
-
       if (createNotification) {
         createNotification({
-          title: `Request Applied: ${targetReq.request_number}`,
-          message: `Change request for ${subjectEmp.first_name} ${subjectEmp.last_name} applied to Employee Master.`,
+          title: `Request Applied: ${targetReq.request_number || 'Profile Change'}`,
+          message: `Change request for ${subjectEmp ? (subjectEmp.first_name || '') + ' ' + (subjectEmp.last_name || '') : 'employee'} applied to Employee Master.`,
           entity_type: 'approval_request',
-          entity_id: targetReq.id,
+          entity_id: requestId,
           tenant_company_id: activeOperatingCompanyId
         });
       }
 
-      return { success: true };
+      return { success: true, data };
     } catch (err) {
-      console.error('Error applying employee change:', err);
+      console.error('Error in applyEmployeeChange:', err);
       return { success: false, error: err.message };
     }
   };
