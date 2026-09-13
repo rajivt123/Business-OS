@@ -8,6 +8,7 @@ export default function Modals() {
     isDarkMode, userRole, tenantRole, promptModal, closePrompt, confirmModal, closeConfirm,
     isIssueModalOpen, setIsIssueModalOpen, issueTitleInput, setIssueTitleInput, handleAddIssue,
     isReminderModalOpen, setIsReminderModalOpen, reminderForm, setReminderForm, submitReminder,
+    editReminderModal, setEditReminderModal, editReminderForm, setEditReminderForm, handleSaveReminderEdit,
     companies, modalUnits, modalWorks, handleModalCompanyChange, handleModalUnitChange,
     reminders, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
     isBinModalOpen, setIsBinModalOpen, logs, handleRestoreLog, handlePermanentDeleteLog,
