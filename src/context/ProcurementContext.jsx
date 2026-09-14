@@ -211,8 +211,8 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: Vendor creation requires Manager or Admin permissions.');
     }
     const payload = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
       ...vendorPayload
     };
@@ -229,8 +229,8 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: Purchase Request creation requires Manager or Admin permissions.');
     }
     const header = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
       status: 'pending',
       ...headerPayload
@@ -257,8 +257,8 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: RFQ creation requires Manager or Admin permissions.');
     }
     const header = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
       status: 'open',
       ...headerPayload
@@ -276,8 +276,8 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: Vendor Quotation creation requires Manager or Admin permissions.');
     }
     const header = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
       status: 'received',
       ...headerPayload
@@ -304,10 +304,10 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: Purchase Order issuance requires Manager or Admin permissions.');
     }
     const header = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
-      status: 'issued',
+      status: 'draft',
       ...headerPayload
     };
 
@@ -326,14 +326,27 @@ export function ProcurementProvider({ children }) {
     return data;
   };
 
+  // 5b. Approve Purchase Order (approve_purchase_order_atomic)
+  const approvePurchaseOrder = async (poId) => {
+    if (!isManagementOrAdmin) {
+      throw new Error('Access denied: PO Approval requires Manager or Admin permissions.');
+    }
+    const { data, error } = await supabase.rpc('approve_purchase_order_atomic', {
+      p_po_id: poId
+    });
+    if (error) throw error;
+    await fetchPurchaseOrders(activeOperatingCompanyId);
+    return data;
+  };
+
   // 6. Record GRN (create_goods_received_note_atomic)
   const createGoodsReceivedNote = async (headerPayload, itemsPayload = []) => {
     if (!isManagementOrAdmin) {
       throw new Error('Access denied: GRN logging requires Manager or Admin permissions.');
     }
     const header = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       received_by: authUserId,
       status: 'received',
       ...headerPayload
@@ -360,8 +373,8 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: Purchase Bill recording requires Manager or Admin permissions.');
     }
     const header = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
       status: 'pending',
       ...headerPayload
@@ -388,8 +401,8 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: Recording vendor payment requires Manager or Admin permissions.');
     }
     const payload = {
-      tenant_id: tenantId || '00000000-0000-0000-0000-000000000001',
-      tenant_company_id: activeOperatingCompanyId || '11111111-1111-1111-1111-111111111111',
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId,
       recorded_by: authUserId,
       ...paymentPayload
     };
@@ -425,6 +438,7 @@ export function ProcurementProvider({ children }) {
     createRfq,
     createVendorQuotation,
     createPurchaseOrder,
+    approvePurchaseOrder,
     createGoodsReceivedNote,
     createPurchaseBill,
     recordPurchasePayment

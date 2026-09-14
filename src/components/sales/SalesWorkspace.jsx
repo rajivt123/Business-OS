@@ -211,14 +211,22 @@ export default function SalesWorkspace() {
     }
   };
 
+  const [isConverting, setIsConverting] = useState(false);
+
   const handleConvertQuotation = async (qtnId) => {
+    if (isConverting) return;
     if (!confirm('Are you sure you want to convert this accepted Quotation into a Sales Order?')) return;
-    const res = await convertQuotationToSalesOrder(qtnId);
-    if (res.success) {
-      alert('Quotation successfully converted to Sales Order!');
-      setActiveTab('orders');
-    } else {
-      alert('Conversion failed: ' + res.error);
+    setIsConverting(true);
+    try {
+      const res = await convertQuotationToSalesOrder(qtnId);
+      if (res.success) {
+        alert('Quotation successfully converted to Sales Order!');
+        setActiveTab('orders');
+      } else {
+        alert('Conversion failed: ' + res.error);
+      }
+    } finally {
+      setIsConverting(false);
     }
   };
 
