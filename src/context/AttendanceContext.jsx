@@ -28,7 +28,7 @@ export function AttendanceProvider({ children }) {
   // Current authenticated user's linked employee profile
   const currentEmployee = useMemo(() => {
     if (!authUserId) return null;
-    return employees.find(e => e.user_id === authUserId || e.email === currentUser?.email) || null;
+    return employees.find(e => e.linked_user_id === authUserId || e.email === currentUser?.email) || null;
   }, [employees, authUserId, currentUser]);
 
   // State collections from DB tables
@@ -480,36 +480,70 @@ export function AttendanceProvider({ children }) {
     }
   };
 
-  // 7. Register Employee Face Profile
-  const registerFaceProfile = async (employee_id) => {
+  // 7. RPC-Backed Face Profile Enrollment & Revocation
+  const enrollFaceProfile = async ({
+    employee_id,
+    verification_provider,
+    provider_subject_ref,
+    tenant_company_id = null
+  }) => {
     try {
-      const existing = faceProfiles.find(fp => fp.employee_id === employee_id);
-      if (existing) {
-        return { success: true, profile: existing, message: 'Face profile already registered.' };
+      const targetCompanyId = tenant_company_id || activeOperatingCompanyId || null;
+      const { data, error: rpcErr } = await supabase.rpc('enroll_attendance_face_profile', {
+        p_employee_id: employee_id,
+        p_verification_provider: verification_provider,
+        p_provider_subject_ref: provider_subject_ref,
+        p_tenant_company_id: targetCompanyId,
+        p_tenant_id: tenantId || null
+      });
+
+      if (rpcErr) {
+        console.error('Error in enroll_attendance_face_profile RPC:', rpcErr);
+        return { success: false, error: rpcErr.message || rpcErr.details || 'Enrollment RPC failed.' };
       }
 
-      const payload = {
-        tenant_id: tenantId || null,
-        tenant_company_id: activeOperatingCompanyId || null,
-        employee_id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      const { data: newProfile, error: err } = await supabase
-        .from('attendance_face_profiles')
-        .insert([payload])
-        .select('*')
-        .single();
-
-      if (err) throw err;
-
       await fetchAttendanceData(activeOperatingCompanyId);
-      return { success: true, profile: newProfile };
+      return { success: true, data };
     } catch (err) {
-      console.error('Error registering face profile:', err);
+      console.error('Error enrolling face profile:', err);
       return { success: false, error: err.message };
     }
+  };
+
+  const revokeFaceProfile = async ({
+    employee_id,
+    reason,
+    tenant_company_id = null
+  }) => {
+    try {
+      const targetCompanyId = tenant_company_id || activeOperatingCompanyId || null;
+      const { data, error: rpcErr } = await supabase.rpc('revoke_attendance_face_profile', {
+        p_employee_id: employee_id,
+        p_reason: reason || 'Revoked by administrator',
+        p_tenant_company_id: targetCompanyId,
+        p_tenant_id: tenantId || null
+      });
+
+      if (rpcErr) {
+        console.error('Error in revoke_attendance_face_profile RPC:', rpcErr);
+        return { success: false, error: rpcErr.message || rpcErr.details || 'Revocation RPC failed.' };
+      }
+
+      await fetchAttendanceData(activeOperatingCompanyId);
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error revoking face profile:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  // Legacy wrapper for backwards compatibility
+  const registerFaceProfile = async (employee_id, provider = 'configured_provider', subjectRef = `ref-${employee_id}`) => {
+    return await enrollFaceProfile({
+      employee_id,
+      verification_provider: provider,
+      provider_subject_ref: subjectRef
+    });
   };
 
   // 8. Attendance Correction Request via Approval Engine
@@ -563,6 +597,8 @@ export function AttendanceProvider({ children }) {
     registerDevice,
     toggleDeviceStatus,
     registerFaceProfile,
+    enrollFaceProfile,
+    revokeFaceProfile,
     verifyFaceProfile,
     submitAttendanceCorrection,
     fetchAttendanceData

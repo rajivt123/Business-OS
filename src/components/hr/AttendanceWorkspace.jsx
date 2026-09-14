@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useAttendance } from '../../context/AttendanceContext';
 import { useEmployee } from '../../context/EmployeeContext';
 import { useCrm } from '../../context/CrmContext';
+import FaceEnrollmentModal from './FaceEnrollmentModal';
 import {
   Clock, CalendarCheck2, LogIn, LogOut, ShieldCheck, Settings, Tablet, UserCheck,
   AlertCircle, CheckCircle2, SlidersHorizontal, Plus, AlertTriangle, X, Search,
@@ -13,18 +14,21 @@ export default function AttendanceWorkspace() {
     shifts = [], devices = [], events = [], dailyRecords = [], faceProfiles = [],
     isLoading, currentEmployee, activeCompanySettings, updateCompanySettings,
     recordPunch, saveShift, registerDevice, toggleDeviceStatus,
-    registerFaceProfile, verifyFaceProfile, submitAttendanceCorrection
+    enrollFaceProfile, revokeFaceProfile, verifyFaceProfile, submitAttendanceCorrection
   } = useAttendance();
 
   const { employees = [] } = useEmployee() || {};
-  const { activeOperatingCompany, tenantRole } = useCrm() || {};
+  const { activeOperatingCompany, operatingCompanies = [], tenantRole } = useCrm() || {};
 
   const currentRole = (tenantRole || 'TEAM').toUpperCase();
   const isManagement = ['OWNER', 'ADMIN', 'MANAGER'].includes(currentRole);
 
-  const [activeTab, setActiveTab] = useState('my_attendance'); // 'my_attendance' | 'shifts' | 'settings' | 'kiosk' | 'corrections'
+  const [activeTab, setActiveTab] = useState('my_attendance'); // 'my_attendance' | 'shifts' | 'settings' | 'kiosk' | 'corrections' | 'face_profiles'
   const [notice, setNotice] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFaceEnrollModalOpen, setIsFaceEnrollModalOpen] = useState(false);
+  const [revokeTargetProfile, setRevokeTargetProfile] = useState(null);
+  const [revokeReasonInput, setRevokeReasonInput] = useState('');
 
   // Today's Date Str (YYYY-MM-DD)
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -291,6 +295,26 @@ export default function AttendanceWorkspace() {
     );
   }
 
+  // Revoke Face Profile from list handler
+  const handleRevokeProfileFromList = async (e) => {
+    e.preventDefault();
+    if (!revokeTargetProfile) return;
+    setIsSubmitting(true);
+    const res = await revokeFaceProfile({
+      employee_id: revokeTargetProfile.employee_id,
+      reason: revokeReasonInput || 'Revoked by HR Administrator',
+      tenant_company_id: revokeTargetProfile.tenant_company_id
+    });
+    setIsSubmitting(false);
+    if (res.success) {
+      setRevokeTargetProfile(null);
+      setRevokeReasonInput('');
+      setNotice({ type: 'success', text: 'Face profile revoked successfully via Supabase RPC!' });
+    } else {
+      setNotice({ type: 'error', text: `Revocation RPC Failed: ${res.error}` });
+    }
+  };
+
   return (
     <div className="space-y-5">
       {notice && (
@@ -329,6 +353,19 @@ export default function AttendanceWorkspace() {
           >
             <CalendarCheck2 size={14} /> Shifts & Schedules
           </button>
+
+          {isManagement && (
+            <button
+              onClick={() => setActiveTab('face_profiles')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'face_profiles'
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <UserCheck size={14} /> Face Profiles
+            </button>
+          )}
 
           {isManagement && (
             <button
@@ -524,7 +561,102 @@ export default function AttendanceWorkspace() {
         </div>
       )}
 
-      {/* Tab 3: Attendance Settings */}
+      {/* Tab 3: Face Profiles & Enrollment (Management Only) */}
+      {activeTab === 'face_profiles' && isManagement && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">Face Profiles & Biometric Enrollment</h3>
+              <p className="text-xs text-slate-400">Manage employee biometric face profiles & provider subject references</p>
+            </div>
+            <button
+              onClick={() => setIsFaceEnrollModalOpen(true)}
+              className="os-primary flex items-center gap-1.5 cursor-pointer bg-sky-600 hover:bg-sky-500"
+            >
+              <UserCheck size={14} /> Enroll Employee Face
+            </button>
+          </div>
+
+          <div className="os-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[9px] font-black uppercase text-slate-400 bg-slate-50 dark:bg-slate-900">
+                    <th className="px-4 py-3">Employee</th>
+                    <th className="px-4 py-3">Company</th>
+                    <th className="px-4 py-3">Biometric Provider</th>
+                    <th className="px-4 py-3">Subject Reference</th>
+                    <th className="px-4 py-3">Enrollment Status</th>
+                    <th className="px-4 py-3">Enrolled Date</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {faceProfiles.map(fp => {
+                    const emp = employees.find(e => e.id === fp.employee_id);
+                    const empName = emp ? `${emp.first_name} ${emp.last_name}` : (fp.employee_id || 'Unknown Employee');
+                    const empCode = emp?.employee_code || '';
+                    const opCo = operatingCompanies.find(c => c.id === fp.tenant_company_id);
+                    const statusStr = (fp.enrollment_status || 'active').toLowerCase();
+
+                    return (
+                      <tr key={fp.id} className="border-b border-slate-100 dark:border-slate-800/60">
+                        <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-200">
+                          <div>{empName}</div>
+                          {empCode && <div className="text-[10px] font-mono text-slate-400">{empCode}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500">{opCo?.name || 'Primary Company'}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-sky-600 dark:text-sky-400 font-bold">
+                          {fp.verification_provider || 'provider_unspecified'}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[10px] text-slate-400">
+                          {fp.provider_subject_ref || '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                            statusStr === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (statusStr === 'revoked' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200')
+                          }`}>
+                            {statusStr}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-400">
+                          {fp.enrolled_at || fp.created_at ? new Date(fp.enrolled_at || fp.created_at).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {statusStr === 'active' ? (
+                            <button
+                              onClick={() => { setRevokeTargetProfile(fp); setRevokeReasonInput(''); }}
+                              className="os-secondary text-xs text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5 py-1 cursor-pointer"
+                            >
+                              Revoke
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setIsFaceEnrollModalOpen(true)}
+                              className="os-secondary text-xs text-sky-600 border-sky-200 hover:bg-sky-50 px-2.5 py-1 cursor-pointer"
+                            >
+                              Re-Enroll
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {faceProfiles.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-xs italic text-slate-400">
+                        No face profiles enrolled yet. Click "Enroll Employee Face" to register a biometric profile.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Attendance Settings */}
       {activeTab === 'settings' && isManagement && (
         <div className="os-card p-5 space-y-5">
           <div>
@@ -614,7 +746,7 @@ export default function AttendanceWorkspace() {
         </div>
       )}
 
-      {/* Tab 4: Kiosk / Tablet Devices */}
+      {/* Tab 5: Kiosk / Tablet Devices */}
       {activeTab === 'kiosk' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -678,7 +810,7 @@ export default function AttendanceWorkspace() {
         </div>
       )}
 
-      {/* Tab 5: Corrections */}
+      {/* Tab 6: Corrections */}
       {activeTab === 'corrections' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -790,6 +922,51 @@ export default function AttendanceWorkspace() {
           </div>
         </div>
       )}
+
+      {/* Revoke Profile Reason Modal */}
+      {revokeTargetProfile && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-black uppercase text-rose-600 flex items-center gap-2">
+                <ShieldAlert size={18} /> Revoke Face Enrollment
+              </h3>
+              <button onClick={() => setRevokeTargetProfile(null)}><X size={16} /></button>
+            </div>
+            <form onSubmit={handleRevokeProfileFromList} className="space-y-3 text-xs">
+              <p className="text-slate-600 dark:text-slate-400">
+                Are you sure you want to revoke the face enrollment profile for employee <strong>{employees.find(e => e.id === revokeTargetProfile.employee_id)?.first_name || revokeTargetProfile.employee_id}</strong>? This action calls the Supabase `revoke_attendance_face_profile` RPC.
+              </p>
+              <div>
+                <label className="font-bold block mb-1">Reason for Revocation</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Employee requested biometric profile reset..."
+                  value={revokeReasonInput}
+                  onChange={e => setRevokeReasonInput(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setRevokeTargetProfile(null)} className="os-secondary">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="os-primary bg-rose-600 hover:bg-rose-500 text-white font-bold">
+                  Confirm Revoke via RPC
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* HR Face Enrollment Modal */}
+      <FaceEnrollmentModal
+        isOpen={isFaceEnrollModalOpen}
+        onClose={() => setIsFaceEnrollModalOpen(false)}
+        onEnrollSuccess={() => {
+          setNotice({ type: 'success', text: 'Employee face profile enrolled successfully!' });
+        }}
+      />
     </div>
   );
 }
