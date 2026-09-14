@@ -30,6 +30,7 @@ export default function SalesWorkspace() {
     proformaInvoices,
     taxInvoices,
     salesPayments,
+    bankAccounts = [],
     isLoading,
     error,
     isManagementOrAdmin,
@@ -96,7 +97,8 @@ export default function SalesWorkspace() {
     due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     customer_gstin: '',
     place_of_supply: 'Maharashtra (27)',
-    notes: ''
+    notes: '',
+    operation_key: crypto.randomUUID()
   });
   const [invItems, setInvItems] = useState([
     { item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }
@@ -108,7 +110,9 @@ export default function SalesWorkspace() {
     amount: 0,
     payment_mode: 'bank_transfer',
     reference_number: '',
-    notes: ''
+    bank_account_id: '',
+    notes: '',
+    operation_key: crypto.randomUUID()
   });
 
   // Calculate Summary Metrics
@@ -320,13 +324,14 @@ export default function SalesWorkspace() {
         igst_amount: 0,
         tax_amount: totals.tax_amount,
         total_amount: totals.total_amount,
-        notes: invForm.notes
+        notes: invForm.notes,
+        operation_key: invForm.operation_key
       };
 
       const res = await issueTaxInvoice(header, computedItems);
       if (res.success) {
         setIsTaxInvoiceModalOpen(false);
-        setInvForm({ company_id: '', enquiry_id: '', work_id: '', sales_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), customer_gstin: '', place_of_supply: 'Maharashtra (27)', notes: '' });
+        setInvForm({ company_id: '', enquiry_id: '', work_id: '', sales_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), customer_gstin: '', place_of_supply: 'Maharashtra (27)', notes: '', operation_key: crypto.randomUUID() });
         setInvItems([{ item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
       } else {
         setSalesModalError(res.error || 'Failed to issue Tax Invoice');
@@ -340,8 +345,9 @@ export default function SalesWorkspace() {
 
   const handleRecordPaymentSubmit = async (e) => {
     e.preventDefault();
+    setSalesModalError(null);
     if (!payForm.tax_invoice_id || !payForm.amount || Number(payForm.amount) <= 0) {
-      alert('Please select a valid tax invoice and enter a positive payment amount');
+      setSalesModalError('Please select a valid tax invoice and enter a positive payment amount');
       return;
     }
 
@@ -350,14 +356,16 @@ export default function SalesWorkspace() {
       amount: Number(payForm.amount),
       payment_mode: payForm.payment_mode,
       reference_number: payForm.reference_number,
+      bank_account_id: payForm.bank_account_id || null,
+      operation_key: payForm.operation_key,
       notes: payForm.notes
     });
 
     if (res.success) {
       setIsPaymentModalOpen(false);
-      setPayForm({ tax_invoice_id: '', amount: 0, payment_mode: 'bank_transfer', reference_number: '', notes: '' });
+      setPayForm({ tax_invoice_id: '', amount: 0, payment_mode: 'bank_transfer', reference_number: '', bank_account_id: '', notes: '', operation_key: crypto.randomUUID() });
     } else {
-      alert('Failed to record payment: ' + res.error);
+      setSalesModalError(res.error || 'Failed to record payment');
     }
   };
 
@@ -1624,6 +1632,12 @@ export default function SalesWorkspace() {
               </button>
             </div>
 
+            {salesModalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {salesModalError}
+              </div>
+            )}
+
             <form onSubmit={handleRecordPaymentSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
@@ -1651,6 +1665,24 @@ export default function SalesWorkspace() {
                         {inv.invoice_no || `INV-${inv.id.slice(0,6)}`} - {inv.company?.name || inv.customer_name} (Bal Due: ₹{Number(inv.balance_due || inv.total_amount).toLocaleString('en-IN')})
                       </option>
                     ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                  Deposit Bank Account (GL Ledger)
+                </label>
+                <select
+                  value={payForm.bank_account_id || ''}
+                  onChange={(e) => setPayForm({ ...payForm, bank_account_id: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold"
+                >
+                  <option value="">-- Primary Bank / Cash Account (Auto-Detect) --</option>
+                  {bankAccounts.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.bank_name ? `${b.bank_name} - ${b.account_name}` : b.account_name} ({b.account_number || 'Bank Account'})
+                    </option>
+                  ))}
                 </select>
               </div>
 
