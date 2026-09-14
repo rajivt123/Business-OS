@@ -12,6 +12,28 @@ function formatFinancialValue(val) {
   return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function formatReconciliationBadge(isReconciled) {
+  if (isReconciled === null || isReconciled === undefined) {
+    return (
+      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+        Unavailable
+      </span>
+    );
+  }
+  if (isReconciled === true) {
+    return (
+      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        RECONCILED
+      </span>
+    );
+  }
+  return (
+    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+      UNBALANCED
+    </span>
+  );
+}
+
 export default function AccountsWorkspace() {
   const {
     accounts,
@@ -20,10 +42,13 @@ export default function AccountsWorkspace() {
     bankAccounts,
     bankTransactions,
     financials,
+    arApIntegrity,
     fromDate,
     toDate,
+    asOfDate,
     setFromDate,
     setToDate,
+    setAsOfDate,
     isLoading,
     error,
     metrics,
@@ -315,6 +340,123 @@ export default function AccountsWorkspace() {
                     <span className="font-mono text-indigo-400">
                       {formatFinancialValue(financials?.total_equity ?? financials?.equity)}
                     </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* AR/AP Reconciliation Integrity (RPC Authoritative) */}
+            <div className="p-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                <div className="flex items-center gap-3">
+                  <h3 className="text-sm font-semibold text-slate-200">AR & AP Ledger Reconciliation Integrity</h3>
+                  <span className="text-[10px] font-mono bg-teal-500/10 text-teal-400 px-2 py-0.5 rounded-full border border-teal-500/20">
+                    RPC AUTHORITATIVE
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">As Of Date:</span>
+                    <input
+                      type="date"
+                      value={asOfDate || ''}
+                      onChange={(e) => setAsOfDate && setAsOfDate(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 font-mono text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Overall Status:</span>
+                    {formatReconciliationBadge(arApIntegrity?.overall_reconciled)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Accounts Receivable (AR) Card */}
+                <div className="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                      Accounts Receivable (AR)
+                    </span>
+                    {formatReconciliationBadge(arApIntegrity?.ar?.is_reconciled)}
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-slate-800/50">
+                      <span className="text-slate-400">AR GL Balance:</span>
+                      <span className="font-mono font-bold text-slate-100">
+                        {formatFinancialValue(arApIntegrity?.ar?.gl_balance)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 border-b border-slate-800/50">
+                      <span className="text-slate-400">AR Operational Outstanding:</span>
+                      <span className="font-mono font-bold text-slate-100">
+                        {formatFinancialValue(arApIntegrity?.ar?.operational_outstanding)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 border-b border-slate-800/50">
+                      <span className="text-slate-400">AR Difference:</span>
+                      <span className={`font-mono font-bold ${
+                        arApIntegrity?.ar?.difference === 0 ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {formatFinancialValue(arApIntegrity?.ar?.difference)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 text-slate-500 text-[11px]">
+                      <span>Control Accounts Count:</span>
+                      <span className="font-mono text-slate-400">
+                        {arApIntegrity?.ar?.control_account_count ?? 'Unavailable'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Accounts Payable (AP) Card */}
+                <div className="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                      Accounts Payable (AP)
+                    </span>
+                    {formatReconciliationBadge(arApIntegrity?.ap?.is_reconciled)}
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-slate-800/50">
+                      <span className="text-slate-400">AP GL Balance:</span>
+                      <span className="font-mono font-bold text-slate-100">
+                        {formatFinancialValue(arApIntegrity?.ap?.gl_balance)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 border-b border-slate-800/50">
+                      <span className="text-slate-400">AP Operational Outstanding:</span>
+                      <span className="font-mono font-bold text-slate-100">
+                        {formatFinancialValue(arApIntegrity?.ap?.operational_outstanding)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 border-b border-slate-800/50">
+                      <span className="text-slate-400">AP Difference:</span>
+                      <span className={`font-mono font-bold ${
+                        arApIntegrity?.ap?.difference === 0 ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {formatFinancialValue(arApIntegrity?.ap?.difference)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between py-1 text-slate-500 text-[11px]">
+                      <span>Control Accounts Count:</span>
+                      <span className="font-mono text-slate-400">
+                        {arApIntegrity?.ap?.control_account_count ?? 'Unavailable'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

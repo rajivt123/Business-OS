@@ -35,9 +35,11 @@ export function AccountsProvider({ children }) {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
   const [financials, setFinancials] = useState(null);
+  const [arApIntegrity, setArApIntegrity] = useState(null);
 
   const [fromDate, setFromDate] = useState(() => `${new Date().getFullYear()}-01-01`);
   const [toDate, setToDate] = useState(() => `${new Date().getFullYear()}-12-31`);
+  const [asOfDate, setAsOfDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [isLoading, setIsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -70,6 +72,32 @@ export function AccountsProvider({ children }) {
       setFinancials(null);
     }
   }, [tenantId, fromDate, toDate]);
+
+  const fetchArApIntegrity = useCallback(async (opCoId) => {
+    if (!tenantId || !opCoId) {
+      setArApIntegrity(null);
+      return;
+    }
+    try {
+      const { data, error: err } = await supabase.rpc('get_accounts_ar_ap_integrity_atomic', {
+        p_tenant_id: tenantId,
+        p_tenant_company_id: opCoId,
+        p_as_of_date: asOfDate
+      });
+      if (err) {
+        console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
+        setArApIntegrity(null);
+        if (err.code === '42501') {
+          setError('Authorization error (42501) accessing AR/AP integrity');
+        }
+        return;
+      }
+      setArApIntegrity(data || null);
+    } catch (err) {
+      console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
+      setArApIntegrity(null);
+    }
+  }, [tenantId, asOfDate]);
 
   const fetchAccounts = useCallback(async (opCoId) => {
     try {
@@ -173,14 +201,15 @@ export function AccountsProvider({ children }) {
         fetchJournalEntries(activeOperatingCompanyId),
         fetchBankAccounts(activeOperatingCompanyId),
         fetchBankTransactions(activeOperatingCompanyId),
-        fetchFinancials(activeOperatingCompanyId)
+        fetchFinancials(activeOperatingCompanyId),
+        fetchArApIntegrity(activeOperatingCompanyId)
       ]);
     } catch (err) {
       setError(err.message || 'Failed to load accounting data');
     } finally {
       setIsLoading(false);
     }
-  }, [activeOperatingCompanyId, fetchAccounts, fetchFiscalPeriods, fetchJournalEntries, fetchBankAccounts, fetchBankTransactions, fetchFinancials]);
+  }, [activeOperatingCompanyId, fetchAccounts, fetchFiscalPeriods, fetchJournalEntries, fetchBankAccounts, fetchBankTransactions, fetchFinancials, fetchArApIntegrity]);
 
   useEffect(() => {
     refreshAllAccounts();
@@ -601,10 +630,14 @@ export function AccountsProvider({ children }) {
     bankAccounts,
     bankTransactions,
     financials,
+    arApIntegrity,
     fromDate,
     toDate,
+    asOfDate,
     setFromDate,
     setToDate,
+    setAsOfDate,
+    fetchArApIntegrity,
     isLoading,
     submitting,
     error,
