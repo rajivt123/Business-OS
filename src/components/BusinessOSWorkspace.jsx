@@ -24,6 +24,7 @@ import LeaveWorkspace from './hr/LeaveWorkspace';
 import PayrollWorkspace from './hr/PayrollWorkspace';
 import SalesWorkspace from './sales/SalesWorkspace';
 import ProcurementWorkspace from './procurement/ProcurementWorkspace';
+import InventoryWorkspace from './inventory/InventoryWorkspace';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -828,7 +829,8 @@ export default function BusinessOSWorkspace() {
         )}
         {page === 'sales' && <SalesWorkspace />}
         {page === 'procurement' && <ProcurementWorkspace />}
-        {['crm', 'inventory', 'accounts'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
+        {page === 'inventory' && <InventoryWorkspace isDarkMode={isDarkMode} />}
+        {['crm', 'accounts'].includes(page) && <DataModulePage module={page} onNavigate={go} />}
         {page === 'hr' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
