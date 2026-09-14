@@ -26,6 +26,7 @@ import SalesWorkspace from './sales/SalesWorkspace';
 import ProcurementWorkspace from './procurement/ProcurementWorkspace';
 import InventoryWorkspace from './inventory/InventoryWorkspace';
 import AccountsWorkspace from './accounts/AccountsWorkspace';
+import ReportsWorkspace from './reports/ReportsWorkspace';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -371,8 +372,7 @@ function ProjectsPage({ onOpenClassic, data = {} }) {
 }
 
 function ReportsPage() {
-  const groups = [['Executive', ['Business Overview', 'Company Comparison', 'KPI Dashboard']], ['Sales', ['Enquiry Report', 'Quotation Report', 'Sales Order Report', 'Invoice Report']], ['Projects', ['Project Status', 'Project Cost', 'Profitability', 'Stage Performance', 'Delay Report']], ['Procurement', ['Purchase', 'Vendor', 'PO', 'Price Comparison']], ['Inventory', ['Stock', 'Movement', 'Project Consumption']], ['Accounts', ['Receivables', 'Payables', 'Ledger', 'Trial Balance', 'P&L', 'Balance Sheet', 'GST']], ['HR', ['Headcount', 'Attendance', 'Leave', 'Payroll', 'Employee Cost', 'Project Labour Cost']]];
-  return <div className="space-y-4"><div className="grid md:grid-cols-3 gap-3"><StatCard icon={BarChart3} label="Reports Available" value="Unavailable" sub="No reporting backend" tone="blue" /><StatCard icon={FileSpreadsheet} label="Scheduled Reports" value="Unavailable" sub="No reporting backend" tone="violet" /><StatCard icon={Download} label="Exports This Month" value="Unavailable" sub="No reporting backend" tone="emerald" /></div><div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{groups.map(([g, items]) => <SectionCard key={g} title={g} icon={FileBarChart}><div className="p-3 space-y-1">{items.map(i => <UnavailableAction key={i} className="w-full flex items-center justify-between p-2.5 rounded-lg text-left"><span className="text-xs font-bold">{i}</span><ChevronRight size={14} className="text-slate-400" /></UnavailableAction>)}</div></SectionCard>)}</div></div>;
+  return <ReportsWorkspace />;
 }
 
 function DocumentsPage() {
