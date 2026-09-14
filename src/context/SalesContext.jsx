@@ -109,7 +109,7 @@ export function SalesProvider({ children }) {
           company:companies(id, name),
           enquiry:enquiries(id, title),
           work:works(id, title),
-          sales_order:sales_orders(id, so_no),
+          sales_order:sales_orders(id, customer_name, total_amount),
           quotation:sales_quotations(id, quotation_no),
           items:proforma_invoice_items(*)
         `)
@@ -137,7 +137,7 @@ export function SalesProvider({ children }) {
           company:companies(id, name),
           enquiry:enquiries(id, title),
           work:works(id, title),
-          sales_order:sales_orders(id, so_no),
+          sales_order:sales_orders(id, customer_name, total_amount),
           items:tax_invoice_items(*),
           payments:sales_payments(*)
         `)

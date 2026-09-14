@@ -332,7 +332,7 @@ export function ProcurementProvider({ children }) {
       throw new Error('Access denied: PO Approval requires Manager or Admin permissions.');
     }
     const { data, error } = await supabase.rpc('approve_purchase_order_atomic', {
-      p_po_id: poId
+      p_purchase_order_id: poId
     });
     if (error) throw error;
     await fetchPurchaseOrders(activeOperatingCompanyId);

@@ -824,83 +824,97 @@ export default function ProcurementWorkspace() {
 
       {/* --- CREATE MODALS --- */}
 
-      {/* 1. VENDOR MODAL */}
+      {/* 1. VENDOR MODAL (650px) */}
       {isVendorModalOpen && (
         <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-lg">
+          <div className="os-modal-content os-modal-md">
             <div className="os-modal-head">
-              <h3>Register New Vendor</h3>
-              <button onClick={() => setIsVendorModalOpen(false)}><X size={16} /></button>
+              <h3 className="flex items-center gap-2">
+                <Building size={18} className="text-sky-500" /> Register New Vendor
+              </h3>
+              <button onClick={() => setIsVendorModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
             </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreateVendor} className="space-y-3">
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateVendor} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div>
-                <label className="os-label">Vendor Name *</label>
+                <label className="os-label">Vendor Business Name *</label>
                 <input
                   type="text"
                   required
                   value={vendorForm.vendor_name}
                   onChange={(e) => setVendorForm({ ...vendorForm, vendor_name: e.target.value })}
-                  placeholder="e.g. Apex Industrial Supplies"
+                  placeholder="e.g. Apex Industrial Supplies Pvt Ltd"
                   className="os-input"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="os-label">Vendor Code</label>
+                  <label className="os-label">Vendor Code / Reference</label>
                   <input
                     type="text"
                     value={vendorForm.vendor_code}
                     onChange={(e) => setVendorForm({ ...vendorForm, vendor_code: e.target.value })}
                     placeholder="e.g. VEN-001"
-                    className="os-input"
+                    className="os-input uppercase"
                   />
                 </div>
                 <div>
-                  <label className="os-label">GSTIN</label>
+                  <label className="os-label">GSTIN Identification #</label>
                   <input
                     type="text"
                     value={vendorForm.gstin}
                     onChange={(e) => setVendorForm({ ...vendorForm, gstin: e.target.value })}
-                    placeholder="27AAAAA0000A1Z5"
-                    className="os-input"
+                    placeholder="e.g. 27AAAAA0000A1Z5"
+                    className="os-input font-mono uppercase"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="os-label">Email</label>
+                  <label className="os-label">Primary Email Address</label>
                   <input
                     type="email"
                     value={vendorForm.email}
                     onChange={(e) => setVendorForm({ ...vendorForm, email: e.target.value })}
-                    placeholder="contact@apex.com"
+                    placeholder="contact@apexsupplies.com"
                     className="os-input"
                   />
                 </div>
                 <div>
-                  <label className="os-label">Phone</label>
+                  <label className="os-label">Contact Phone Number</label>
                   <input
                     type="text"
                     value={vendorForm.phone}
                     onChange={(e) => setVendorForm({ ...vendorForm, phone: e.target.value })}
-                    placeholder="+91 9876543210"
+                    placeholder="+91 98765 43210"
                     className="os-input"
                   />
                 </div>
               </div>
+
               <div>
-                <label className="os-label">Address</label>
+                <label className="os-label">Registered Office / Billing Address</label>
                 <textarea
                   value={vendorForm.address}
                   onChange={(e) => setVendorForm({ ...vendorForm, address: e.target.value })}
-                  placeholder="Vendor office/warehouse address"
-                  className="os-input h-16"
+                  placeholder="Street address, city, state and PIN code..."
+                  className="os-input h-20 p-2 text-xs"
                 />
               </div>
+
               <div className="os-modal-foot">
                 <button type="button" onClick={() => setIsVendorModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
                   {isSubmitting ? 'Registering...' : 'Register Vendor'}
                 </button>
               </div>
@@ -909,16 +923,26 @@ export default function ProcurementWorkspace() {
         </div>
       )}
 
-      {/* 2. PURCHASE REQUEST MODAL */}
+      {/* 2. PURCHASE REQUEST MODAL (800px) */}
       {isPrModalOpen && (
         <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-lg">
+          <div className="os-modal-content os-modal-lg">
             <div className="os-modal-head">
-              <h3>Create Purchase Request</h3>
-              <button onClick={() => setIsPrModalOpen(false)}><X size={16} /></button>
+              <h3 className="flex items-center gap-2">
+                <FileText size={18} className="text-amber-500" /> Create Purchase Request (PR)
+              </h3>
+              <button onClick={() => setIsPrModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
             </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreatePR} className="space-y-3">
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreatePR} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div>
                 <label className="os-label">Project / Work Linkage (Optional)</label>
                 <select
@@ -926,61 +950,81 @@ export default function ProcurementWorkspace() {
                   onChange={(e) => setPrForm({ ...prForm, work_id: e.target.value })}
                   className="os-input"
                 >
-                  <option value="">No specific project (General Requisition)</option>
+                  <option value="">-- No Specific Project (General Requisition) --</option>
                   {works.map(w => <option key={w.id} value={w.id}>{w.title}</option>)}
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <label className="os-label">Line Items</label>
-                {prItems.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <input
-                      type="text"
-                      placeholder="Item Description"
-                      value={item.item_description}
-                      onChange={(e) => {
-                        const updated = [...prItems];
-                        updated[idx].item_description = e.target.value;
-                        setPrItems(updated);
-                      }}
-                      className="os-input col-span-7"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const updated = [...prItems];
-                        updated[idx].quantity = Number(e.target.value);
-                        setPrItems(updated);
-                      }}
-                      className="os-input col-span-4"
-                    />
-                    {prItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setPrItems(prItems.filter((_, i) => i !== idx))}
-                        className="col-span-1 text-rose-500 hover:text-rose-700 flex justify-center"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setPrItems([...prItems, { item_description: '', quantity: 1, estimated_unit_price: 0 }])}
-                  className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1 mt-1"
-                >
-                  <Plus size={13} /> Add Line Item
-                </button>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="os-label font-bold text-slate-700 dark:text-slate-300">Requisition Items *</label>
+                  <button
+                    type="button"
+                    onClick={() => setPrItems([...prItems, { item_description: '', quantity: 1, estimated_unit_price: 0 }])}
+                    className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Item
+                  </button>
+                </div>
+
+                <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800/80 rounded-t-xl text-[10px] uppercase font-black tracking-wider text-slate-500 border border-slate-200 dark:border-slate-700">
+                  <div className="col-span-8">Item Description & Specifications</div>
+                  <div className="col-span-3 text-center">Required Qty</div>
+                  <div className="col-span-1 text-center">Action</div>
+                </div>
+
+                <div className="space-y-2 md:space-y-0 md:divide-y md:divide-slate-200 dark:md:divide-slate-800 md:border md:border-t-0 md:border-slate-200 dark:md:border-slate-800 md:rounded-b-xl overflow-hidden">
+                  {prItems.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                      <div className="md:col-span-8">
+                        <label className="md:hidden os-label">Item Description</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Structural Steel Beams ISMB 300 (12m length)"
+                          value={item.item_description}
+                          onChange={(e) => {
+                            const updated = [...prItems];
+                            updated[idx].item_description = e.target.value;
+                            setPrItems(updated);
+                          }}
+                          className="os-input"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="md:hidden os-label">Required Qty</label>
+                        <input
+                          type="number"
+                          placeholder="Qty"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const updated = [...prItems];
+                            updated[idx].quantity = Number(e.target.value);
+                            setPrItems(updated);
+                          }}
+                          className="os-input text-center"
+                        />
+                      </div>
+                      <div className="md:col-span-1 flex justify-center">
+                        {prItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPrItems(prItems.filter((_, i) => i !== idx))}
+                            className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                            title="Remove Item"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="os-modal-foot">
                 <button type="button" onClick={() => setIsPrModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
                   {isSubmitting ? 'Submitting...' : 'Submit Purchase Request'}
                 </button>
               </div>
@@ -989,241 +1033,43 @@ export default function ProcurementWorkspace() {
         </div>
       )}
 
-      {/* 5. PO MODAL */}
-      {isPoModalOpen && (
-        <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-xl">
-            <div className="os-modal-head">
-              <h3>Issue Purchase Order (PO)</h3>
-              <button onClick={() => setIsPoModalOpen(false)}><X size={16} /></button>
-            </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreatePO} className="space-y-3">
-              <div>
-                <label className="os-label">Select Vendor *</label>
-                <select
-                  required
-                  value={poForm.vendor_id}
-                  onChange={(e) => setPoForm({ ...poForm, vendor_id: e.target.value })}
-                  className="os-input"
-                >
-                  <option value="">Select Vendor</option>
-                  {vendors.map(v => <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code || 'No Code'})</option>)}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="os-label">PO Date</label>
-                  <input
-                    type="date"
-                    value={poForm.po_date}
-                    onChange={(e) => setPoForm({ ...poForm, po_date: e.target.value })}
-                    className="os-input"
-                  />
-                </div>
-                <div>
-                  <label className="os-label">Project / Work (Optional)</label>
-                  <select
-                    value={poForm.work_id}
-                    onChange={(e) => setPoForm({ ...poForm, work_id: e.target.value })}
-                    className="os-input"
-                  >
-                    <option value="">No Project Linkage</option>
-                    {works.map(w => <option key={w.id} value={w.id}>{w.title}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="os-label">Order Items</label>
-                {poItems.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <input
-                      type="text"
-                      placeholder="Item Description"
-                      value={item.item_description}
-                      onChange={(e) => {
-                        const updated = [...poItems];
-                        updated[idx].item_description = e.target.value;
-                        setPoItems(updated);
-                      }}
-                      className="os-input col-span-5"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const updated = [...poItems];
-                        updated[idx].quantity = Number(e.target.value);
-                        setPoItems(updated);
-                      }}
-                      className="os-input col-span-3"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Unit Price"
-                      value={item.unit_price}
-                      onChange={(e) => {
-                        const updated = [...poItems];
-                        updated[idx].unit_price = Number(e.target.value);
-                        setPoItems(updated);
-                      }}
-                      className="os-input col-span-3"
-                    />
-                    {poItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setPoItems(poItems.filter((_, i) => i !== idx))}
-                        className="col-span-1 text-rose-500 hover:text-rose-700 flex justify-center"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setPoItems([...poItems, { item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }])}
-                  className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1 mt-1"
-                >
-                  <Plus size={13} /> Add Item
-                </button>
-              </div>
-
-              <div className="os-modal-foot">
-                <button type="button" onClick={() => setIsPoModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
-                  {isSubmitting ? 'Issuing...' : 'Issue Purchase Order'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 8. PAYMENT MODAL */}
-      {isPaymentModalOpen && (
-        <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-lg">
-            <div className="os-modal-head">
-              <h3>Record Vendor Payment</h3>
-              <button onClick={() => setIsPaymentModalOpen(false)}><X size={16} /></button>
-            </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleRecordPayment} className="space-y-3">
-              <div>
-                <label className="os-label">Select Purchase Bill *</label>
-                <select
-                  required
-                  value={paymentForm.purchase_bill_id}
-                  onChange={(e) => {
-                    const bill = purchaseBills.find(b => b.id === e.target.value);
-                    setPaymentForm({
-                      ...paymentForm,
-                      purchase_bill_id: e.target.value,
-                      vendor_id: bill ? bill.vendor_id : '',
-                      amount: bill ? Number(bill.balance_due) : 0
-                    });
-                  }}
-                  className="os-input"
-                >
-                  <option value="">Select Bill to Pay</option>
-                  {purchaseBills.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.bill_no || b.id.slice(0, 8)} — Balance Due: ₹{Number(b.balance_due).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="os-label">Payment Date</label>
-                  <input
-                    type="date"
-                    value={paymentForm.payment_date}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
-                    className="os-input"
-                  />
-                </div>
-                <div>
-                  <label className="os-label">Payment Mode</label>
-                  <select
-                    value={paymentForm.payment_mode}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_mode: e.target.value })}
-                    className="os-input"
-                  >
-                    <option value="bank_transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
-                    <option value="cheque">Cheque</option>
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="os-label">Amount (₹) *</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })}
-                  className="os-input"
-                />
-              </div>
-
-              <div>
-                <label className="os-label">Reference Number (UTR / Cheque No)</label>
-                <input
-                  type="text"
-                  value={paymentForm.reference_number}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, reference_number: e.target.value })}
-                  placeholder="e.g. UTR123456789"
-                  className="os-input"
-                />
-              </div>
-
-              <div className="os-modal-foot">
-                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
-                  {isSubmitting ? 'Recording...' : 'Record Vendor Payment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 3. RFQ MODAL */}
+      {/* 3. RFQ MODAL (750px) */}
       {isRfqModalOpen && (
         <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-lg">
+          <div className="os-modal-content os-modal-rfq">
             <div className="os-modal-head">
-              <h3>Create Request For Quotation (RFQ)</h3>
-              <button onClick={() => setIsRfqModalOpen(false)}><X size={16} /></button>
+              <h3 className="flex items-center gap-2">
+                <Send size={18} className="text-indigo-500" /> Create Request For Quotation (RFQ)
+              </h3>
+              <button onClick={() => setIsRfqModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
             </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreateRFQ} className="space-y-3">
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateRFQ} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div>
-                <label className="os-label">Select Purchase Request (Optional)</label>
+                <label className="os-label">Select Source Purchase Request (Optional)</label>
                 <select
                   value={rfqForm.purchase_request_id}
                   onChange={(e) => setRfqForm({ ...rfqForm, purchase_request_id: e.target.value })}
                   className="os-input"
                 >
-                  <option value="">No PR Linkage</option>
+                  <option value="">-- Direct RFQ (No PR Linkage) --</option>
                   {purchaseRequests.map(pr => (
-                    <option key={pr.id} value={pr.id}>{pr.pr_no || pr.id.slice(0,8)} ({pr.status})</option>
+                    <option key={pr.id} value={pr.id}>{pr.pr_no || pr.id.slice(0,8)} — Status: {pr.status}</option>
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="os-label">Due Date</label>
+                  <label className="os-label">Quotation Submission Due Date</label>
                   <input
                     type="date"
                     value={rfqForm.due_date}
@@ -1238,23 +1084,25 @@ export default function ProcurementWorkspace() {
                     onChange={(e) => setRfqForm({ ...rfqForm, work_id: e.target.value })}
                     className="os-input"
                   >
-                    <option value="">No Project Linkage</option>
+                    <option value="">-- No Project Linkage --</option>
                     {works.map(w => <option key={w.id} value={w.id}>{w.title}</option>)}
                   </select>
                 </div>
               </div>
+
               <div>
-                <label className="os-label">Notes / Instructions</label>
+                <label className="os-label">Vendor Instructions & Technical Specifications</label>
                 <textarea
                   value={rfqForm.notes}
                   onChange={(e) => setRfqForm({ ...rfqForm, notes: e.target.value })}
-                  placeholder="Specific vendor requirements or scope details..."
-                  className="os-input h-16"
+                  placeholder="Specify delivery timeline, material grades, warranty terms, and compliance requirements for vendors..."
+                  className="os-input h-24 p-2 text-xs"
                 />
               </div>
+
               <div className="os-modal-foot">
                 <button type="button" onClick={() => setIsRfqModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
                   {isSubmitting ? 'Creating...' : 'Create RFQ'}
                 </button>
               </div>
@@ -1263,17 +1111,27 @@ export default function ProcurementWorkspace() {
         </div>
       )}
 
-      {/* 4. VENDOR QUOTATION MODAL */}
+      {/* 4. VENDOR QUOTATION MODAL (900px) */}
       {isQuoteModalOpen && (
         <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-xl">
+          <div className="os-modal-content os-modal-xl">
             <div className="os-modal-head">
-              <h3>Record Vendor Quotation</h3>
-              <button onClick={() => setIsQuoteModalOpen(false)}><X size={16} /></button>
+              <h3 className="flex items-center gap-2">
+                <FileText size={18} className="text-purple-500" /> Record Vendor Quotation
+              </h3>
+              <button onClick={() => setIsQuoteModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
             </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreateQuotation} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateQuotation} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="os-label">Select Vendor *</label>
                   <select
@@ -1282,8 +1140,8 @@ export default function ProcurementWorkspace() {
                     onChange={(e) => setQuoteForm({ ...quoteForm, vendor_id: e.target.value })}
                     className="os-input"
                   >
-                    <option value="">Select Vendor</option>
-                    {vendors.map(v => <option key={v.id} value={v.id}>{v.vendor_name}</option>)}
+                    <option value="">-- Select Vendor --</option>
+                    {vendors.map(v => <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code || 'No Code'})</option>)}
                   </select>
                 </div>
                 <div>
@@ -1293,12 +1151,13 @@ export default function ProcurementWorkspace() {
                     onChange={(e) => setQuoteForm({ ...quoteForm, rfq_id: e.target.value })}
                     className="os-input"
                   >
-                    <option value="">No RFQ Linkage</option>
+                    <option value="">-- No RFQ Linkage --</option>
                     {rfqs.map(r => <option key={r.id} value={r.id}>{r.rfq_no || r.id.slice(0,8)}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
                 <div>
                   <label className="os-label">Quotation Date</label>
                   <input
@@ -1319,67 +1178,91 @@ export default function ProcurementWorkspace() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="os-label">Line Items</label>
-                {quoteItems.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <input
-                      type="text"
-                      placeholder="Item Description"
-                      value={item.item_description}
-                      onChange={(e) => {
-                        const updated = [...quoteItems];
-                        updated[idx].item_description = e.target.value;
-                        setQuoteItems(updated);
-                      }}
-                      className="os-input col-span-5"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const updated = [...quoteItems];
-                        updated[idx].quantity = Number(e.target.value);
-                        setQuoteItems(updated);
-                      }}
-                      className="os-input col-span-3"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Unit Price"
-                      value={item.unit_price}
-                      onChange={(e) => {
-                        const updated = [...quoteItems];
-                        updated[idx].unit_price = Number(e.target.value);
-                        setQuoteItems(updated);
-                      }}
-                      className="os-input col-span-3"
-                    />
-                    {quoteItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setQuoteItems(quoteItems.filter((_, i) => i !== idx))}
-                        className="col-span-1 text-rose-500 hover:text-rose-700 flex justify-center"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setQuoteItems([...quoteItems, { item_description: '', quantity: 1, unit_price: 0 }])}
-                  className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1 mt-1"
-                >
-                  <Plus size={13} /> Add Item
-                </button>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="os-label font-bold text-slate-700 dark:text-slate-300">Quoted Line Items</label>
+                  <button
+                    type="button"
+                    onClick={() => setQuoteItems([...quoteItems, { item_description: '', quantity: 1, unit_price: 0 }])}
+                    className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Quoted Item
+                  </button>
+                </div>
+
+                <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800/80 rounded-t-xl text-[10px] uppercase font-black tracking-wider text-slate-500 border border-slate-200 dark:border-slate-700">
+                  <div className="col-span-6">Item Description & Specifications</div>
+                  <div className="col-span-2 text-center">Qty</div>
+                  <div className="col-span-3 text-right">Quoted Unit Price (₹)</div>
+                  <div className="col-span-1 text-center">Action</div>
+                </div>
+
+                <div className="space-y-2 md:space-y-0 md:divide-y md:divide-slate-200 dark:md:divide-slate-800 md:border md:border-t-0 md:border-slate-200 dark:md:border-slate-800 md:rounded-b-xl overflow-hidden">
+                  {quoteItems.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                      <div className="md:col-span-6">
+                        <label className="md:hidden os-label">Item Description</label>
+                        <input
+                          type="text"
+                          placeholder="Quoted material / service description"
+                          value={item.item_description}
+                          onChange={(e) => {
+                            const updated = [...quoteItems];
+                            updated[idx].item_description = e.target.value;
+                            setQuoteItems(updated);
+                          }}
+                          className="os-input"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="md:hidden os-label">Qty</label>
+                        <input
+                          type="number"
+                          placeholder="Qty"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const updated = [...quoteItems];
+                            updated[idx].quantity = Number(e.target.value);
+                            setQuoteItems(updated);
+                          }}
+                          className="os-input text-center"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className="md:hidden os-label">Unit Price (₹)</label>
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          value={item.unit_price}
+                          onChange={(e) => {
+                            const updated = [...quoteItems];
+                            updated[idx].unit_price = Number(e.target.value);
+                            setQuoteItems(updated);
+                          }}
+                          className="os-input text-right font-semibold"
+                        />
+                      </div>
+                      <div className="md:col-span-1 flex justify-center">
+                        {quoteItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setQuoteItems(quoteItems.filter((_, i) => i !== idx))}
+                            className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                            title="Remove Item"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="os-modal-foot">
                 <button type="button" onClick={() => setIsQuoteModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
                   {isSubmitting ? 'Recording...' : 'Record Quotation'}
                 </button>
               </div>
@@ -1388,18 +1271,181 @@ export default function ProcurementWorkspace() {
         </div>
       )}
 
-      {/* 6. GRN MODAL */}
+      {/* 5. PO MODAL (900px) */}
+      {isPoModalOpen && (
+        <div className="os-modal-backdrop">
+          <div className="os-modal-content os-modal-xl">
+            <div className="os-modal-head">
+              <h3 className="flex items-center gap-2">
+                <ShoppingCart size={18} className="text-sky-500" /> Issue Purchase Order (PO)
+              </h3>
+              <button onClick={() => setIsPoModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreatePO} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              <div>
+                <label className="os-label">Select Vendor *</label>
+                <select
+                  required
+                  value={poForm.vendor_id}
+                  onChange={(e) => setPoForm({ ...poForm, vendor_id: e.target.value })}
+                  className="os-input"
+                >
+                  <option value="">-- Select Vendor --</option>
+                  {vendors.map(v => <option key={v.id} value={v.id}>{v.vendor_name} ({v.vendor_code || 'No Code'})</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="os-label">PO Issuance Date</label>
+                  <input
+                    type="date"
+                    value={poForm.po_date}
+                    onChange={(e) => setPoForm({ ...poForm, po_date: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Project / Work Linkage (Optional)</label>
+                  <select
+                    value={poForm.work_id}
+                    onChange={(e) => setPoForm({ ...poForm, work_id: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="">-- No Project Linkage --</option>
+                    {works.map(w => <option key={w.id} value={w.id}>{w.title}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="os-label font-bold text-slate-700 dark:text-slate-300">Purchase Order Items</label>
+                  <button
+                    type="button"
+                    onClick={() => setPoItems([...poItems, { item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }])}
+                    className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Order Item
+                  </button>
+                </div>
+
+                <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800/80 rounded-t-xl text-[10px] uppercase font-black tracking-wider text-slate-500 border border-slate-200 dark:border-slate-700">
+                  <div className="col-span-5">Item Description & Specifications</div>
+                  <div className="col-span-2 text-center">Qty</div>
+                  <div className="col-span-3 text-right">Unit Price (₹)</div>
+                  <div className="col-span-2 text-right">Line Total (₹)</div>
+                </div>
+
+                <div className="space-y-2 md:space-y-0 md:divide-y md:divide-slate-200 dark:md:divide-slate-800 md:border md:border-t-0 md:border-slate-200 dark:md:border-slate-800 md:rounded-b-xl overflow-hidden">
+                  {poItems.map((item, idx) => {
+                    const total = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
+                    return (
+                      <div key={idx} className="p-3 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                        <div className="md:col-span-5">
+                          <label className="md:hidden os-label">Item Description</label>
+                          <input
+                            type="text"
+                            placeholder="Item description & specifications"
+                            value={item.item_description}
+                            onChange={(e) => {
+                              const updated = [...poItems];
+                              updated[idx].item_description = e.target.value;
+                              setPoItems(updated);
+                            }}
+                            className="os-input"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="md:hidden os-label">Qty</label>
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...poItems];
+                              updated[idx].quantity = Number(e.target.value);
+                              setPoItems(updated);
+                            }}
+                            className="os-input text-center"
+                          />
+                        </div>
+                        <div className="md:col-span-3">
+                          <label className="md:hidden os-label">Unit Price (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            value={item.unit_price}
+                            onChange={(e) => {
+                              const updated = [...poItems];
+                              updated[idx].unit_price = Number(e.target.value);
+                              setPoItems(updated);
+                            }}
+                            className="os-input text-right"
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex items-center justify-between pl-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white">₹{total.toLocaleString('en-IN')}</span>
+                          {poItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setPoItems(poItems.filter((_, i) => i !== idx))}
+                              className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                              title="Remove Item"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="os-modal-foot">
+                <button type="button" onClick={() => setIsPoModalOpen(false)} className="os-secondary">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
+                  {isSubmitting ? 'Issuing...' : 'Issue Purchase Order'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. GRN MODAL (950px) */}
       {isGrnModalOpen && (
         <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-xl">
+          <div className="os-modal-content os-modal-grn">
             <div className="os-modal-head">
-              <h3>Log Goods Received Note (GRN)</h3>
-              <button onClick={() => setIsGrnModalOpen(false)}><X size={16} /></button>
+              <h3 className="flex items-center gap-2">
+                <Truck size={18} className="text-emerald-500" /> Log Goods Received Note (GRN)
+              </h3>
+              <button onClick={() => setIsGrnModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
             </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreateGRN} className="space-y-3">
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateGRN} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
               <div>
-                <label className="os-label">Select Purchase Order *</label>
+                <label className="os-label">Select Approved Purchase Order *</label>
                 <select
                   required
                   value={grnForm.purchase_order_id}
@@ -1429,7 +1475,7 @@ export default function ProcurementWorkspace() {
                   }}
                   className="os-input"
                 >
-                  <option value="">Select Approved PO</option>
+                  <option value="">-- Select Approved PO --</option>
                   {purchaseOrders.map(po => (
                     <option key={po.id} value={po.id}>
                       {po.po_no || po.id.slice(0,8)} — Status: {po.status}
@@ -1438,7 +1484,7 @@ export default function ProcurementWorkspace() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="os-label">GRN Receipt Date</label>
                   <input
@@ -1460,65 +1506,88 @@ export default function ProcurementWorkspace() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="os-label">Received Items Breakdown</label>
-                {grnItems.map((item, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
-                    <div className="font-bold text-slate-800 dark:text-slate-200">{item.item_description || `Item #${idx+1}`}</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="os-label text-[10px]">Received Qty</label>
-                        <input
-                          type="number"
-                          value={item.received_quantity}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            const updated = [...grnItems];
-                            updated[idx].received_quantity = val;
-                            updated[idx].accepted_quantity = Math.max(0, val - updated[idx].rejected_quantity);
-                            setGrnItems(updated);
-                          }}
-                          className="os-input"
-                        />
+              <div>
+                <label className="os-label mb-2 block font-bold text-slate-700 dark:text-slate-300">Received Items Quantity Breakdown</label>
+                <div className="space-y-3">
+                  {grnItems.map((item, idx) => (
+                    <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
+                      <div className="font-extrabold text-slate-900 dark:text-white flex items-center justify-between">
+                        <span>{item.item_description || `Item #${idx+1}`}</span>
+                        {item.ordered_quantity ? <span className="text-[11px] font-semibold text-slate-500">Ordered PO Qty: {item.ordered_quantity}</span> : null}
                       </div>
-                      <div>
-                        <label className="os-label text-[10px]">Accepted Qty</label>
-                        <input
-                          type="number"
-                          value={item.accepted_quantity}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            const updated = [...grnItems];
-                            updated[idx].accepted_quantity = val;
-                            updated[idx].rejected_quantity = Math.max(0, updated[idx].received_quantity - val);
-                            setGrnItems(updated);
-                          }}
-                          className="os-input"
-                        />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="os-label text-[10px]">Total Received Qty</label>
+                          <input
+                            type="number"
+                            value={item.received_quantity}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              const updated = [...grnItems];
+                              updated[idx].received_quantity = val;
+                              updated[idx].accepted_quantity = Math.max(0, val - updated[idx].rejected_quantity);
+                              setGrnItems(updated);
+                            }}
+                            className="os-input text-center font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="os-label text-[10px]">Accepted Qty</label>
+                          <input
+                            type="number"
+                            value={item.accepted_quantity}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              const updated = [...grnItems];
+                              updated[idx].accepted_quantity = val;
+                              updated[idx].rejected_quantity = Math.max(0, updated[idx].received_quantity - val);
+                              setGrnItems(updated);
+                            }}
+                            className="os-input text-center text-emerald-600 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="os-label text-[10px]">Rejected Qty</label>
+                          <input
+                            type="number"
+                            value={item.rejected_quantity}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              const updated = [...grnItems];
+                              updated[idx].rejected_quantity = val;
+                              updated[idx].accepted_quantity = Math.max(0, updated[idx].received_quantity - val);
+                              setGrnItems(updated);
+                            }}
+                            className="os-input text-center text-rose-600 font-bold"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="os-label text-[10px]">Rejected Qty</label>
-                        <input
-                          type="number"
-                          value={item.rejected_quantity}
-                          onChange={(e) => {
-                            const val = Number(e.target.value);
-                            const updated = [...grnItems];
-                            updated[idx].rejected_quantity = val;
-                            updated[idx].accepted_quantity = Math.max(0, updated[idx].received_quantity - val);
-                            setGrnItems(updated);
-                          }}
-                          className="os-input text-rose-600 font-bold"
-                        />
-                      </div>
+
+                      {item.rejected_quantity > 0 && (
+                        <div>
+                          <label className="os-label text-[10px]">Rejection Reason / Defect Notes</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Damaged during transit / specs mismatch"
+                            value={item.rejection_reason || ''}
+                            onChange={(e) => {
+                              const updated = [...grnItems];
+                              updated[idx].rejection_reason = e.target.value;
+                              setGrnItems(updated);
+                            }}
+                            className="os-input text-rose-600 dark:text-rose-400"
+                          />
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               <div className="os-modal-foot">
                 <button type="button" onClick={() => setIsGrnModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
                   {isSubmitting ? 'Logging...' : 'Log Goods Received Note'}
                 </button>
               </div>
@@ -1527,17 +1596,27 @@ export default function ProcurementWorkspace() {
         </div>
       )}
 
-      {/* 7. PURCHASE BILL MODAL */}
+      {/* 7. PURCHASE BILL MODAL (1000px) */}
       {isBillModalOpen && (
         <div className="os-modal-backdrop">
-          <div className="os-modal-content max-w-xl">
+          <div className="os-modal-content os-modal-2xl">
             <div className="os-modal-head">
-              <h3>Record Purchase Bill / Vendor Invoice</h3>
-              <button onClick={() => setIsBillModalOpen(false)}><X size={16} /></button>
+              <h3 className="flex items-center gap-2">
+                <Receipt size={18} className="text-emerald-500" /> Record Purchase Bill / Vendor Invoice
+              </h3>
+              <button onClick={() => setIsBillModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
             </div>
-            {modalError && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-600 text-xs rounded-xl mb-3">{modalError}</div>}
-            <form onSubmit={handleCreateBill} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateBill} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="os-label">Select Vendor *</label>
                   <select
@@ -1546,7 +1625,7 @@ export default function ProcurementWorkspace() {
                     onChange={(e) => setBillForm({ ...billForm, vendor_id: e.target.value })}
                     className="os-input"
                   >
-                    <option value="">Select Vendor</option>
+                    <option value="">-- Select Vendor --</option>
                     {vendors.map(v => <option key={v.id} value={v.id}>{v.vendor_name}</option>)}
                   </select>
                 </div>
@@ -1557,21 +1636,21 @@ export default function ProcurementWorkspace() {
                     onChange={(e) => setBillForm({ ...billForm, purchase_order_id: e.target.value })}
                     className="os-input"
                   >
-                    <option value="">No PO Linkage</option>
+                    <option value="">-- No PO Linkage --</option>
                     {purchaseOrders.map(po => <option key={po.id} value={po.id}>{po.po_no || po.id.slice(0,8)}</option>)}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
                 <div>
-                  <label className="os-label">Vendor Bill #</label>
+                  <label className="os-label">Vendor Bill / Invoice #</label>
                   <input
                     type="text"
                     placeholder="e.g. INV-9901"
                     value={billForm.vendor_bill_no}
                     onChange={(e) => setBillForm({ ...billForm, vendor_bill_no: e.target.value })}
-                    className="os-input"
+                    className="os-input font-mono uppercase"
                   />
                 </div>
                 <div>
@@ -1584,7 +1663,7 @@ export default function ProcurementWorkspace() {
                   />
                 </div>
                 <div>
-                  <label className="os-label">Due Date</label>
+                  <label className="os-label">Payment Due Date</label>
                   <input
                     type="date"
                     value={billForm.due_date}
@@ -1594,68 +1673,200 @@ export default function ProcurementWorkspace() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="os-label">Billed Items Breakdown</label>
-                {billItems.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <input
-                      type="text"
-                      placeholder="Item Description"
-                      value={item.item_description}
-                      onChange={(e) => {
-                        const updated = [...billItems];
-                        updated[idx].item_description = e.target.value;
-                        setBillItems(updated);
-                      }}
-                      className="os-input col-span-5"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const updated = [...billItems];
-                        updated[idx].quantity = Number(e.target.value);
-                        setBillItems(updated);
-                      }}
-                      className="os-input col-span-3"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Unit Price"
-                      value={item.unit_price}
-                      onChange={(e) => {
-                        const updated = [...billItems];
-                        updated[idx].unit_price = Number(e.target.value);
-                        setBillItems(updated);
-                      }}
-                      className="os-input col-span-3"
-                    />
-                    {billItems.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setBillItems(billItems.filter((_, i) => i !== idx))}
-                        className="col-span-1 text-rose-500 hover:text-rose-700 flex justify-center"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setBillItems([...billItems, { item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }])}
-                  className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1 mt-1"
-                >
-                  <Plus size={13} /> Add Item
-                </button>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="os-label font-bold text-slate-700 dark:text-slate-300">Billed Line Items</label>
+                  <button
+                    type="button"
+                    onClick={() => setBillItems([...billItems, { item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }])}
+                    className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Billed Item
+                  </button>
+                </div>
+
+                <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800/80 rounded-t-xl text-[10px] uppercase font-black tracking-wider text-slate-500 border border-slate-200 dark:border-slate-700">
+                  <div className="col-span-5">Item Description & Specifications</div>
+                  <div className="col-span-2 text-center">Billed Qty</div>
+                  <div className="col-span-3 text-right">Unit Price (₹)</div>
+                  <div className="col-span-2 text-right">Line Total (₹)</div>
+                </div>
+
+                <div className="space-y-2 md:space-y-0 md:divide-y md:divide-slate-200 dark:md:divide-slate-800 md:border md:border-t-0 md:border-slate-200 dark:md:border-slate-800 md:rounded-b-xl overflow-hidden">
+                  {billItems.map((item, idx) => {
+                    const total = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
+                    return (
+                      <div key={idx} className="p-3 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                        <div className="md:col-span-5">
+                          <label className="md:hidden os-label">Item Description</label>
+                          <input
+                            type="text"
+                            placeholder="Item description & specs"
+                            value={item.item_description}
+                            onChange={(e) => {
+                              const updated = [...billItems];
+                              updated[idx].item_description = e.target.value;
+                              setBillItems(updated);
+                            }}
+                            className="os-input"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="md:hidden os-label">Qty</label>
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...billItems];
+                              updated[idx].quantity = Number(e.target.value);
+                              setBillItems(updated);
+                            }}
+                            className="os-input text-center"
+                          />
+                        </div>
+                        <div className="md:col-span-3">
+                          <label className="md:hidden os-label">Unit Price (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            value={item.unit_price}
+                            onChange={(e) => {
+                              const updated = [...billItems];
+                              updated[idx].unit_price = Number(e.target.value);
+                              setBillItems(updated);
+                            }}
+                            className="os-input text-right"
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex items-center justify-between pl-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white">₹{total.toLocaleString('en-IN')}</span>
+                          {billItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setBillItems(billItems.filter((_, i) => i !== idx))}
+                              className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                              title="Remove Item"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="os-modal-foot">
                 <button type="button" onClick={() => setIsBillModalOpen(false)} className="os-secondary">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="os-primary">
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
                   {isSubmitting ? 'Recording...' : 'Record Purchase Bill'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. PAYMENT MODAL (600px) */}
+      {isPaymentModalOpen && (
+        <div className="os-modal-backdrop">
+          <div className="os-modal-content os-modal-sm">
+            <div className="os-modal-head">
+              <h3 className="flex items-center gap-2">
+                <DollarSign size={18} className="text-emerald-500" /> Record Vendor Payment
+              </h3>
+              <button onClick={() => setIsPaymentModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleRecordPayment} className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+              <div>
+                <label className="os-label">Select Purchase Bill *</label>
+                <select
+                  required
+                  value={paymentForm.purchase_bill_id}
+                  onChange={(e) => {
+                    const bill = purchaseBills.find(b => b.id === e.target.value);
+                    setPaymentForm({
+                      ...paymentForm,
+                      purchase_bill_id: e.target.value,
+                      vendor_id: bill ? bill.vendor_id : '',
+                      amount: bill ? Number(bill.balance_due) : 0
+                    });
+                  }}
+                  className="os-input"
+                >
+                  <option value="">-- Select Bill to Pay --</option>
+                  {purchaseBills.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.bill_no || b.id.slice(0, 8)} — Balance Due: ₹{Number(b.balance_due).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="os-label">Payment Date</label>
+                  <input
+                    type="date"
+                    value={paymentForm.payment_date}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Payment Mode</label>
+                  <select
+                    value={paymentForm.payment_mode}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, payment_mode: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="bank_transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="os-label">Payment Amount (₹) *</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })}
+                  className="os-input font-bold text-emerald-600 dark:text-emerald-400"
+                />
+              </div>
+
+              <div>
+                <label className="os-label">Reference Number (UTR / Cheque No)</label>
+                <input
+                  type="text"
+                  value={paymentForm.reference_number}
+                  onChange={(e) => setPaymentForm({ ...paymentForm, reference_number: e.target.value })}
+                  placeholder="e.g. UTR123456789"
+                  className="os-input font-mono"
+                />
+              </div>
+
+              <div className="os-modal-foot">
+                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="os-secondary">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="os-primary cursor-pointer">
+                  {isSubmitting ? 'Recording...' : 'Record Vendor Payment'}
                 </button>
               </div>
             </form>

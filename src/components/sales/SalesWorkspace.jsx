@@ -230,82 +230,117 @@ export default function SalesWorkspace() {
     }
   };
 
+  const [salesModalError, setSalesModalError] = useState(null);
+  const [isSubmittingProforma, setIsSubmittingProforma] = useState(false);
+  const [isSubmittingTaxInvoice, setIsSubmittingTaxInvoice] = useState(false);
+
   const handleSaveProforma = async (e) => {
     e.preventDefault();
+    setSalesModalError(null);
     if (!piForm.company_id) {
-      alert('Please select a customer company');
+      setSalesModalError('Please select a customer company');
       return;
     }
-    const computedItems = computeLineTotals(piItems);
-    const totals = computeHeaderTotals(computedItems);
-    const selectedCompany = companies.find(c => c.id === piForm.company_id);
+    if (isSubmittingProforma) return;
+    setIsSubmittingProforma(true);
+    try {
+      const computedItems = computeLineTotals(piItems);
+      const totals = computeHeaderTotals(computedItems);
+      const selectedCompany = companies.find(c => c.id === piForm.company_id);
 
-    const header = {
-      company_id: piForm.company_id,
-      enquiry_id: piForm.enquiry_id || null,
-      work_id: piForm.work_id || null,
-      customer_name: selectedCompany?.name || '',
-      pi_date: piForm.pi_date,
-      due_date: piForm.due_date,
-      customer_gstin: piForm.customer_gstin,
-      place_of_supply: piForm.place_of_supply,
-      subtotal: totals.subtotal,
-      cgst_amount: totals.cgst_amount,
-      sgst_amount: totals.sgst_amount,
-      igst_amount: 0,
-      tax_amount: totals.tax_amount,
-      total_amount: totals.total_amount,
-      notes: piForm.notes,
-      status: 'issued'
-    };
+      const header = {
+        company_id: piForm.company_id,
+        sales_order_id: piForm.sales_order_id || null,
+        enquiry_id: piForm.enquiry_id || null,
+        work_id: piForm.work_id || null,
+        customer_name: selectedCompany?.name || '',
+        pi_date: piForm.pi_date,
+        due_date: piForm.due_date,
+        customer_gstin: piForm.customer_gstin,
+        place_of_supply: piForm.place_of_supply,
+        subtotal: totals.subtotal,
+        cgst_amount: totals.cgst_amount,
+        sgst_amount: totals.sgst_amount,
+        igst_amount: 0,
+        tax_amount: totals.tax_amount,
+        total_amount: totals.total_amount,
+        notes: piForm.notes,
+        status: 'issued'
+      };
 
-    const res = await createProformaInvoice(header, computedItems);
-    if (res.success) {
-      setIsProformaModalOpen(false);
-    } else {
-      alert('Failed to create Proforma Invoice: ' + res.error);
+      const res = await createProformaInvoice(header, computedItems);
+      if (res.success) {
+        setIsProformaModalOpen(false);
+        setPiForm({ company_id: '', enquiry_id: '', work_id: '', sales_order_id: '', pi_date: new Date().toISOString().slice(0, 10), due_date: new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10), customer_gstin: '', place_of_supply: 'Maharashtra (27)', notes: '' });
+        setPiItems([{ item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
+      } else {
+        setSalesModalError(res.error || 'Failed to create Proforma Invoice');
+      }
+    } catch (err) {
+      setSalesModalError(err.message || 'Failed to create Proforma Invoice');
+    } finally {
+      setIsSubmittingProforma(false);
     }
   };
 
   const handleIssueTaxInvoice = async (e) => {
     e.preventDefault();
+    setSalesModalError(null);
     if (!invForm.company_id) {
-      alert('Please select a customer company');
+      setSalesModalError('Please select a customer company');
       return;
     }
-    const computedItems = computeLineTotals(invItems);
-    const totals = computeHeaderTotals(computedItems);
-    const selectedCompany = companies.find(c => c.id === invForm.company_id);
+    if (invForm.sales_order_id) {
+      const selectedSo = salesOrders.find(so => so.id === invForm.sales_order_id);
+      if (selectedSo && selectedSo.company_id && selectedSo.company_id !== invForm.company_id) {
+        setSalesModalError('Cross-company validation error: Sales Order does not belong to the selected customer company.');
+        return;
+      }
+    }
+    if (isSubmittingTaxInvoice) return;
+    setIsSubmittingTaxInvoice(true);
+    try {
+      const computedItems = computeLineTotals(invItems);
+      const totals = computeHeaderTotals(computedItems);
+      const selectedCompany = companies.find(c => c.id === invForm.company_id);
 
-    const header = {
-      company_id: invForm.company_id,
-      enquiry_id: invForm.enquiry_id || null,
-      work_id: invForm.work_id || null,
-      customer_name: selectedCompany?.name || '',
-      invoice_date: invForm.invoice_date,
-      due_date: invForm.due_date,
-      customer_gstin: invForm.customer_gstin,
-      place_of_supply: invForm.place_of_supply,
-      subtotal: totals.subtotal,
-      cgst_amount: totals.cgst_amount,
-      sgst_amount: totals.sgst_amount,
-      igst_amount: 0,
-      tax_amount: totals.tax_amount,
-      total_amount: totals.total_amount,
-      notes: invForm.notes
-    };
+      const header = {
+        company_id: invForm.company_id,
+        sales_order_id: invForm.sales_order_id || null,
+        enquiry_id: invForm.enquiry_id || null,
+        work_id: invForm.work_id || null,
+        customer_name: selectedCompany?.name || '',
+        invoice_date: invForm.invoice_date,
+        due_date: invForm.due_date,
+        customer_gstin: invForm.customer_gstin,
+        place_of_supply: invForm.place_of_supply,
+        subtotal: totals.subtotal,
+        cgst_amount: totals.cgst_amount,
+        sgst_amount: totals.sgst_amount,
+        igst_amount: 0,
+        tax_amount: totals.tax_amount,
+        total_amount: totals.total_amount,
+        notes: invForm.notes
+      };
 
-    const res = await issueTaxInvoice(header, computedItems);
-    if (res.success) {
-      setIsTaxInvoiceModalOpen(false);
-    } else {
-      alert('Failed to issue Tax Invoice: ' + res.error);
+      const res = await issueTaxInvoice(header, computedItems);
+      if (res.success) {
+        setIsTaxInvoiceModalOpen(false);
+        setInvForm({ company_id: '', enquiry_id: '', work_id: '', sales_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), customer_gstin: '', place_of_supply: 'Maharashtra (27)', notes: '' });
+        setInvItems([{ item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
+      } else {
+        setSalesModalError(res.error || 'Failed to issue Tax Invoice');
+      }
+    } catch (err) {
+      setSalesModalError(err.message || 'Failed to issue Tax Invoice');
+    } finally {
+      setIsSubmittingTaxInvoice(false);
     }
   };
 
   const handleRecordPaymentSubmit = async (e) => {
     e.preventDefault();
-    if (!payForm.tax_invoice_id || !payForm.amount || payForm.amount <= 0) {
+    if (!payForm.tax_invoice_id || !payForm.amount || Number(payForm.amount) <= 0) {
       alert('Please select a valid tax invoice and enter a positive payment amount');
       return;
     }
@@ -976,6 +1011,599 @@ export default function SalesWorkspace() {
                   className="os-primary text-xs px-5 py-2 cursor-pointer"
                 >
                   {isLoading ? 'Saving...' : 'Save & Issue Quotation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- NEW PROFORMA MODAL --- */}
+      {isProformaModalOpen && (
+        <div className="os-modal-backdrop">
+          <div className="os-modal-content os-modal-2xl">
+            <div className="os-modal-head">
+              <h3 className="flex items-center gap-2">
+                <Receipt size={18} className="text-sky-500" /> Create New Proforma Invoice
+              </h3>
+              <button onClick={() => setIsProformaModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {salesModalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {salesModalError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProforma} className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+              {/* Section 1: Customer & Order Linkage */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="os-label">Customer Company *</label>
+                  <select
+                    required
+                    value={piForm.company_id}
+                    onChange={(e) => setPiForm({ ...piForm, company_id: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="">-- Select Customer Company --</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="os-label">Link Sales Order (Optional)</label>
+                  <select
+                    value={piForm.sales_order_id || ''}
+                    onChange={(e) => {
+                      const soId = e.target.value;
+                      const so = salesOrders.find(o => o.id === soId);
+                      if (so) {
+                        setPiForm({
+                          ...piForm,
+                          sales_order_id: soId,
+                          company_id: so.company_id || piForm.company_id,
+                          enquiry_id: so.enquiry_id || piForm.enquiry_id,
+                          work_id: so.work_id || piForm.work_id,
+                          customer_gstin: so.customer_gstin || piForm.customer_gstin,
+                          place_of_supply: so.place_of_supply || piForm.place_of_supply
+                        });
+                        if (so.items && so.items.length > 0) {
+                          setPiItems(so.items.map(item => ({
+                            item_description: item.item_description,
+                            hsn_sac_code: item.hsn_sac_code || '998311',
+                            quantity: Number(item.quantity) || 1,
+                            unit_price: Number(item.unit_price) || 0,
+                            gst_rate_pct: Number(item.gst_rate_pct) || 18
+                          })));
+                        }
+                      } else {
+                        setPiForm({ ...piForm, sales_order_id: '' });
+                      }
+                    }}
+                    className="os-input"
+                  >
+                    <option value="">-- Direct Proforma (No Order Linkage) --</option>
+                    {salesOrders.map(so => (
+                      <option key={so.id} value={so.id}>
+                        {so.so_no || `SO-${so.id.slice(0,6)}`} - {so.company?.name || so.customer_name} (₹{Number(so.total_amount || 0).toLocaleString('en-IN')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="os-label">Linked Project (Optional)</label>
+                  <select
+                    value={piForm.work_id}
+                    onChange={(e) => setPiForm({ ...piForm, work_id: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="">-- None / Select Project --</option>
+                    {works.map(w => (
+                      <option key={w.id} value={w.id}>{w.title}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Section 2: Financial & Supply Attributes */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+                <div>
+                  <label className="os-label">Proforma Date</label>
+                  <input
+                    type="date"
+                    value={piForm.pi_date}
+                    onChange={(e) => setPiForm({ ...piForm, pi_date: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Due Date</label>
+                  <input
+                    type="date"
+                    value={piForm.due_date}
+                    onChange={(e) => setPiForm({ ...piForm, due_date: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Customer GSTIN</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 27AAAAA0000A1Z5"
+                    value={piForm.customer_gstin}
+                    onChange={(e) => setPiForm({ ...piForm, customer_gstin: e.target.value })}
+                    className="os-input font-mono uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Place of Supply</label>
+                  <input
+                    type="text"
+                    value={piForm.place_of_supply}
+                    onChange={(e) => setPiForm({ ...piForm, place_of_supply: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Line Items */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Proforma Line Items</h4>
+                  <button
+                    type="button"
+                    onClick={() => setPiItems([...piItems, { item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }])}
+                    className="text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Line Item
+                  </button>
+                </div>
+
+                {/* Table Header Row */}
+                <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800/80 rounded-t-xl text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  <div className="col-span-4">Item Description & Specifications</div>
+                  <div className="col-span-2 text-center">HSN / SAC Code</div>
+                  <div className="col-span-1 text-center">Qty</div>
+                  <div className="col-span-2 text-right">Unit Price (₹)</div>
+                  <div className="col-span-1 text-center">GST %</div>
+                  <div className="col-span-2 text-right">Line Total (₹)</div>
+                </div>
+
+                <div className="space-y-2 md:space-y-0 md:divide-y md:divide-slate-200 dark:md:divide-slate-800 md:border md:border-t-0 md:border-slate-200 dark:md:border-slate-800 md:rounded-b-xl overflow-hidden">
+                  {piItems.map((item, idx) => {
+                    const lineVal = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
+                    const lineGst = (lineVal * (Number(item.gst_rate_pct) || 0)) / 100;
+                    return (
+                      <div key={idx} className="p-3 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                        <div className="md:col-span-4">
+                          <label className="md:hidden os-label">Item Description</label>
+                          <input
+                            type="text"
+                            placeholder="Item description & specs"
+                            value={item.item_description}
+                            onChange={(e) => {
+                              const updated = [...piItems];
+                              updated[idx].item_description = e.target.value;
+                              setPiItems(updated);
+                            }}
+                            className="os-input"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="md:hidden os-label">HSN / SAC Code</label>
+                          <input
+                            type="text"
+                            placeholder="998311"
+                            value={item.hsn_sac_code}
+                            onChange={(e) => {
+                              const updated = [...piItems];
+                              updated[idx].hsn_sac_code = e.target.value;
+                              setPiItems(updated);
+                            }}
+                            className="os-input font-mono text-center uppercase"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="md:hidden os-label">Qty</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...piItems];
+                              updated[idx].quantity = e.target.value;
+                              setPiItems(updated);
+                            }}
+                            className="os-input text-center"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="md:hidden os-label">Unit Price (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0.00"
+                            value={item.unit_price}
+                            onChange={(e) => {
+                              const updated = [...piItems];
+                              updated[idx].unit_price = e.target.value;
+                              setPiItems(updated);
+                            }}
+                            className="os-input text-right"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="md:hidden os-label">GST %</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="28"
+                            placeholder="18"
+                            value={item.gst_rate_pct}
+                            onChange={(e) => {
+                              const updated = [...piItems];
+                              updated[idx].gst_rate_pct = e.target.value;
+                              setPiItems(updated);
+                            }}
+                            className="os-input text-center"
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex items-center justify-between pl-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white">₹{(lineVal + lineGst).toLocaleString('en-IN')}</span>
+                          {piItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setPiItems(piItems.filter((_, i) => i !== idx))}
+                              className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                              title="Delete Item"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 4: Totals Summary Card */}
+              {(() => {
+                const sub = piItems.reduce((acc, i) => acc + ((Number(i.quantity)||0) * (Number(i.unit_price)||0)), 0);
+                const tax = piItems.reduce((acc, i) => acc + (((Number(i.quantity)||0) * (Number(i.unit_price)||0) * (Number(i.gst_rate_pct)||0))/100), 0);
+                const total = sub + tax;
+                return (
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 gap-3 text-xs">
+                    <div className="text-slate-500 dark:text-slate-400">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 block">{piItems.length} Line Item{piItems.length !== 1 ? 's' : ''} Included</span>
+                      <span className="text-[10px]">All monetary amounts calculated in Indian Rupees (INR ₹)</span>
+                    </div>
+                    <div className="flex items-center gap-6 text-right ml-auto">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Subtotal</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">₹{sub.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">GST Tax</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">₹{tax.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="pl-4 border-l border-slate-200 dark:border-slate-800">
+                        <span className="text-[10px] uppercase font-black text-sky-600 dark:text-sky-400 block">Grand Total</span>
+                        <span className="text-base font-black text-slate-900 dark:text-white">₹{total.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="os-modal-foot">
+                <button type="button" onClick={() => setIsProformaModalOpen(false)} className="os-secondary">Cancel</button>
+                <button type="submit" disabled={isSubmittingProforma} className="os-primary cursor-pointer">
+                  {isSubmittingProforma ? 'Generating...' : 'Generate Proforma Invoice'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- ISSUE TAX INVOICE MODAL --- */}
+      {isTaxInvoiceModalOpen && (
+        <div className="os-modal-backdrop">
+          <div className="os-modal-content os-modal-2xl">
+            <div className="os-modal-head">
+              <h3 className="flex items-center gap-2">
+                <Receipt size={18} className="text-emerald-500" /> Issue Tax Invoice (Server-Authoritative RPC)
+              </h3>
+              <button onClick={() => setIsTaxInvoiceModalOpen(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                <X size={18} />
+              </button>
+            </div>
+
+            {salesModalError && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} /> {salesModalError}
+              </div>
+            )}
+
+            <form onSubmit={handleIssueTaxInvoice} className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+              {/* Section 1: Order & Customer Linkage */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="os-label">Linked Sales Order *</label>
+                  <select
+                    required
+                    value={invForm.sales_order_id || ''}
+                    onChange={(e) => {
+                      const soId = e.target.value;
+                      const so = salesOrders.find(o => o.id === soId);
+                      if (so) {
+                        setInvForm({
+                          ...invForm,
+                          sales_order_id: soId,
+                          company_id: so.company_id,
+                          enquiry_id: so.enquiry_id || invForm.enquiry_id,
+                          work_id: so.work_id || invForm.work_id,
+                          customer_gstin: so.customer_gstin || invForm.customer_gstin,
+                          place_of_supply: so.place_of_supply || invForm.place_of_supply
+                        });
+                        if (so.items && so.items.length > 0) {
+                          setInvItems(so.items.map(item => ({
+                            item_description: item.item_description,
+                            hsn_sac_code: item.hsn_sac_code || '998311',
+                            quantity: Number(item.quantity) || 1,
+                            unit_price: Number(item.unit_price) || 0,
+                            gst_rate_pct: Number(item.gst_rate_pct) || 18
+                          })));
+                        }
+                      } else {
+                        setInvForm({ ...invForm, sales_order_id: '' });
+                      }
+                    }}
+                    className="os-input"
+                  >
+                    <option value="">-- Select Sales Order --</option>
+                    {salesOrders.map(so => (
+                      <option key={so.id} value={so.id}>
+                        {so.so_no || `SO-${so.id.slice(0,6)}`} - {so.company?.name || so.customer_name} (Total: ₹{Number(so.total_amount || 0).toLocaleString('en-IN')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="os-label">Customer Company *</label>
+                  <select
+                    required
+                    value={invForm.company_id}
+                    onChange={(e) => setInvForm({ ...invForm, company_id: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="">-- Select Customer Company --</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="os-label">Linked Project (Optional)</label>
+                  <select
+                    value={invForm.work_id}
+                    onChange={(e) => setInvForm({ ...invForm, work_id: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="">-- None / Select Project --</option>
+                    {works.map(w => (
+                      <option key={w.id} value={w.id}>{w.title}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Section 2: Dates & Tax Attributes */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+                <div>
+                  <label className="os-label">Invoice Date</label>
+                  <input
+                    type="date"
+                    value={invForm.invoice_date}
+                    onChange={(e) => setInvForm({ ...invForm, invoice_date: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Due Date</label>
+                  <input
+                    type="date"
+                    value={invForm.due_date}
+                    onChange={(e) => setInvForm({ ...invForm, due_date: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Customer GSTIN</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 27AAAAA0000A1Z5"
+                    value={invForm.customer_gstin}
+                    onChange={(e) => setInvForm({ ...invForm, customer_gstin: e.target.value })}
+                    className="os-input font-mono uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="os-label">Place of Supply</label>
+                  <input
+                    type="text"
+                    value={invForm.place_of_supply}
+                    onChange={(e) => setInvForm({ ...invForm, place_of_supply: e.target.value })}
+                    className="os-input"
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Tax Invoice Line Items */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Tax Invoice Line Items</h4>
+                  <button
+                    type="button"
+                    onClick={() => setInvItems([...invItems, { item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }])}
+                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Line Item
+                  </button>
+                </div>
+
+                {/* Table Header Row */}
+                <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800/80 rounded-t-xl text-[10px] uppercase font-black tracking-wider text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  <div className="col-span-4">Item Description & Specifications</div>
+                  <div className="col-span-2 text-center">HSN / SAC Code</div>
+                  <div className="col-span-1 text-center">Qty</div>
+                  <div className="col-span-2 text-right">Unit Price (₹)</div>
+                  <div className="col-span-1 text-center">GST %</div>
+                  <div className="col-span-2 text-right">Line Total (₹)</div>
+                </div>
+
+                <div className="space-y-2 md:space-y-0 md:divide-y md:divide-slate-200 dark:md:divide-slate-800 md:border md:border-t-0 md:border-slate-200 dark:md:border-slate-800 md:rounded-b-xl overflow-hidden">
+                  {invItems.map((item, idx) => {
+                    const lineVal = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0);
+                    const lineGst = (lineVal * (Number(item.gst_rate_pct) || 0)) / 100;
+                    return (
+                      <div key={idx} className="p-3 bg-white dark:bg-slate-900 grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-xs">
+                        <div className="md:col-span-4">
+                          <label className="md:hidden os-label">Item Description</label>
+                          <input
+                            type="text"
+                            placeholder="Item description & specs"
+                            value={item.item_description}
+                            onChange={(e) => {
+                              const updated = [...invItems];
+                              updated[idx].item_description = e.target.value;
+                              setInvItems(updated);
+                            }}
+                            className="os-input"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="md:hidden os-label">HSN / SAC Code</label>
+                          <input
+                            type="text"
+                            placeholder="998311"
+                            value={item.hsn_sac_code}
+                            onChange={(e) => {
+                              const updated = [...invItems];
+                              updated[idx].hsn_sac_code = e.target.value;
+                              setInvItems(updated);
+                            }}
+                            className="os-input font-mono text-center uppercase"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="md:hidden os-label">Qty</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...invItems];
+                              updated[idx].quantity = e.target.value;
+                              setInvItems(updated);
+                            }}
+                            className="os-input text-center"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="md:hidden os-label">Unit Price (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="0.00"
+                            value={item.unit_price}
+                            onChange={(e) => {
+                              const updated = [...invItems];
+                              updated[idx].unit_price = e.target.value;
+                              setInvItems(updated);
+                            }}
+                            className="os-input text-right"
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="md:hidden os-label">GST %</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="28"
+                            placeholder="18"
+                            value={item.gst_rate_pct}
+                            onChange={(e) => {
+                              const updated = [...invItems];
+                              updated[idx].gst_rate_pct = e.target.value;
+                              setInvItems(updated);
+                            }}
+                            className="os-input text-center"
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex items-center justify-between pl-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white">₹{(lineVal + lineGst).toLocaleString('en-IN')}</span>
+                          {invItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setInvItems(invItems.filter((_, i) => i !== idx))}
+                              className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer"
+                              title="Delete Item"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 4: Totals Summary Card */}
+              {(() => {
+                const sub = invItems.reduce((acc, i) => acc + ((Number(i.quantity)||0) * (Number(i.unit_price)||0)), 0);
+                const tax = invItems.reduce((acc, i) => acc + (((Number(i.quantity)||0) * (Number(i.unit_price)||0) * (Number(i.gst_rate_pct)||0))/100), 0);
+                const total = sub + tax;
+                return (
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 gap-3 text-xs">
+                    <div className="text-slate-500 dark:text-slate-400">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 block">{invItems.length} Line Item{invItems.length !== 1 ? 's' : ''} Included</span>
+                      <span className="text-[10px]">All monetary amounts calculated in Indian Rupees (INR ₹)</span>
+                    </div>
+                    <div className="flex items-center gap-6 text-right ml-auto">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Subtotal</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">₹{sub.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">GST Tax</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">₹{tax.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="pl-4 border-l border-slate-200 dark:border-slate-800">
+                        <span className="text-[10px] uppercase font-black text-emerald-600 dark:text-emerald-400 block">Grand Total</span>
+                        <span className="text-base font-black text-slate-900 dark:text-white">₹{total.toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="os-modal-foot">
+                <button type="button" onClick={() => setIsTaxInvoiceModalOpen(false)} className="os-secondary">Cancel</button>
+                <button type="submit" disabled={isSubmittingTaxInvoice} className="os-primary bg-emerald-600 hover:bg-emerald-500 border-emerald-600 cursor-pointer">
+                  {isSubmittingTaxInvoice ? 'Issuing via RPC...' : 'Issue Tax Invoice'}
                 </button>
               </div>
             </form>
