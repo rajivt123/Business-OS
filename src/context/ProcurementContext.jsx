@@ -346,52 +346,36 @@ export function ProcurementProvider({ children }) {
     }
     setIsLoading(true);
     try {
+      const idempotencyKey = headerPayload.idempotency_key || `grn-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const header = {
         tenant_id: tenantId,
-        tenant_company_id: activeOperatingCompanyId,
+        company_id: activeOperatingCompanyId,
+        operating_company_id: activeOperatingCompanyId,
         received_by: authUserId,
         status: 'received',
+        idempotency_key: idempotencyKey,
         ...headerPayload
       };
 
       const items = (itemsPayload || []).map(item => ({
         tenant_id: header.tenant_id,
-        tenant_company_id: header.tenant_company_id,
-        ...item
+        company_id: header.company_id,
+        operating_company_id: header.operating_company_id,
+        purchase_order_item_id: item.purchase_order_item_id || item.po_item_id || null,
+        item_id: item.item_id || null,
+        received_quantity: Number(item.received_quantity) || 0,
+        accepted_quantity: Number(item.accepted_quantity) || 0,
+        rejected_quantity: Number(item.rejected_quantity) || 0,
+        unit_price: Number(item.unit_price) || 0,
+        item_description: item.item_description || ''
       }));
 
-      let accountingObj = null;
-      if (activeOperatingCompanyId) {
-        const { data: coa } = await supabase
-          .from('chart_of_accounts')
-          .select('id, account_type, account_subtype, account_code, control_account_type')
-          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`);
-
-        const invAcc = coa?.find(a => a.control_account_type === 'inventory_asset' || a.account_subtype === 'inventory' || a.account_code === '1050' || a.account_code === 'QA-1050' || a.account_type === 'asset');
-        const grniAcc = coa?.find(a => a.control_account_type === 'grni_clearing' || a.account_subtype === 'grni' || a.account_code === '2050' || a.account_code === 'QA-2050' || a.account_type === 'liability');
-
-        if (invAcc?.id && grniAcc?.id) {
-          accountingObj = {
-            post_accounting: true,
-            inventory_account_id: invAcc.id,
-            grni_account_id: grniAcc.id
-          };
-        }
-      }
-
-      // Sole Production Path: Server-authoritative atomic wrapper RPC
       const { data, error: rpcError } = await supabase.rpc('create_goods_received_note_with_accounting_atomic', {
-        p_header_json: header,
-        p_items_json: items,
-        p_accounting_json: accountingObj
+        p_header: header,
+        p_items: items
       });
 
-      if (rpcError) {
-        if (rpcError.message?.includes('schema cache') || rpcError.code === 'PGRST202') {
-          throw new Error('Database Deployment Error: create_goods_received_note_with_accounting_atomic wrapper RPC is missing or not deployed on Supabase.');
-        }
-        throw rpcError;
-      }
+      if (rpcError) throw rpcError;
 
       await fetchGoodsReceivedNotes(activeOperatingCompanyId);
       return { success: true, data };
@@ -404,76 +388,43 @@ export function ProcurementProvider({ children }) {
   };
 
   // 7. Create Purchase Bill with Authoritative Atomic Server Wrapper
-  const createPurchaseBill = async (headerPayload, itemsPayload) => {
+  const createPurchaseBill = async (headerPayload, itemsPayload = []) => {
     if (!isManagementOrAdmin) {
       throw new Error('Access denied: Purchase Bill recording requires Manager or Admin permissions.');
     }
     setIsLoading(true);
     try {
       const grandTotal = Number(headerPayload.total_amount || headerPayload.balance_due) || 0;
+      const idempotencyKey = headerPayload.idempotency_key || `bill-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const header = {
         tenant_id: tenantId,
-        tenant_company_id: activeOperatingCompanyId,
+        company_id: activeOperatingCompanyId,
+        operating_company_id: activeOperatingCompanyId,
         created_by: authUserId,
         status: 'pending',
         amount_paid: 0,
         balance_due: grandTotal,
+        idempotency_key: idempotencyKey,
         ...headerPayload
       };
 
       const items = (itemsPayload || []).map(item => ({
         tenant_id: header.tenant_id,
-        tenant_company_id: header.tenant_company_id,
-        ...item
+        company_id: header.company_id,
+        operating_company_id: header.operating_company_id,
+        item_description: item.item_description || '',
+        item_code: item.item_code || item.code || '',
+        quantity: Number(item.quantity) || 1,
+        unit_price: Number(item.unit_price) || 0,
+        line_total: Number(item.line_total) || (Number(item.quantity) * Number(item.unit_price))
       }));
 
-      let accountingObj = null;
-      if (grandTotal > 0 && activeOperatingCompanyId) {
-        const { data: coa } = await supabase
-          .from('chart_of_accounts')
-          .select('id, account_type, account_subtype, account_code, control_account_type')
-          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`);
-
-        const apAcc = coa?.find(a => a.control_account_type === 'accounts_payable' || a.account_subtype === 'payable' || a.account_code === '2010' || a.account_code === 'QA-2010' || a.account_type === 'liability');
-        const grniAcc = coa?.find(a => a.control_account_type === 'grni_clearing' || a.account_subtype === 'grni' || a.account_code === '2050' || a.account_code === 'QA-2050');
-        const expenseAcc = coa?.find(a => a.control_account_type === 'purchase_expense' || a.account_subtype === 'purchase' || a.account_code === '5010' || a.account_code === 'QA-5010' || a.account_type === 'expense');
-        const ppvAcc = coa?.find(a => a.control_account_type === 'purchase_price_variance' || a.account_subtype === 'ppv' || a.account_code === '5020' || a.account_code === 'QA-5020');
-
-        const cgstAmt = Number(headerPayload.cgst_amount) || 0;
-        const sgstAmt = Number(headerPayload.sgst_amount) || 0;
-        const igstAmt = Number(headerPayload.igst_amount) || 0;
-
-        const cgstAcc = cgstAmt > 0 ? coa?.find(a => a.control_account_type === 'input_cgst' || a.account_code === '1030' || a.account_code === 'QA-1030') : null;
-        const sgstAcc = sgstAmt > 0 ? coa?.find(a => a.control_account_type === 'input_sgst' || a.account_code === '1040' || a.account_code === 'QA-1040') : null;
-        const igstAcc = igstAmt > 0 ? coa?.find(a => a.control_account_type === 'input_igst' || a.account_code === '1050' || a.account_code === 'QA-1050') : null;
-
-        if (apAcc?.id && (grniAcc?.id || expenseAcc?.id)) {
-          accountingObj = {
-            post_accounting: true,
-            ap_account_id: apAcc.id,
-            grni_account_id: grniAcc?.id || null,
-            expense_account_id: expenseAcc?.id || null,
-            ppv_account_id: ppvAcc?.id || null,
-            cgst_account_id: cgstAcc?.id || null,
-            sgst_account_id: sgstAcc?.id || null,
-            igst_account_id: igstAcc?.id || null
-          };
-        }
-      }
-
-      // Sole Production Path: Server-authoritative atomic wrapper RPC
       const { data, error: rpcError } = await supabase.rpc('create_purchase_bill_with_accounting_atomic', {
-        p_header_json: header,
-        p_items_json: items,
-        p_accounting_json: accountingObj
+        p_header: header,
+        p_items: items
       });
 
-      if (rpcError) {
-        if (rpcError.message?.includes('schema cache') || rpcError.code === 'PGRST202') {
-          throw new Error('Database Deployment Error: create_purchase_bill_with_accounting_atomic wrapper RPC is missing or not deployed on Supabase.');
-        }
-        throw rpcError;
-      }
+      if (rpcError) throw rpcError;
 
       await fetchPurchaseBills(activeOperatingCompanyId);
       return { success: true, data };
@@ -492,57 +443,22 @@ export function ProcurementProvider({ children }) {
     }
     setIsLoading(true);
     try {
+      const idempotencyKey = paymentPayload.idempotency_key || `pay-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const payload = {
         tenant_id: tenantId,
-        tenant_company_id: activeOperatingCompanyId,
+        company_id: activeOperatingCompanyId,
+        operating_company_id: activeOperatingCompanyId,
         recorded_by: authUserId,
         payment_date: new Date().toISOString().slice(0, 10),
+        idempotency_key: idempotencyKey,
         ...paymentPayload
       };
 
-      const pmtAmount = Number(payload.amount) || 0;
-      let accountingObj = null;
-
-      if (pmtAmount > 0 && activeOperatingCompanyId) {
-        const { data: coa } = await supabase
-          .from('chart_of_accounts')
-          .select('id, account_type, account_subtype, account_code, control_account_type')
-          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`);
-
-        const apAcc = coa?.find(a => a.control_account_type === 'accounts_payable' || a.account_subtype === 'payable' || a.account_code === '2010' || a.account_code === 'QA-2010' || a.account_type === 'liability');
-        const { data: bnkData } = await supabase
-          .from('accounting_bank_accounts')
-          .select('id, ledger_account_id')
-          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`)
-          .limit(1);
-
-        let bankOrCashAccId = bnkData && bnkData.length > 0 ? bnkData[0].ledger_account_id : null;
-        if (!bankOrCashAccId) {
-          const bankAcc = coa?.find(a => a.control_account_type === 'bank' || a.control_account_type === 'cash' || a.account_subtype === 'bank' || a.account_subtype === 'cash' || a.account_code === '1020' || a.account_code === 'QA-1020');
-          if (bankAcc) bankOrCashAccId = bankAcc.id;
-        }
-
-        if (apAcc?.id && bankOrCashAccId) {
-          accountingObj = {
-            post_accounting: true,
-            ap_account_id: apAcc.id,
-            bank_account_id: bankOrCashAccId
-          };
-        }
-      }
-
-      // Sole Production Path: Server-authoritative atomic wrapper RPC
       const { data, error: rpcError } = await supabase.rpc('record_purchase_payment_with_accounting_atomic', {
-        p_payment_json: payload,
-        p_accounting_json: accountingObj
+        p_payment: payload
       });
 
-      if (rpcError) {
-        if (rpcError.message?.includes('schema cache') || rpcError.code === 'PGRST202') {
-          throw new Error('Database Deployment Error: record_purchase_payment_with_accounting_atomic wrapper RPC is missing or not deployed on Supabase.');
-        }
-        throw rpcError;
-      }
+      if (rpcError) throw rpcError;
 
       await Promise.all([
         fetchPurchaseBills(activeOperatingCompanyId),

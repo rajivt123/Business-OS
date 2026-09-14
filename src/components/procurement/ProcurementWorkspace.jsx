@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useProcurement } from '../../context/ProcurementContext';
 import { useCrm } from '../../context/CrmContext';
+import { supabase } from '../../lib/supabase';
 import {
   ShoppingCart, Building2, FileText, Send, FileCheck, Truck, Receipt, Landmark,
-  Plus, Search, Filter, AlertCircle, CheckCircle2, Clock, X, ChevronRight, RefreshCw, ShieldAlert
+  Plus, Search, Filter, AlertCircle, CheckCircle2, Clock, X, ChevronRight, RefreshCw, ShieldAlert, DollarSign
 } from 'lucide-react';
 
 export default function ProcurementWorkspace() {
@@ -44,6 +45,29 @@ export default function ProcurementWorkspace() {
   const [modalError, setModalError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Aux dropdown states
+  const [locations, setLocations] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [cashAccounts, setCashAccounts] = useState([]);
+
+  useEffect(() => {
+    async function loadAuxDropdowns() {
+      try {
+        const { data: locs } = await supabase.from('inventory_locations').select('id, location_name, location_code');
+        if (locs) setLocations(locs);
+
+        const { data: bnks } = await supabase.from('accounting_bank_accounts').select('id, account_name, bank_name');
+        if (bnks) setBankAccounts(bnks);
+
+        const { data: coa } = await supabase.from('chart_of_accounts').select('id, account_name, account_code').or('account_subtype.eq.cash,control_account_type.eq.cash');
+        if (coa) setCashAccounts(coa);
+      } catch (err) {
+        console.error('[ProcurementWorkspace] Error loading aux dropdowns:', err);
+      }
+    }
+    loadAuxDropdowns();
+  }, []);
+
   // Modal Open States
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [isPrModalOpen, setIsPrModalOpen] = useState(false);
@@ -82,17 +106,17 @@ export default function ProcurementWorkspace() {
   const [poItems, setPoItems] = useState([{ item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
 
   // 6. GRN Form
-  const [grnForm, setGrnForm] = useState({ purchase_order_id: '', vendor_id: '', grn_date: new Date().toISOString().slice(0, 10), delivery_challan_no: '', notes: '' });
+  const [grnForm, setGrnForm] = useState({ purchase_order_id: '', vendor_id: '', to_location_id: '', grn_date: new Date().toISOString().slice(0, 10), delivery_challan_no: '', notes: '' });
   const [grnItems, setGrnItems] = useState([
-    { po_item_id: '', item_description: '', ordered_quantity: 1, received_quantity: 1, accepted_quantity: 1, rejected_quantity: 0, rejection_reason: '' }
+    { po_item_id: '', purchase_order_item_id: '', item_id: '', item_description: '', ordered_quantity: 1, received_quantity: 1, accepted_quantity: 1, rejected_quantity: 0, rejection_reason: '' }
   ]);
 
   // 7. Purchase Bill Form
   const [billForm, setBillForm] = useState({ purchase_order_id: '', vendor_id: '', vendor_bill_no: '', bill_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '' });
-  const [billItems, setBillItems] = useState([{ item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
+  const [billItems, setBillItems] = useState([{ item_code: '', item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
 
   // 8. Payment Form
-  const [paymentForm, setPaymentForm] = useState({ purchase_bill_id: '', vendor_id: '', payment_date: new Date().toISOString().slice(0, 10), payment_mode: 'bank_transfer', reference_number: '', amount: 0, notes: '' });
+  const [paymentForm, setPaymentForm] = useState({ purchase_bill_id: '', vendor_id: '', bank_account_id: '', cash_account_id: '', payment_date: new Date().toISOString().slice(0, 10), payment_mode: 'bank_transfer', reference_number: '', amount: 0, notes: '' });
 
   // --- STATS CALCULATIONS ---
   const activeVendorsCount = vendors.filter(v => v.status !== 'inactive').length;
@@ -256,11 +280,27 @@ export default function ProcurementWorkspace() {
     }
     setIsSubmitting(true);
     try {
-      await createGoodsReceivedNote(grnForm, grnItems);
+      const idempotency_key = `grn-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      await createGoodsReceivedNote(
+        {
+          ...grnForm,
+          idempotency_key,
+          to_location_id: grnForm.to_location_id || null
+        },
+        grnItems.map(item => ({
+          purchase_order_item_id: item.po_item_id || item.purchase_order_item_id || null,
+          item_id: item.item_id || null,
+          received_quantity: Number(item.received_quantity) || 0,
+          accepted_quantity: Number(item.accepted_quantity) || 0,
+          rejected_quantity: Number(item.rejected_quantity) || 0,
+          unit_price: Number(item.unit_price) || 0,
+          item_description: item.item_description || ''
+        }))
+      );
       showToast('GRN logged successfully');
       setIsGrnModalOpen(false);
-      setGrnForm({ purchase_order_id: '', vendor_id: '', grn_date: new Date().toISOString().slice(0, 10), delivery_challan_no: '', notes: '' });
-      setGrnItems([{ po_item_id: '', item_description: '', ordered_quantity: 1, received_quantity: 1, accepted_quantity: 1, rejected_quantity: 0, rejection_reason: '' }]);
+      setGrnForm({ purchase_order_id: '', vendor_id: '', to_location_id: '', grn_date: new Date().toISOString().slice(0, 10), delivery_challan_no: '', notes: '' });
+      setGrnItems([{ po_item_id: '', purchase_order_item_id: '', item_id: '', item_description: '', ordered_quantity: 1, received_quantity: 1, accepted_quantity: 1, rejected_quantity: 0, rejection_reason: '' }]);
     } catch (err) {
       setModalError(err.message || 'Failed to log GRN');
     } finally {
@@ -280,15 +320,29 @@ export default function ProcurementWorkspace() {
       const subtotal = billItems.reduce((acc, i) => acc + (Number(i.quantity) * Number(i.unit_price)), 0);
       const tax_amount = Math.round(subtotal * 0.18 * 100) / 100;
       const total_amount = subtotal + tax_amount;
+      const idempotency_key = `bill-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-      await createPurchaseBill({
-        ...billForm, subtotal, tax_amount, total_amount, amount_paid: 0, balance_due: total_amount
-      }, billItems.map(i => ({ ...i, line_total: Number(i.quantity) * Number(i.unit_price) })));
+      await createPurchaseBill(
+        {
+          ...billForm,
+          subtotal,
+          tax_amount,
+          total_amount,
+          amount_paid: 0,
+          balance_due: total_amount,
+          idempotency_key
+        },
+        billItems.map(i => ({
+          ...i,
+          item_code: i.item_code || i.code || '',
+          line_total: Number(i.quantity) * Number(i.unit_price)
+        }))
+      );
 
       showToast('Purchase Bill recorded successfully');
       setIsBillModalOpen(false);
       setBillForm({ purchase_order_id: '', vendor_id: '', vendor_bill_no: '', bill_date: new Date().toISOString().slice(0, 10), due_date: '', notes: '' });
-      setBillItems([{ item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
+      setBillItems([{ item_code: '', item_description: '', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
     } catch (err) {
       setModalError(err.message || 'Failed to record Purchase Bill');
     } finally {
@@ -305,10 +359,19 @@ export default function ProcurementWorkspace() {
     }
     setIsSubmitting(true);
     try {
-      await recordPurchasePayment(paymentForm);
+      const idempotency_key = `pay-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const isCash = paymentForm.payment_mode === 'cash';
+      const payload = {
+        ...paymentForm,
+        idempotency_key,
+        bank_account_id: isCash ? null : (paymentForm.bank_account_id || bankAccounts[0]?.id || null),
+        cash_account_id: isCash ? (paymentForm.cash_account_id || cashAccounts[0]?.id || null) : null
+      };
+
+      await recordPurchasePayment(payload);
       showToast('Vendor Payment recorded successfully');
       setIsPaymentModalOpen(false);
-      setPaymentForm({ purchase_bill_id: '', vendor_id: '', payment_date: new Date().toISOString().slice(0, 10), payment_mode: 'bank_transfer', reference_number: '', amount: 0, notes: '' });
+      setPaymentForm({ purchase_bill_id: '', vendor_id: '', bank_account_id: '', cash_account_id: '', payment_date: new Date().toISOString().slice(0, 10), payment_mode: 'bank_transfer', reference_number: '', amount: 0, notes: '' });
     } catch (err) {
       setModalError(err.message || 'Failed to record Vendor Payment');
     } finally {
@@ -1484,7 +1547,7 @@ export default function ProcurementWorkspace() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="os-label">GRN Receipt Date</label>
                   <input
@@ -1503,6 +1566,21 @@ export default function ProcurementWorkspace() {
                     onChange={(e) => setGrnForm({ ...grnForm, delivery_challan_no: e.target.value })}
                     className="os-input"
                   />
+                </div>
+                <div>
+                  <label className="os-label">Destination Location (Inventory)</label>
+                  <select
+                    value={grnForm.to_location_id || ''}
+                    onChange={(e) => setGrnForm({ ...grnForm, to_location_id: e.target.value })}
+                    className="os-input"
+                  >
+                    <option value="">-- Main Warehouse / Default --</option>
+                    {locations.map(loc => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.location_name} ({loc.location_code || 'LOC'})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
