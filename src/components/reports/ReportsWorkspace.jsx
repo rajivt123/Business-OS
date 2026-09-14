@@ -3,9 +3,9 @@ import { useCrm } from '../../context/CrmContext';
 import { supabase } from '../../lib/supabase';
 import ReportTable from './ReportTable';
 import {
-  BarChart3, FileText, Building2, RefreshCw, ShieldAlert,
+  BarChart3, Building2, RefreshCw, ShieldAlert,
   TrendingUp, ShoppingCart, Package, DollarSign, Users, FolderKanban,
-  Info, AlertTriangle, Layers
+  Info, Layers
 } from 'lucide-react';
 
 export default function ReportsWorkspace() {
@@ -103,7 +103,7 @@ export default function ReportsWorkspace() {
     fetchSummary();
   };
 
-  // Helper value renderer for KPIs (Rule 2: null/undefined/missing displays "Unavailable", 0 displays 0)
+  // Helper value renderer for KPIs (Rule 4: null/undefined/missing displays "Unavailable", 0 displays 0)
   const renderKpiValue = (val, isCurrency = true) => {
     if (val === null || val === undefined || val === '') {
       return <span className="text-slate-400 font-normal italic text-sm">Unavailable</span>;
@@ -118,24 +118,28 @@ export default function ReportsWorkspace() {
     return num.toLocaleString('en-IN');
   };
 
-  // Report Column Definitions & Meta for V2 Keys
+  // Report Column Definitions matching exact backend SQL response fields (Rule 2)
   const reportConfigs = {
-    // Accounts Reports (V2)
+    // Accounts Reports
     accounts_ledger: {
       title: 'General Ledger Report',
-      description: 'Financial journal entries, debits, credits, and voucher line items',
+      description: 'Financial journal entries, debits, credits, and line details',
       domain: 'accounts',
       columns: [
-        { label: 'Posting Date', key: 'posting_date', type: 'date' },
+        { label: 'Entry Date', key: 'entry_date', type: 'date' },
         { label: 'Voucher No', key: 'voucher_number' },
         { label: 'Voucher Type', key: 'voucher_type' },
+        { label: 'Narration', key: 'narration' },
         { label: 'Account Code', key: 'account_code' },
         { label: 'Account Name', key: 'account_name' },
-        { label: 'Line Description', key: 'line_description' },
-        { label: 'Debit', key: 'debit_amount', type: 'currency', align: 'right' },
-        { label: 'Credit', key: 'credit_amount', type: 'currency', align: 'right' },
-        { label: 'Party', key: 'party_name' },
-        { label: 'Project', key: 'project_name' }
+        { label: 'Account Type', key: 'account_type' },
+        { label: 'Line No', key: 'line_no', type: 'number', align: 'right' },
+        { label: 'Description', key: 'description' },
+        { label: 'Debit', key: 'debit', type: 'currency', align: 'right' },
+        { label: 'Credit', key: 'credit', type: 'currency', align: 'right' },
+        { label: 'Party Type', key: 'party_type' },
+        { label: 'Party ID', key: 'party_id' },
+        { label: 'Project ID', key: 'project_id' }
       ]
     },
     accounts_trial_balance: {
@@ -145,10 +149,10 @@ export default function ReportsWorkspace() {
       columns: [
         { label: 'Account Code', key: 'account_code' },
         { label: 'Account Name', key: 'account_name' },
-        { label: 'Category / Type', key: 'account_type' },
+        { label: 'Account Type', key: 'account_type' },
         { label: 'Opening Balance', key: 'opening_balance', type: 'currency', align: 'right' },
-        { label: 'Debit', key: 'debit_amount', type: 'currency', align: 'right' },
-        { label: 'Credit', key: 'credit_amount', type: 'currency', align: 'right' },
+        { label: 'Debit', key: 'debit', type: 'currency', align: 'right' },
+        { label: 'Credit', key: 'credit', type: 'currency', align: 'right' },
         { label: 'Closing Balance', key: 'closing_balance', type: 'currency', align: 'right' }
       ]
     },
@@ -159,8 +163,8 @@ export default function ReportsWorkspace() {
       columns: [
         { label: 'Account Code', key: 'account_code' },
         { label: 'Account Name', key: 'account_name' },
-        { label: 'Category', key: 'account_category' },
         { label: 'Account Type', key: 'account_type' },
+        { label: 'Section', key: 'section' },
         { label: 'Net Amount', key: 'net_amount', type: 'currency', align: 'right' }
       ]
     },
@@ -171,8 +175,9 @@ export default function ReportsWorkspace() {
       columns: [
         { label: 'Account Code', key: 'account_code' },
         { label: 'Account Name', key: 'account_name' },
-        { label: 'Section / Category', key: 'account_category' },
-        { label: 'Balance Amount', key: 'balance', type: 'currency', align: 'right' }
+        { label: 'Account Type', key: 'account_type' },
+        { label: 'Section', key: 'section' },
+        { label: 'Debit/Credit Balance', key: 'debit_credit_balance', type: 'currency', align: 'right' }
       ]
     },
     accounts_cash_flow: {
@@ -181,12 +186,14 @@ export default function ReportsWorkspace() {
       domain: 'accounts',
       notice: 'Presents actual posted cash/bank movements.',
       columns: [
-        { label: 'Posting Date', key: 'entry_date', type: 'date' },
-        { label: 'Voucher / Ref', key: 'voucher_no' },
-        { label: 'Account', key: 'account_name' },
-        { label: 'Classification', key: 'classification' },
-        { label: 'Description', key: 'description' },
-        { label: 'Movement Value', key: 'amount', type: 'currency', align: 'right' }
+        { label: 'Flow Date', key: 'flow_date', type: 'date' },
+        { label: 'Voucher No', key: 'voucher_number' },
+        { label: 'Voucher Type', key: 'voucher_type' },
+        { label: 'Narration', key: 'narration' },
+        { label: 'Account Code', key: 'account_code' },
+        { label: 'Account Name', key: 'account_name' },
+        { label: 'Account Class', key: 'account_class' },
+        { label: 'Net Cash Movement', key: 'net_cash_movement', type: 'currency', align: 'right' }
       ]
     },
     accounts_ar_aging: {
@@ -199,10 +206,11 @@ export default function ReportsWorkspace() {
         { label: 'Invoice Date', key: 'invoice_date', type: 'date' },
         { label: 'Due Date', key: 'due_date', type: 'date' },
         { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
-        { label: 'Amount Paid', key: 'paid_amount', type: 'currency', align: 'right' },
-        { label: 'Balance Due', key: 'balance_amount', type: 'currency', align: 'right' },
+        { label: 'Amount Paid', key: 'amount_paid', type: 'currency', align: 'right' },
+        { label: 'Balance Due', key: 'balance_due', type: 'currency', align: 'right' },
         { label: 'Days Overdue', key: 'days_overdue', type: 'number', align: 'right' },
-        { label: 'Aging Bucket', key: 'aging_bucket', type: 'status' }
+        { label: 'Aging Bucket', key: 'aging_bucket', type: 'status' },
+        { label: 'Work ID', key: 'work_id' }
       ]
     },
     accounts_ap_aging: {
@@ -211,18 +219,19 @@ export default function ReportsWorkspace() {
       domain: 'accounts',
       columns: [
         { label: 'Bill No', key: 'bill_no' },
-        { label: 'Vendor', key: 'vendor_name' },
         { label: 'Bill Date', key: 'bill_date', type: 'date' },
         { label: 'Due Date', key: 'due_date', type: 'date' },
+        { label: 'Vendor ID', key: 'vendor_id' },
         { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
-        { label: 'Amount Paid', key: 'paid_amount', type: 'currency', align: 'right' },
-        { label: 'Balance Due', key: 'balance_amount', type: 'currency', align: 'right' },
+        { label: 'Amount Paid', key: 'amount_paid', type: 'currency', align: 'right' },
+        { label: 'Balance Due', key: 'balance_due', type: 'currency', align: 'right' },
         { label: 'Days Overdue', key: 'days_overdue', type: 'number', align: 'right' },
-        { label: 'Aging Bucket', key: 'aging_bucket', type: 'status' }
+        { label: 'Aging Bucket', key: 'aging_bucket', type: 'status' },
+        { label: 'Work ID', key: 'work_id' }
       ]
     },
 
-    // Inventory Reports (V2)
+    // Inventory Reports
     inventory_stock: {
       title: 'Stock Position Report',
       description: 'Current inventory stock levels, valuations, and reorder alerts',
@@ -233,8 +242,12 @@ export default function ReportsWorkspace() {
         { label: 'UOM', key: 'uom' },
         { label: 'Location', key: 'location_name' },
         { label: 'Available Qty', key: 'quantity_available', type: 'number', align: 'right' },
-        { label: 'Avg Unit Cost', key: 'unit_cost', type: 'currency', align: 'right' },
+        { label: 'On Hand Qty', key: 'quantity_on_hand', type: 'number', align: 'right' },
+        { label: 'Reserved Qty', key: 'quantity_reserved', type: 'number', align: 'right' },
+        { label: 'Unit Cost', key: 'unit_cost', type: 'currency', align: 'right' },
         { label: 'Stock Value', key: 'stock_value', type: 'currency', align: 'right' },
+        { label: 'Reorder Level', key: 'reorder_level', type: 'number', align: 'right' },
+        { label: 'Shortfall', key: 'reorder_shortfall', type: 'number', align: 'right' },
         { label: 'Low Stock Alert', key: 'is_low_stock', type: 'status' }
       ]
     },
@@ -243,14 +256,20 @@ export default function ReportsWorkspace() {
       description: 'Stock receipts, project issuances, transfers, and adjustments',
       domain: 'inventory',
       columns: [
+        { label: 'Transaction No', key: 'transaction_no' },
         { label: 'Date', key: 'created_at', type: 'date' },
         { label: 'Type', key: 'transaction_type', type: 'status' },
+        { label: 'Item Code', key: 'item_code' },
         { label: 'Item Name', key: 'item_name' },
         { label: 'Location', key: 'location_name' },
         { label: 'Quantity', key: 'quantity', type: 'number', align: 'right' },
+        { label: 'Qty In', key: 'quantity_in', type: 'number', align: 'right' },
+        { label: 'Qty Out', key: 'quantity_out', type: 'number', align: 'right' },
         { label: 'Unit Cost', key: 'unit_cost', type: 'currency', align: 'right' },
         { label: 'Line Value', key: 'line_value', type: 'currency', align: 'right' },
-        { label: 'Reference', key: 'reference_no' }
+        { label: 'Reference', key: 'reference_no' },
+        { label: 'Source', key: 'source' },
+        { label: 'Project Name', key: 'project_name' }
       ]
     },
     inventory_valuation: {
@@ -258,6 +277,7 @@ export default function ReportsWorkspace() {
       description: 'Item stock quantities, average unit cost, total valuation, and shortfall',
       domain: 'inventory',
       columns: [
+        { label: 'Item Code', key: 'item_code' },
         { label: 'Item Name', key: 'item_name' },
         { label: 'Location', key: 'location_name' },
         { label: 'Lot / Batch', key: 'lot_number' },
@@ -266,7 +286,7 @@ export default function ReportsWorkspace() {
         { label: 'Stock Value', key: 'stock_value', type: 'currency', align: 'right' },
         { label: 'Reorder Level', key: 'reorder_level', type: 'number', align: 'right' },
         { label: 'Shortfall', key: 'shortfall', type: 'number', align: 'right' },
-        { label: 'Low Stock', key: 'low_stock', type: 'status' }
+        { label: 'Low Stock', key: 'is_low_stock', type: 'status' }
       ]
     },
     inventory_aging: {
@@ -274,6 +294,7 @@ export default function ReportsWorkspace() {
       description: 'Stock batch age analysis and inventory holding buckets',
       domain: 'inventory',
       columns: [
+        { label: 'Item Code', key: 'item_code' },
         { label: 'Item Name', key: 'item_name' },
         { label: 'Location', key: 'location_name' },
         { label: 'Lot / Batch', key: 'lot_number' },
@@ -285,7 +306,7 @@ export default function ReportsWorkspace() {
       ]
     },
 
-    // Procurement Reports (V2)
+    // Procurement Reports
     procurement_orders: {
       title: 'Purchase Orders Report',
       description: 'Vendor purchase orders, commitments, and expected delivery dates',
@@ -296,7 +317,8 @@ export default function ReportsWorkspace() {
         { label: 'Vendor', key: 'vendor_name' },
         { label: 'Status', key: 'status', type: 'status' },
         { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
-        { label: 'Expected Delivery', key: 'expected_delivery', type: 'date' }
+        { label: 'Expected Delivery', key: 'expected_delivery', type: 'date' },
+        { label: 'Project Name', key: 'project_name' }
       ]
     },
     procurement_bills: {
@@ -310,7 +332,9 @@ export default function ReportsWorkspace() {
         { label: 'Status', key: 'status', type: 'status' },
         { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
         { label: 'Amount Paid', key: 'amount_paid', type: 'currency', align: 'right' },
-        { label: 'Balance Due', key: 'balance_due', type: 'currency', align: 'right' }
+        { label: 'Balance Due', key: 'balance_due', type: 'currency', align: 'right' },
+        { label: 'Due Date', key: 'due_date', type: 'date' },
+        { label: 'Project Name', key: 'project_name' }
       ]
     },
     procurement_performance: {
@@ -330,7 +354,7 @@ export default function ReportsWorkspace() {
       ]
     },
 
-    // Projects Reports (V2)
+    // Projects Reports
     projects: {
       title: 'Projects Commercial Summary',
       description: 'Project task counts, revenue, procurement cost, material issue value, and gross contribution',
@@ -347,7 +371,7 @@ export default function ReportsWorkspace() {
         { label: 'Revenue', key: 'revenue', type: 'currency', align: 'right' },
         { label: 'Procurement Cost', key: 'procurement_cost', type: 'currency', align: 'right' },
         { label: 'Material Issue Value', key: 'material_issue_value', type: 'currency', align: 'right' },
-        { label: 'Gross Contribution', key: 'gross_contribution', type: 'calculated_contribution', align: 'right' }
+        { label: 'Gross Contribution', key: 'gross_contribution', type: 'currency', align: 'right' }
       ]
     },
     projects_profitability: {
@@ -356,12 +380,13 @@ export default function ReportsWorkspace() {
       domain: 'projects',
       notice: 'Gross contribution is based on available revenue, procurement, material issue and project-linked labour/accounting data.',
       columns: [
-        { label: 'Project Name / Work #', key: 'project_name' },
+        { label: 'Project Name', key: 'project_name' },
+        { label: 'Work Number', key: 'work_number' },
         { label: 'Revenue', key: 'revenue', type: 'currency', align: 'right' },
         { label: 'Procurement Cost', key: 'procurement_cost', type: 'currency', align: 'right' },
         { label: 'Material Issue Value', key: 'material_issue_value', type: 'currency', align: 'right' },
         { label: 'Labour Cost', key: 'labour_cost', type: 'currency', align: 'right' },
-        { label: 'Gross Contribution', key: 'gross_contribution', type: 'calculated_contribution', align: 'right' }
+        { label: 'Gross Contribution', key: 'gross_contribution', type: 'currency', align: 'right' }
       ]
     },
 
@@ -375,7 +400,9 @@ export default function ReportsWorkspace() {
         { label: 'Date', key: 'quotation_date', type: 'date' },
         { label: 'Customer', key: 'customer_name' },
         { label: 'Status', key: 'status', type: 'status' },
-        { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' }
+        { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
+        { label: 'Valid Until', key: 'valid_until', type: 'date' },
+        { label: 'Project Name', key: 'project_name' }
       ]
     },
     sales_orders: {
@@ -387,7 +414,9 @@ export default function ReportsWorkspace() {
         { label: 'Order Date', key: 'order_date', type: 'date' },
         { label: 'Customer', key: 'customer_name' },
         { label: 'Status', key: 'status', type: 'status' },
-        { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' }
+        { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
+        { label: 'Delivery Date', key: 'delivery_date', type: 'date' },
+        { label: 'Project Name', key: 'project_name' }
       ]
     },
     sales_invoices: {
@@ -401,7 +430,9 @@ export default function ReportsWorkspace() {
         { label: 'Status', key: 'status', type: 'status' },
         { label: 'Total Amount', key: 'total_amount', type: 'currency', align: 'right' },
         { label: 'Amount Paid', key: 'amount_paid', type: 'currency', align: 'right' },
-        { label: 'Balance Due', key: 'balance_due', type: 'currency', align: 'right' }
+        { label: 'Balance Due', key: 'balance_due', type: 'currency', align: 'right' },
+        { label: 'Due Date', key: 'due_date', type: 'date' },
+        { label: 'Project Name', key: 'project_name' }
       ]
     },
 
@@ -415,7 +446,15 @@ export default function ReportsWorkspace() {
         { label: 'Employee Code', key: 'employee_code' },
         { label: 'Employee Name', key: 'employee_name' },
         { label: 'Status', key: 'status', type: 'status' },
-        { label: 'Worked Mins', key: 'worked_minutes', type: 'number', align: 'right' }
+        { label: 'Worked Mins', key: 'worked_minutes', type: 'number', align: 'right' },
+        { label: 'Effective Mins', key: 'effective_work_minutes', type: 'number', align: 'right' },
+        { label: 'Late Mins', key: 'late_minutes', type: 'number', align: 'right' },
+        { label: 'Early Departure Mins', key: 'early_departure_minutes', type: 'number', align: 'right' },
+        { label: 'Full Day', key: 'is_full_day', type: 'status' },
+        { label: 'Half Day', key: 'is_half_day', type: 'status' },
+        { label: 'Holiday', key: 'is_holiday', type: 'status' },
+        { label: 'Weekly Off', key: 'is_weekly_off', type: 'status' },
+        { label: 'Leave', key: 'is_leave', type: 'status' }
       ]
     },
     hr_leave: {
@@ -427,9 +466,11 @@ export default function ReportsWorkspace() {
         { label: 'To Date', key: 'to_date', type: 'date' },
         { label: 'Employee Code', key: 'employee_code' },
         { label: 'Employee Name', key: 'employee_name' },
-        { label: 'Leave Type', key: 'leave_type_name' },
+        { label: 'Leave Type Name', key: 'leave_type_name' },
+        { label: 'Leave Type Code', key: 'leave_type_code' },
         { label: 'Total Days', key: 'total_days', type: 'number', align: 'right' },
-        { label: 'Status', key: 'status', type: 'status' }
+        { label: 'Status', key: 'status', type: 'status' },
+        { label: 'Reason', key: 'reason' }
       ]
     },
     hr_payroll: {
@@ -437,11 +478,18 @@ export default function ReportsWorkspace() {
       description: 'Pay run periods, paid days, gross earnings, deductions, and net pay',
       domain: 'hr',
       columns: [
-        { label: 'Period', key: 'period_name' },
+        { label: 'Period Name', key: 'period_name' },
+        { label: 'Period Start', key: 'period_start', type: 'date' },
+        { label: 'Period End', key: 'period_end', type: 'date' },
+        { label: 'Status', key: 'status', type: 'status' },
         { label: 'Employee Code', key: 'employee_code' },
         { label: 'Employee Name', key: 'employee_name' },
+        { label: 'Working Days', key: 'working_days', type: 'number', align: 'right' },
+        { label: 'Paid Days', key: 'paid_days', type: 'number', align: 'right' },
+        { label: 'LOP Days', key: 'lop_days', type: 'number', align: 'right' },
         { label: 'Gross Earnings', key: 'gross_earnings', type: 'currency', align: 'right' },
         { label: 'Total Deductions', key: 'total_deductions', type: 'currency', align: 'right' },
+        { label: 'Employer Contributions', key: 'employer_contributions', type: 'currency', align: 'right' },
         { label: 'Net Pay', key: 'net_pay', type: 'currency', align: 'right' }
       ]
     }
@@ -475,27 +523,22 @@ export default function ReportsWorkspace() {
 
   // Executive summary values extracted directly from backend response JSON
   const exec = summary?.executive || {};
-  const mgmtV2 = summary?.management_v2 || summary?.executive?.management_v2 || {};
-  const sSales = summary?.sales || {};
-  const sProc = summary?.procurement || {};
-  const sInv = summary?.inventory || {};
-  const sHr = summary?.hr || {};
-  const sProj = summary?.projects || {};
+  const mgmtV2 = summary?.management_v2 || {};
 
-  // Exact 12 Management KPIs mapped to backend RPC fields
+  // Exact 12 Management KPIs mapped to backend RPC fields directly (Rule 6)
   const kpiData = [
-    { title: 'Revenue', value: mgmtV2.profit_loss_income ?? exec.revenue ?? sSales.invoices_value, type: 'currency', sub: 'Total Income / Revenue', tone: 'sky' },
+    { title: 'Revenue', value: mgmtV2.profit_loss_income ?? exec.revenue, type: 'currency', sub: 'Total Income / Revenue', tone: 'sky' },
     { title: 'Net Result', value: mgmtV2.profit_loss_net, type: 'currency', sub: 'Net Profit / Income Result', tone: 'indigo' },
-    { title: 'Collections', value: exec.collections ?? sSales.collections, type: 'currency', sub: 'Sales Payment Receipts', tone: 'emerald' },
-    { title: 'Receivables', value: mgmtV2.receivables_current ?? exec.receivables ?? sSales.receivables, type: 'currency', sub: 'Current Outstanding Invoices', tone: 'amber' },
+    { title: 'Collections', value: exec.collections, type: 'currency', sub: 'Sales Payment Receipts', tone: 'emerald' },
+    { title: 'Receivables', value: mgmtV2.receivables_current ?? exec.receivables, type: 'currency', sub: 'Current Outstanding Invoices', tone: 'amber' },
     { title: 'Overdue Receivables', value: mgmtV2.receivables_overdue, type: 'currency', sub: 'Overdue Customer Bills', tone: 'rose' },
-    { title: 'Payables', value: mgmtV2.payables_current ?? exec.payables ?? sProc.payables, type: 'currency', sub: 'Current Outstanding Bills', tone: 'orange' },
+    { title: 'Payables', value: mgmtV2.payables_current ?? exec.payables, type: 'currency', sub: 'Current Outstanding Bills', tone: 'orange' },
     { title: 'Overdue Payables', value: mgmtV2.payables_overdue, type: 'currency', sub: 'Overdue Vendor Bills', tone: 'red' },
-    { title: 'Inventory Valuation', value: exec.stock_value ?? sInv.stock_value, type: 'currency', sub: 'On-Hand Stock Valuation', tone: 'cyan' },
-    { title: 'Project Gross Contribution', value: mgmtV2.project_gross_contribution ?? exec.project_gross_contribution, type: 'currency', sub: 'Revenue - Direct Costs', tone: 'violet' },
-    { title: 'Active Employees', value: exec.active_headcount ?? sHr.active_employees, type: 'number', sub: 'Active Workforce Count', tone: 'teal' },
-    { title: 'Open Tasks', value: exec.open_tasks ?? sProj.open_tasks, type: 'number', sub: 'Pending Execution Tasks', tone: 'blue' },
-    { title: 'Overdue Tasks', value: exec.overdue_tasks ?? sProj.overdue_tasks, type: 'number', sub: 'Delayed Project Tasks', tone: 'amber' }
+    { title: 'Inventory Valuation', value: exec.stock_value, type: 'currency', sub: 'On-Hand Stock Valuation', tone: 'cyan' },
+    { title: 'Project Gross Contribution', value: mgmtV2.project_gross_contribution, type: 'currency', sub: 'Revenue - Direct Costs', tone: 'violet' },
+    { title: 'Active Employees', value: exec.active_headcount, type: 'number', sub: 'Active Workforce Count', tone: 'teal' },
+    { title: 'Open Tasks', value: exec.open_tasks, type: 'number', sub: 'Pending Execution Tasks', tone: 'blue' },
+    { title: 'Overdue Tasks', value: exec.overdue_tasks, type: 'number', sub: 'Delayed Project Tasks', tone: 'amber' }
   ];
 
   const currentReportConfig = activeReportKey ? reportConfigs[activeReportKey] || {
@@ -657,6 +700,13 @@ export default function ReportsWorkspace() {
             <ShieldAlert size={18} className="text-rose-600" /> Access Denied: Reporting Permissions Required
           </div>
           <p className="leading-relaxed text-[11px]">{summaryAuthError}</p>
+        </div>
+      )}
+
+      {/* General Error Banner */}
+      {summaryError && activeTab === 'overview' && !summaryAuthError && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 font-bold">
+          <ShieldAlert size={16} className="text-amber-600" /> {summaryError}
         </div>
       )}
 

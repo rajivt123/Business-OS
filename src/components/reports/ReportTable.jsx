@@ -84,14 +84,24 @@ export default function ReportTable({
         const kLower = key.toLowerCase();
         let type = 'string';
         let align = 'left';
-        if (kLower.includes('amount') || kLower.includes('cost') || kLower.includes('value') || kLower.includes('revenue') || kLower.includes('price') || kLower.includes('balance') || kLower.includes('debit') || kLower.includes('credit') || kLower.includes('net') || kLower.includes('pay') || kLower.includes('earnings') || kLower.includes('deduction')) {
+        if (
+          kLower.includes('amount') || kLower.includes('cost') || kLower.includes('value') ||
+          kLower.includes('revenue') || kLower.includes('price') || kLower.includes('balance') ||
+          kLower.includes('debit') || kLower.includes('credit') || kLower.includes('net') ||
+          kLower.includes('pay') || kLower.includes('earnings') || kLower.includes('deduction') ||
+          kLower.includes('gross') || kLower.includes('contribution')
+        ) {
           type = 'currency';
           align = 'right';
         } else if (kLower.includes('date') || kLower.includes('_at')) {
           type = 'date';
         } else if (kLower.includes('status') || kLower.includes('is_') || kLower.includes('flag') || kLower.includes('overdue')) {
           type = 'status';
-        } else if (kLower.includes('count') || kLower.includes('qty') || kLower.includes('quantity') || kLower.includes('days') || kLower.includes('level') || kLower.includes('tasks') || kLower.includes('number') || kLower.includes('age')) {
+        } else if (
+          kLower.includes('count') || kLower.includes('qty') || kLower.includes('quantity') ||
+          kLower.includes('days') || kLower.includes('level') || kLower.includes('tasks') ||
+          kLower.includes('number') || kLower.includes('age') || kLower.includes('line_no')
+        ) {
           type = 'number';
           align = 'right';
         }
@@ -106,8 +116,8 @@ export default function ReportTable({
     return [];
   }, [columns, rows]);
 
-  // Value formatters
-  const formatCellValue = (val, type, row) => {
+  // Strict value formatters: null/undefined/missing = "Unavailable" (Rule 4)
+  const formatCellValue = (val, type) => {
     if (val === null || val === undefined || val === '') {
       return <span className="text-slate-400 dark:text-slate-500 font-normal italic text-[11px]">Unavailable</span>;
     }
@@ -152,38 +162,20 @@ export default function ReportTable({
           </span>
         );
       }
-      case 'calculated_contribution': {
-        if (val !== undefined && val !== null && val !== '') {
-          const cNum = Number(val);
-          if (!isNaN(cNum)) return `₹${cNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        }
-        const rev = Number(row?.revenue || row?.total_amount || 0);
-        const cost = Number(row?.procurement_cost || row?.po_cost || 0);
-        const mat = Number(row?.material_issue_value || row?.material_cost || 0);
-        const contrib = rev - cost - mat;
-        return `₹${contrib.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      }
       default:
         return String(val);
     }
   };
 
-  // Export to XLSX / CSV
+  // Export to XLSX / CSV consuming backend fields directly without client-side financial calculations
   const handleExport = (exportType = 'xlsx') => {
     if (rows.length === 0) return;
 
-    // Map rows using effective column headers
     const exportData = rows.map(r => {
       const rowObj = {};
       effectiveColumns.forEach(col => {
-        let val = r[col.key];
-        if (col.type === 'calculated_contribution' && (val === undefined || val === null)) {
-          const rev = Number(r.revenue || r.total_amount || 0);
-          const cost = Number(r.procurement_cost || r.po_cost || 0);
-          const mat = Number(r.material_issue_value || r.material_cost || 0);
-          val = rev - cost - mat;
-        }
-        rowObj[col.label] = val !== undefined && val !== null ? val : 'Unavailable';
+        const val = r[col.key];
+        rowObj[col.label] = val !== undefined && val !== null && val !== '' ? val : 'Unavailable';
       });
       return rowObj;
     });
@@ -291,7 +283,7 @@ export default function ReportTable({
                     const isRight = col.align === 'right' || col.type === 'currency' || col.type === 'number';
                     return (
                       <td key={col.key || col.label} className={`px-4 py-3 font-semibold text-slate-800 dark:text-slate-200 ${isRight ? 'text-right font-mono' : ''}`}>
-                        {formatCellValue(val, col.type, row)}
+                        {formatCellValue(val, col.type)}
                       </td>
                     );
                   })}
