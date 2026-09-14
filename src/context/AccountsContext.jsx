@@ -34,12 +34,43 @@ export function AccountsProvider({ children }) {
   const [journalEntries, setJournalEntries] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
+  const [financials, setFinancials] = useState(null);
+
+  const [fromDate, setFromDate] = useState(() => `${new Date().getFullYear()}-01-01`);
+  const [toDate, setToDate] = useState(() => `${new Date().getFullYear()}-12-31`);
 
   const [isLoading, setIsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   // --- FETCHERS ---
+  const fetchFinancials = useCallback(async (opCoId) => {
+    if (!tenantId || !opCoId) {
+      setFinancials(null);
+      return;
+    }
+    try {
+      const { data, error: err } = await supabase.rpc('get_accounting_financials_atomic', {
+        p_tenant_id: tenantId,
+        p_tenant_company_id: opCoId,
+        p_from_date: fromDate,
+        p_to_date: toDate
+      });
+      if (err) {
+        console.error('[AccountsContext] Error fetching financials:', err);
+        setFinancials(null);
+        if (err.code === '42501') {
+          setError('Authorization error (42501) accessing accounting financials');
+        }
+        return;
+      }
+      setFinancials(data || null);
+    } catch (err) {
+      console.error('[AccountsContext] Error fetching financials:', err);
+      setFinancials(null);
+    }
+  }, [tenantId, fromDate, toDate]);
+
   const fetchAccounts = useCallback(async (opCoId) => {
     try {
       let q = supabase.from('chart_of_accounts').select('*').order('account_code', { ascending: true });
@@ -77,7 +108,7 @@ export function AccountsProvider({ children }) {
         .select(`
           *,
           lines:accounting_journal_lines(
-            id, account_id, debit_amount, credit_amount, narration,
+            id, account_id, debit, credit, narration,
             account:chart_of_accounts(id, account_code, account_name)
           )
         `)
@@ -141,14 +172,15 @@ export function AccountsProvider({ children }) {
         fetchFiscalPeriods(activeOperatingCompanyId),
         fetchJournalEntries(activeOperatingCompanyId),
         fetchBankAccounts(activeOperatingCompanyId),
-        fetchBankTransactions(activeOperatingCompanyId)
+        fetchBankTransactions(activeOperatingCompanyId),
+        fetchFinancials(activeOperatingCompanyId)
       ]);
     } catch (err) {
       setError(err.message || 'Failed to load accounting data');
     } finally {
       setIsLoading(false);
     }
-  }, [activeOperatingCompanyId, fetchAccounts, fetchFiscalPeriods, fetchJournalEntries, fetchBankAccounts, fetchBankTransactions]);
+  }, [activeOperatingCompanyId, fetchAccounts, fetchFiscalPeriods, fetchJournalEntries, fetchBankAccounts, fetchBankTransactions, fetchFinancials]);
 
   useEffect(() => {
     refreshAllAccounts();
@@ -551,27 +583,16 @@ export function AccountsProvider({ children }) {
 
   // Derived Dashboard Metrics
   const metrics = useMemo(() => {
-    let totalCashBank = 0;
-    let totalReceivables = 0;
-    let totalPayables = 0;
-
-    bankAccounts.forEach(b => {
-      totalCashBank += Number(b.current_balance || 0);
-    });
-
     const activePeriod = fiscalPeriods.find(fp => !fp.is_closed) || fiscalPeriods[0] || null;
     const recentJournals = journalEntries.slice(0, 5);
 
     return {
-      totalCashBank,
-      totalReceivables,
-      totalPayables,
       activePeriod,
       recentJournals,
       totalAccounts: accounts.length,
       totalJournals: journalEntries.length
     };
-  }, [accounts, fiscalPeriods, journalEntries, bankAccounts]);
+  }, [accounts, fiscalPeriods, journalEntries]);
 
   const value = {
     accounts,
@@ -579,6 +600,11 @@ export function AccountsProvider({ children }) {
     journalEntries,
     bankAccounts,
     bankTransactions,
+    financials,
+    fromDate,
+    toDate,
+    setFromDate,
+    setToDate,
     isLoading,
     submitting,
     error,

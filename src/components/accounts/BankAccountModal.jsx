@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useAccounts } from '../../context/AccountsContext';
 
 export default function BankAccountModal({ isOpen, onClose }) {
-  const { accounts, submitting, error: contextError, setError } = useAccounts();
+  const { accounts, createBankAccount, submitting, error: contextError, setError } = useAccounts();
 
   const [form, setForm] = useState({
     account_name: '',
@@ -40,11 +40,23 @@ export default function BankAccountModal({ isOpen, onClose }) {
       return;
     }
 
-    // Call context method or handle atomic RPC if available
-    // For bank account creation, we use direct atomic wrapper or context handler
     try {
-      // In AccountsContext, we will add createBankAccount
-      onClose();
+      const payload = {
+        account_name: form.account_name,
+        account_type: form.account_type,
+        bank_name: form.bank_name,
+        account_number: form.account_number,
+        ifsc_code: form.ifsc_code,
+        branch_name: form.branch_name,
+        ledger_account_id: form.chart_of_account_id || null,
+        initial_balance: form.opening_balance
+      };
+      const res = await createBankAccount(payload);
+      if (res?.success) {
+        onClose();
+      } else if (res?.error) {
+        setLocalError(res.error);
+      }
     } catch (err) {
       setLocalError(err.message || 'Failed to save bank account');
     }

@@ -109,7 +109,7 @@ export default function ManualJournalModal({ isOpen, onClose }) {
     let hasNegativeAmount = false;
     let hasZeroLine = false;
 
-    lines.forEach((l, idx) => {
+    lines.forEach((l) => {
       if (!l.account_id) hasEmptyAccount = true;
       const dr = parseFloat(l.debit_amount) || 0;
       const cr = parseFloat(l.credit_amount) || 0;

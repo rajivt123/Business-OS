@@ -5,6 +5,13 @@ import FiscalPeriodModal from './FiscalPeriodModal';
 import ManualJournalModal from './ManualJournalModal';
 import BankAccountModal from './BankAccountModal';
 
+function formatFinancialValue(val) {
+  if (val === null || val === undefined || val === '') return 'Unavailable';
+  const num = Number(val);
+  if (isNaN(num)) return 'Unavailable';
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function AccountsWorkspace() {
   const {
     accounts,
@@ -12,6 +19,11 @@ export default function AccountsWorkspace() {
     journalEntries,
     bankAccounts,
     bankTransactions,
+    financials,
+    fromDate,
+    toDate,
+    setFromDate,
+    setToDate,
     isLoading,
     error,
     metrics,
@@ -55,6 +67,23 @@ export default function AccountsWorkspace() {
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
+            <span className="text-slate-400 font-medium">Period:</span>
+            <input
+              type="date"
+              value={fromDate || ''}
+              onChange={(e) => setFromDate && setFromDate(e.target.value)}
+              className="bg-transparent text-slate-200 font-mono text-xs focus:outline-none"
+            />
+            <span className="text-slate-500">to</span>
+            <input
+              type="date"
+              value={toDate || ''}
+              onChange={(e) => setToDate && setToDate(e.target.value)}
+              className="bg-transparent text-slate-200 font-mono text-xs focus:outline-none"
+            />
+          </div>
+
           <button
             onClick={refreshAllAccounts}
             className="p-2 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-colors"
@@ -187,9 +216,9 @@ export default function AccountsWorkspace() {
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  ₹{metrics.totalCashBank.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatFinancialValue(financials?.cash_and_bank ?? financials?.total_cash_bank ?? financials?.cash_balance ?? financials?.cash)}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">Foundation liquidity across accounts</p>
+                <p className="text-[11px] text-slate-500 mt-1">Authoritative liquidity from database RPC</p>
               </div>
 
               <div className="p-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl">
@@ -200,7 +229,7 @@ export default function AccountsWorkspace() {
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  ₹{metrics.totalReceivables.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatFinancialValue(financials?.accounts_receivable ?? financials?.total_receivables ?? financials?.receivables ?? financials?.ar)}
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">Total customer receivables balance</p>
               </div>
@@ -213,7 +242,7 @@ export default function AccountsWorkspace() {
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  ₹{metrics.totalPayables.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatFinancialValue(financials?.accounts_payable ?? financials?.total_payables ?? financials?.payables ?? financials?.ap)}
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">Total vendor payables balance</p>
               </div>
@@ -231,6 +260,63 @@ export default function AccountsWorkspace() {
                 <p className="text-[11px] text-slate-500 mt-1">
                   {metrics.activePeriod ? `${metrics.activePeriod.period_start} to ${metrics.activePeriod.period_end}` : 'Create period in Fiscal Periods tab'}
                 </p>
+              </div>
+            </div>
+
+            {/* Authoritative Financial Statement Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-3">
+                <h3 className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                  <span>Profit & Loss Summary</span>
+                  <span className="text-[10px] font-mono bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">RPC AUTHORITATIVE</span>
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-800/60">
+                    <span className="text-slate-400">Total Revenue:</span>
+                    <span className="font-mono font-bold text-slate-100">
+                      {formatFinancialValue(financials?.total_revenue ?? financials?.revenue ?? financials?.sales_revenue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-800/60">
+                    <span className="text-slate-400">Total Expenses:</span>
+                    <span className="font-mono font-bold text-slate-100">
+                      {formatFinancialValue(financials?.total_expenses ?? financials?.expenses)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 font-bold pt-1 text-sm">
+                    <span className="text-slate-200">Net Result:</span>
+                    <span className="font-mono text-emerald-400">
+                      {formatFinancialValue(financials?.net_result ?? financials?.net_profit ?? financials?.pnl)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-3">
+                <h3 className="text-sm font-semibold text-slate-200 flex items-center justify-between">
+                  <span>Balance Sheet Summary</span>
+                  <span className="text-[10px] font-mono bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20">RPC AUTHORITATIVE</span>
+                </h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-800/60">
+                    <span className="text-slate-400">Total Assets:</span>
+                    <span className="font-mono font-bold text-slate-100">
+                      {formatFinancialValue(financials?.total_assets ?? financials?.assets)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-slate-800/60">
+                    <span className="text-slate-400">Total Liabilities:</span>
+                    <span className="font-mono font-bold text-slate-100">
+                      {formatFinancialValue(financials?.total_liabilities ?? financials?.liabilities)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 font-bold pt-1 text-sm">
+                    <span className="text-slate-200">Total Equity:</span>
+                    <span className="font-mono text-indigo-400">
+                      {formatFinancialValue(financials?.total_equity ?? financials?.equity)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -261,7 +347,7 @@ export default function AccountsWorkspace() {
                   <tbody className="divide-y divide-slate-800/60 text-xs">
                     {journalEntries.slice(0, 5).map(j => (
                       <tr key={j.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3 px-4 font-mono font-medium text-blue-400">{j.voucher_no || j.id.slice(0, 8)}</td>
+                        <td className="py-3 px-4 font-mono font-medium text-blue-400">{j.voucher_number || j.voucher_no || j.id.slice(0, 8)}</td>
                         <td className="py-3 px-4 font-semibold text-slate-300">{j.voucher_type}</td>
                         <td className="py-3 px-4 text-slate-400">{j.entry_date}</td>
                         <td className="py-3 px-4 text-slate-200 truncate max-w-xs">{j.narration || '-'}</td>
@@ -464,7 +550,7 @@ export default function AccountsWorkspace() {
                 <tbody className="divide-y divide-slate-800/60 text-xs">
                   {journalEntries.map(j => (
                     <tr key={j.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-blue-400">{j.voucher_no || j.id.slice(0, 8)}</td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-blue-400">{j.voucher_number || j.voucher_no || j.id.slice(0, 8)}</td>
                       <td className="py-3.5 px-4 font-semibold text-slate-300">{j.voucher_type}</td>
                       <td className="py-3.5 px-4 text-slate-300 font-mono">{j.entry_date}</td>
                       <td className="py-3.5 px-4 text-slate-200 truncate max-w-sm">{j.narration || '-'}</td>
@@ -525,7 +611,7 @@ export default function AccountsWorkspace() {
                   <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                     <span className="text-xs text-slate-400">Balance:</span>
                     <span className="text-lg font-bold font-mono text-emerald-400">
-                      ₹{Number(b.current_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {formatFinancialValue(b.current_balance)}
                     </span>
                   </div>
                 </div>
@@ -567,7 +653,7 @@ export default function AccountsWorkspace() {
                       <td className="py-3.5 px-4 font-mono text-blue-400">{bt.reference_no || '-'}</td>
                       <td className="py-3.5 px-4 text-slate-200">{bt.description || '-'}</td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-100">
-                        ₹{Number(bt.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatFinancialValue(bt.amount)}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
