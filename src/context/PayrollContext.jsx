@@ -58,6 +58,8 @@ export function PayrollProvider({ children }) {
   const [payrollBankReconciliations, setPayrollBankReconciliations] = useState([]);
   const [payrollStatutorySettlements, setPayrollStatutorySettlements] = useState([]);
   const [payrollDashboardSummary, setPayrollDashboardSummary] = useState(null);
+  const [payrollIntegrity, setPayrollIntegrity] = useState(null);
+  const [selectedPayrollRunId, setSelectedPayrollRunId] = useState(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -287,6 +289,33 @@ export function PayrollProvider({ children }) {
     }
   }, [tenantId]);
 
+  const fetchPayrollIntegrity = useCallback(async (opCoId, runId) => {
+    const targetRunId = runId || selectedPayrollRunId;
+    if (!tenantId || !opCoId || !targetRunId) {
+      setPayrollIntegrity(null);
+      return;
+    }
+    try {
+      const { data, error: err } = await supabase.rpc('get_payroll_accounting_e2e_integrity_atomic', {
+        p_tenant_id: tenantId,
+        p_tenant_company_id: opCoId,
+        p_payroll_run_id: targetRunId
+      });
+      if (err) {
+        console.error('[PayrollContext] Error fetching payroll accounting e2e integrity:', err);
+        setPayrollIntegrity(null);
+        if (err.code === '42501') {
+          setError('Authorization error (42501) accessing payroll accounting E2E integrity');
+        }
+        return;
+      }
+      setPayrollIntegrity(data || null);
+    } catch (err) {
+      console.error('[PayrollContext] Error fetching payroll accounting e2e integrity:', err);
+      setPayrollIntegrity(null);
+    }
+  }, [tenantId, selectedPayrollRunId]);
+
   // Primary data loader
   const fetchAllPayrollData = useCallback(async (opCoId) => {
     if (!authUserId) return;
@@ -307,7 +336,8 @@ export function PayrollProvider({ children }) {
         fetchBankFiles(opCoId),
         fetchBankReconciliations(opCoId),
         fetchStatutorySettlements(opCoId),
-        fetchDashboardSummary(opCoId)
+        fetchDashboardSummary(opCoId),
+        fetchPayrollIntegrity(opCoId, selectedPayrollRunId)
       ]);
     } catch (err) {
       console.error('Error loading payroll foundation data:', err);
@@ -315,13 +345,19 @@ export function PayrollProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [authUserId, fetchPayrollSettings, fetchPayrollComponents, fetchStatutoryRules, fetchSalaryStructures, fetchPayrollPeriods, fetchPayrollRuns, fetchTaxDeclarations, fetchPayrollAccountMappings, fetchPayrollPaymentBatches, fetchBankFileProfiles, fetchBankFiles, fetchBankReconciliations, fetchStatutorySettlements, fetchDashboardSummary]);
+  }, [authUserId, fetchPayrollSettings, fetchPayrollComponents, fetchStatutoryRules, fetchSalaryStructures, fetchPayrollPeriods, fetchPayrollRuns, fetchTaxDeclarations, fetchPayrollAccountMappings, fetchPayrollPaymentBatches, fetchBankFileProfiles, fetchBankFiles, fetchBankReconciliations, fetchStatutorySettlements, fetchDashboardSummary, fetchPayrollIntegrity, selectedPayrollRunId]);
 
   useEffect(() => {
     if (authUserId) {
       fetchAllPayrollData(activeOperatingCompanyId);
     }
   }, [authUserId, activeOperatingCompanyId, fetchAllPayrollData]);
+
+  useEffect(() => {
+    if (activeOperatingCompanyId && selectedPayrollRunId) {
+      fetchPayrollIntegrity(activeOperatingCompanyId, selectedPayrollRunId);
+    }
+  }, [activeOperatingCompanyId, selectedPayrollRunId, fetchPayrollIntegrity]);
 
   // --- CRUD Operations ---
 
@@ -1252,6 +1288,10 @@ export function PayrollProvider({ children }) {
     payrollBankReconciliations,
     payrollStatutorySettlements,
     payrollDashboardSummary,
+    payrollIntegrity,
+    selectedPayrollRunId,
+    setSelectedPayrollRunId,
+    fetchPayrollIntegrity,
     isLoading,
     error,
     isManagementOrAdmin,

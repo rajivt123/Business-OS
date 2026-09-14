@@ -52,6 +52,10 @@ export default function PayrollWorkspace() {
     payrollBankReconciliations = [],
     payrollStatutorySettlements = [],
     payrollDashboardSummary = null,
+    payrollIntegrity = null,
+    selectedPayrollRunId = null,
+    setSelectedPayrollRunId,
+    fetchPayrollIntegrity,
     payrollSummary,
     consumedMasterData,
     isManagementOrAdmin,
@@ -842,6 +846,230 @@ export default function PayrollWorkspace() {
     }
   };
 
+  // Helper to safely extract values from flat or nested integrity RPC response keys
+  const getIntegrityVal = (data, ...keys) => {
+    if (!data) return undefined;
+    for (const k of keys) {
+      const parts = k.split('.');
+      let val = data;
+      for (const p of parts) {
+        if (val === null || val === undefined) break;
+        val = val[p];
+      }
+      if (val !== undefined && val !== null) return val;
+    }
+    return undefined;
+  };
+
+  const formatIntegrityVal = (val, type = 'text') => {
+    if (val === null || val === undefined || val === '') return 'Unavailable';
+    if (type === 'currency') {
+      const num = Number(val);
+      if (isNaN(num)) return 'Unavailable';
+      return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (type === 'badge') {
+      if (typeof val === 'boolean') {
+        return val ? (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            PASSED / RECONCILED
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            UNBALANCED / MISMATCH
+          </span>
+        );
+      }
+      const str = String(val).toUpperCase();
+      if (['PASSED', 'RECONCILED', 'BALANCED', 'POSTED', 'MATCHED', 'PROCESSED', 'COMPLETED', 'APPROVED', 'FINALIZED', 'PAID', 'TRUE'].includes(str)) {
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            {str}
+          </span>
+        );
+      }
+      if (['FAILED', 'UNBALANCED', 'MISMATCH', 'REJECTED', 'FALSE'].includes(str)) {
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            {str}
+          </span>
+        );
+      }
+      return (
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          {str}
+        </span>
+      );
+    }
+    return String(val);
+  };
+
+  const renderPayrollIntegritySection = () => {
+    const currentRunId = selectedPayrollRunId || payrollRuns[0]?.id || '';
+    const activeRunObj = payrollRuns.find(r => r.id === currentRunId);
+
+    const valRunStatus = getIntegrityVal(payrollIntegrity, 'payroll_run_status', 'run_status', 'payroll.status', 'status') ?? activeRunObj?.status;
+    const valNetPay = getIntegrityVal(payrollIntegrity, 'net_pay', 'total_net_pay', 'payroll.net_pay', 'payroll_net_pay') ?? activeRunObj?.total_net_pay;
+    const valJournalStatus = getIntegrityVal(payrollIntegrity, 'accounting_journal_status', 'journal_status', 'journal.status');
+    const valJournalDebit = getIntegrityVal(payrollIntegrity, 'journal_debit', 'total_debit', 'journal.debit', 'journal.total_debit');
+    const valJournalCredit = getIntegrityVal(payrollIntegrity, 'journal_credit', 'total_credit', 'journal.credit', 'journal.total_credit');
+    const valJournalBalanced = getIntegrityVal(payrollIntegrity, 'journal_balanced', 'is_journal_balanced', 'journal.is_balanced', 'journal.balanced');
+    const valPaymentBatchStatus = getIntegrityVal(payrollIntegrity, 'payment_batch_status', 'batch_status', 'payment_batch.status');
+    const valPaymentBatchTotal = getIntegrityVal(payrollIntegrity, 'payment_batch_total', 'batch_total', 'payment_batch.total_amount', 'payment_batch.total');
+    const valPaymentItemsTotal = getIntegrityVal(payrollIntegrity, 'payment_items_total', 'items_total', 'payment_batch.items_total');
+    const valBankTxCount = getIntegrityVal(payrollIntegrity, 'bank_transaction_count', 'transaction_count', 'reconciliation.bank_transaction_count');
+    const valReconciliationCount = getIntegrityVal(payrollIntegrity, 'reconciliation_count', 'reconciled_count', 'reconciliation.count');
+    const valMatchedAmount = getIntegrityVal(payrollIntegrity, 'matched_amount', 'total_matched_amount', 'reconciliation.matched_amount');
+    const valPayMatchesPayroll = getIntegrityVal(payrollIntegrity, 'payment_total_matches_payroll', 'payment_matches_payroll', 'integrity.payment_matches_payroll');
+    const valFullyReconciled = getIntegrityVal(payrollIntegrity, 'fully_reconciled', 'is_fully_reconciled', 'integrity.fully_reconciled');
+    const valOverallIntegrity = getIntegrityVal(payrollIntegrity, 'overall_e2e_integrity', 'overall_integrity', 'is_overall_integrity', 'overall_reconciled');
+
+    return (
+      <div className="p-5 bg-slate-900/60 border border-slate-800/80 rounded-2xl space-y-4 text-slate-100 my-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-3">
+            <ShieldCheck size={18} className="text-teal-400" />
+            <h3 className="text-sm font-bold text-slate-200">Accounting & Payment E2E Integrity</h3>
+            <span className="text-[10px] font-mono bg-teal-500/10 text-teal-400 px-2 py-0.5 rounded-full border border-teal-500/20">
+              RPC AUTHORITATIVE
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-medium">Payroll Run:</span>
+              <select
+                value={currentRunId}
+                onChange={(e) => {
+                  if (setSelectedPayrollRunId) setSelectedPayrollRunId(e.target.value);
+                }}
+                className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500 font-mono"
+              >
+                {payrollRuns.length === 0 && <option value="">No Payroll Runs Available</option>}
+                {payrollRuns.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.run_type ? r.run_type.toUpperCase() : 'RUN'} — {r.id.slice(0, 8)} ({r.status || 'draft'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-medium">Overall E2E Integrity:</span>
+              {formatIntegrityVal(valOverallIntegrity, 'badge')}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Section 1: Payroll Run Overview */}
+          <div className="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/60">
+              <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                <Users size={14} /> 1. Payroll Run
+              </span>
+              {formatIntegrityVal(valRunStatus, 'badge')}
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Payroll Run Status:</span>
+                <span className="font-semibold text-slate-200">{formatIntegrityVal(valRunStatus, 'text')}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Net Pay:</span>
+                <span className="font-mono font-bold text-slate-100">{formatIntegrityVal(valNetPay, 'currency')}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: General Ledger Accounting */}
+          <div className="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/60">
+              <span className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+                <FileText size={14} /> 2. GL Accounting
+              </span>
+              {formatIntegrityVal(valJournalBalanced, 'badge')}
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Accounting Journal Status:</span>
+                <span className="font-semibold text-slate-200">{formatIntegrityVal(valJournalStatus, 'text')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Journal Debit:</span>
+                <span className="font-mono font-bold text-slate-100">{formatIntegrityVal(valJournalDebit, 'currency')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Journal Credit:</span>
+                <span className="font-mono font-bold text-slate-100">{formatIntegrityVal(valJournalCredit, 'currency')}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Journal Balanced:</span>
+                {formatIntegrityVal(valJournalBalanced, 'badge')}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Payment Processing */}
+          <div className="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/60">
+              <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                <Banknote size={14} /> 3. Payment Batch
+              </span>
+              {formatIntegrityVal(valPaymentBatchStatus, 'badge')}
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Payment Batch Status:</span>
+                <span className="font-semibold text-slate-200">{formatIntegrityVal(valPaymentBatchStatus, 'text')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Payment Batch Total:</span>
+                <span className="font-mono font-bold text-slate-100">{formatIntegrityVal(valPaymentBatchTotal, 'currency')}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Payment Items Total:</span>
+                <span className="font-mono font-bold text-slate-100">{formatIntegrityVal(valPaymentItemsTotal, 'currency')}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Bank Reconciliation */}
+          <div className="p-4 bg-slate-950/60 border border-slate-800/60 rounded-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800/60">
+              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <RefreshCw size={14} /> 4. Bank Reconciliation
+              </span>
+              {formatIntegrityVal(valFullyReconciled, 'badge')}
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Bank Tx Count:</span>
+                <span className="font-mono font-bold text-slate-200">{formatIntegrityVal(valBankTxCount, 'text')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Reconciliation Count:</span>
+                <span className="font-mono font-bold text-slate-200">{formatIntegrityVal(valReconciliationCount, 'text')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Matched Amount:</span>
+                <span className="font-mono font-bold text-slate-100">{formatIntegrityVal(valMatchedAmount, 'currency')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-800/40">
+                <span className="text-slate-400">Payment Matches Payroll:</span>
+                {formatIntegrityVal(valPayMatchesPayroll, 'badge')}
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Fully Reconciled:</span>
+                {formatIntegrityVal(valFullyReconciled, 'badge')}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-5">
       {/* Top Notification Banner */}
@@ -1253,6 +1481,8 @@ export default function PayrollWorkspace() {
               </div>
             )}
           </div>
+
+          {renderPayrollIntegritySection()}
 
           {/* Payroll Execution Runs Section */}
           <div className="os-card overflow-hidden">
@@ -2129,6 +2359,8 @@ export default function PayrollWorkspace() {
               </button>
             )}
           </div>
+
+          {renderPayrollIntegritySection()}
 
           {/* Section 1: Unreconciled Bank Transactions / Disbursed Items */}
           <div className="os-card overflow-hidden">
