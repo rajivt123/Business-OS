@@ -53,7 +53,7 @@ export default function ProcurementWorkspace() {
   useEffect(() => {
     async function loadAuxDropdowns() {
       try {
-        const { data: locs } = await supabase.from('inventory_locations').select('id, location_name, location_code');
+        const { data: locs } = await supabase.from('inventory_locations').select('id, name, code');
         if (locs) setLocations(locs);
 
         const { data: bnks } = await supabase.from('accounting_bank_accounts').select('id, account_name, bank_name');
@@ -1577,7 +1577,7 @@ export default function ProcurementWorkspace() {
                     <option value="">-- Main Warehouse / Default --</option>
                     {locations.map(loc => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.location_name} ({loc.location_code || 'LOC'})
+                        {loc.name} ({loc.code || 'LOC'})
                       </option>
                     ))}
                   </select>

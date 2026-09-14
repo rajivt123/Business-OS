@@ -7,8 +7,8 @@ export default function LocationModal({ isOpen, onClose, isDarkMode }) {
   const [errorMsg, setErrorMsg] = useState('');
 
   const [form, setForm] = useState({
-    location_code: '',
-    location_name: '',
+    code: '',
+    name: '',
     location_type: 'Warehouse',
     parent_location_id: '',
     is_stock_location: true,
@@ -35,11 +35,11 @@ export default function LocationModal({ isOpen, onClose, isDarkMode }) {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!form.location_code.trim()) {
+    if (!form.code.trim()) {
       setErrorMsg('Location code is required');
       return;
     }
-    if (!form.location_name.trim()) {
+    if (!form.name.trim()) {
       setErrorMsg('Location name is required');
       return;
     }
@@ -94,8 +94,8 @@ export default function LocationModal({ isOpen, onClose, isDarkMode }) {
                 </label>
                 <input
                   type="text"
-                  name="location_code"
-                  value={form.location_code}
+                  name="code"
+                  value={form.code}
                   onChange={handleChange}
                   placeholder="e.g. QA-WH-MAIN"
                   className={`w-full rounded-lg px-3 py-2 text-sm border font-mono ${tInput}`}
@@ -109,8 +109,8 @@ export default function LocationModal({ isOpen, onClose, isDarkMode }) {
                 </label>
                 <input
                   type="text"
-                  name="location_name"
-                  value={form.location_name}
+                  name="name"
+                  value={form.name}
                   onChange={handleChange}
                   placeholder="e.g. Main Central Warehouse"
                   className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
@@ -148,7 +148,7 @@ export default function LocationModal({ isOpen, onClose, isDarkMode }) {
                   <option value="">None (Top-level Location)</option>
                   {locations.map(loc => (
                     <option key={loc.id} value={loc.id}>
-                      {loc.location_code} - {loc.location_name} ({loc.location_type})
+                      {loc.code} - {loc.name} ({loc.location_type})
                     </option>
                   ))}
                 </select>

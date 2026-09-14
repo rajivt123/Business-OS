@@ -45,7 +45,7 @@ export default function InventoryWorkspace({ isDarkMode }) {
 
   // Filtered items
   const filteredItems = items.filter(i => {
-    const matchSearch = !searchQuery || i.item_code?.toLowerCase().includes(searchQuery.toLowerCase()) || i.item_name?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = !searchQuery || i.item_code?.toLowerCase().includes(searchQuery.toLowerCase()) || i.name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchCategory = !filterCategory || i.category === filterCategory;
     const matchType = !filterType || i.item_type === filterType;
     return matchSearch && matchCategory && matchType;
@@ -289,7 +289,7 @@ export default function InventoryWorkspace({ isDarkMode }) {
                             {tx.lines?.length || 0} Item line(s)
                           </p>
                           <p className={`text-[11px] ${tMuted}`}>
-                            {tx.source_location?.location_code || 'External'} → {tx.destination_location?.location_code || 'External'}
+                            {(tx.from_location?.code || 'External')} → {(tx.to_location?.code || 'External')}
                           </p>
                         </div>
                       </div>
@@ -366,14 +366,14 @@ export default function InventoryWorkspace({ isDarkMode }) {
                       <tr key={item.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
                         <td className="p-3.5 font-mono font-bold text-amber-500">{item.item_code}</td>
                         <td className="p-3.5 font-semibold">
-                          {item.item_name}
+                          {item.name}
                           {item.description && (
                             <p className={`text-[11px] font-normal ${tMuted} truncate max-w-xs`}>{item.description}</p>
                           )}
                         </td>
                         <td className="p-3.5">{item.category || 'General'}</td>
                         <td className="p-3.5 capitalize">{item.item_type?.replace('_', ' ')}</td>
-                        <td className="p-3.5 font-mono font-semibold">{item.base_uom}</td>
+                        <td className="p-3.5 font-mono font-semibold">{item.base_uom_code}</td>
                         <td className="p-3.5 font-mono">{item.hsn_sac_code || '--'}</td>
                         <td className="p-3.5 text-right font-mono">{item.reorder_level || 0}</td>
                         <td className="p-3.5 text-right font-mono">{item.reorder_quantity || 0}</td>
@@ -430,10 +430,10 @@ export default function InventoryWorkspace({ isDarkMode }) {
                       const parent = locations.find(p => p.id === loc.parent_location_id);
                       return (
                         <tr key={loc.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
-                          <td className="p-3.5 font-mono font-bold text-amber-500">{loc.location_code}</td>
-                          <td className="p-3.5 font-semibold">{loc.location_name}</td>
+                          <td className="p-3.5 font-mono font-bold text-amber-500">{loc.code}</td>
+                          <td className="p-3.5 font-semibold">{loc.name}</td>
                           <td className="p-3.5">{loc.location_type}</td>
-                          <td className="p-3.5 text-slate-400">{parent ? `${parent.location_code} - ${parent.location_name}` : '--'}</td>
+                          <td className="p-3.5 text-slate-400">{parent ? `${parent.code} - ${parent.name}` : '--'}</td>
                           <td className="p-3.5 text-center">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               loc.is_stock_location ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-400'
@@ -490,23 +490,24 @@ export default function InventoryWorkspace({ isDarkMode }) {
                     stockBalances.map(bal => {
                       const item = bal.item || items.find(i => i.id === bal.item_id);
                       const loc = bal.location || locations.find(l => l.id === bal.location_id);
+                      const stockVal = Number(bal.quantity_on_hand || 0) * Number(bal.average_unit_cost || 0);
                       return (
                         <tr key={bal.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
                           <td className="p-3.5 font-mono font-bold text-amber-500">{item?.item_code || 'ITEM'}</td>
-                          <td className="p-3.5 font-semibold">{item?.item_name || 'Item'}</td>
-                          <td className="p-3.5 font-mono">{loc ? `${loc.location_code} (${loc.location_name})` : 'Location'}</td>
-                          <td className="p-3.5 font-mono text-slate-400">{bal.lot_batch_no || '--'}</td>
+                          <td className="p-3.5 font-semibold">{item?.name || 'Item'}</td>
+                          <td className="p-3.5 font-mono">{loc ? `${loc.code} (${loc.name})` : 'Location'}</td>
+                          <td className="p-3.5 font-mono text-slate-400">{bal.lot_number || '--'}</td>
                           <td className="p-3.5 text-right font-mono font-bold text-emerald-400">
-                            {bal.quantity_on_hand} {item?.base_uom || ''}
+                            {bal.quantity_on_hand} {item?.base_uom_code || ''}
                           </td>
                           <td className="p-3.5 text-right font-mono">
                             ₹{Number(bal.average_unit_cost || 0).toFixed(2)}
                           </td>
                           <td className="p-3.5 text-right font-mono font-bold">
-                            ₹{Number(bal.total_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            ₹{stockVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td className="p-3.5 text-right text-slate-400">
-                            {new Date(bal.last_updated_at).toLocaleString()}
+                            {new Date(bal.updated_at).toLocaleString()}
                           </td>
                         </tr>
                       );
@@ -568,12 +569,12 @@ export default function InventoryWorkspace({ isDarkMode }) {
                           </span>
                         </td>
                         <td className="p-3.5">{new Date(tx.transaction_date).toLocaleString()}</td>
-                        <td className="p-3.5 font-mono text-slate-400">{tx.source_location?.location_code || '--'}</td>
-                        <td className="p-3.5 font-mono text-slate-400">{tx.destination_location?.location_code || '--'}</td>
+                        <td className="p-3.5 font-mono text-slate-400">{tx.from_location?.code || '--'}</td>
+                        <td className="p-3.5 font-mono text-slate-400">{tx.to_location?.code || '--'}</td>
                         <td className="p-3.5">
                           {(tx.lines || []).map((l, idx) => (
                             <div key={idx} className="font-mono text-[11px]">
-                              {l.item?.item_code || 'Item'}: <span className="font-bold text-amber-400">{l.quantity}</span> {l.item?.base_uom || ''}
+                              {l.item?.item_code || 'Item'}: <span className="font-bold text-amber-400">{l.quantity}</span> {l.item?.base_uom_code || ''}
                             </div>
                           ))}
                         </td>

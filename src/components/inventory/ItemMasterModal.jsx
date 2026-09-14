@@ -8,11 +8,11 @@ export default function ItemMasterModal({ isOpen, onClose, isDarkMode }) {
 
   const [form, setForm] = useState({
     item_code: '',
-    item_name: '',
+    name: '',
     description: '',
     category: 'Pipes & Fittings',
     item_type: 'raw_material',
-    base_uom: 'MTR',
+    base_uom_code: 'MTR',
     hsn_sac_code: '',
     reorder_level: '100',
     reorder_quantity: '200',
@@ -43,7 +43,7 @@ export default function ItemMasterModal({ isOpen, onClose, isDarkMode }) {
       setErrorMsg('Item code is required');
       return;
     }
-    if (!form.item_name.trim()) {
+    if (!form.name.trim()) {
       setErrorMsg('Item name is required');
       return;
     }
@@ -113,8 +113,8 @@ export default function ItemMasterModal({ isOpen, onClose, isDarkMode }) {
                 </label>
                 <input
                   type="text"
-                  name="item_name"
-                  value={form.item_name}
+                  name="name"
+                  value={form.name}
                   onChange={handleChange}
                   placeholder="e.g. MS Black Steel Pipe 100mm"
                   className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
@@ -181,8 +181,8 @@ export default function ItemMasterModal({ isOpen, onClose, isDarkMode }) {
                   Base UOM
                 </label>
                 <select
-                  name="base_uom"
-                  value={form.base_uom}
+                  name="base_uom_code"
+                  value={form.base_uom_code}
                   onChange={handleChange}
                   className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
                 >

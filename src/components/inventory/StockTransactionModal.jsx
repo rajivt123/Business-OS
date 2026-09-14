@@ -19,8 +19,8 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
 
   const [transactionType, setTransactionType] = useState(initialType);
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 16));
-  const [sourceLocationId, setSourceLocationId] = useState('');
-  const [destinationLocationId, setDestinationLocationId] = useState('');
+  const [fromLocationId, setFromLocationId] = useState('');
+  const [toLocationId, setToLocationId] = useState('');
   const [referenceNo, setReferenceNo] = useState('');
   const [workId, setWorkId] = useState('');
   const [notes, setNotes] = useState('');
@@ -28,20 +28,20 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
 
   // Transaction Lines State
   const [lines, setLines] = useState([
-    { item_id: '', quantity: '1', unit_cost: '0', lot_batch_no: '', notes: '' }
+    { item_id: '', quantity: '1', unit_cost: '0', lot_number: '', notes: '' }
   ]);
 
   useEffect(() => {
     if (isOpen) {
       setTransactionType(initialType);
       setTransactionDate(new Date().toISOString().slice(0, 16));
-      setSourceLocationId('');
-      setDestinationLocationId('');
+      setFromLocationId('');
+      setToLocationId('');
       setReferenceNo('');
       setWorkId('');
       setNotes('');
       setErrorMsg('');
-      setLines([{ item_id: '', quantity: '1', unit_cost: '0', lot_batch_no: '', notes: '' }]);
+      setLines([{ item_id: '', quantity: '1', unit_cost: '0', lot_number: '', notes: '' }]);
     }
   }, [isOpen, initialType]);
 
@@ -66,7 +66,7 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
   };
 
   const addLine = () => {
-    setLines(prev => [...prev, { item_id: '', quantity: '1', unit_cost: '0', lot_batch_no: '', notes: '' }]);
+    setLines(prev => [...prev, { item_id: '', quantity: '1', unit_cost: '0', lot_number: '', notes: '' }]);
   };
 
   const removeLine = (index) => {
@@ -79,15 +79,15 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
     setErrorMsg('');
 
     // Validation Rules
-    if (typeConfig.requiresSource && !sourceLocationId) {
+    if (typeConfig.requiresSource && !fromLocationId) {
       setErrorMsg(`Source location is required for ${typeConfig.name}`);
       return;
     }
-    if (typeConfig.requiresDest && !destinationLocationId) {
+    if (typeConfig.requiresDest && !toLocationId) {
       setErrorMsg(`Destination location is required for ${typeConfig.name}`);
       return;
     }
-    if (sourceLocationId && destinationLocationId && sourceLocationId === destinationLocationId) {
+    if (fromLocationId && toLocationId && fromLocationId === toLocationId) {
       setErrorMsg('Source and Destination locations cannot be the same');
       return;
     }
@@ -120,8 +120,8 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
     const payload = {
       transaction_type: transactionType,
       transaction_date: new Date(transactionDate).toISOString(),
-      source_location_id: sourceLocationId || null,
-      destination_location_id: destinationLocationId || null,
+      from_location_id: fromLocationId || null,
+      to_location_id: toLocationId || null,
       reference_no: referenceNo,
       work_id: workId || null,
       notes: notes,
@@ -129,7 +129,7 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
         item_id: l.item_id,
         quantity: Number(l.quantity),
         unit_cost: Number(l.unit_cost) || 0,
-        lot_batch_no: l.lot_batch_no,
+        lot_number: (l.lot_number || '').trim(),
         notes: l.notes
       }))
     };
@@ -226,15 +226,15 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
                     Source Location <span className="text-rose-500">*</span>
                   </label>
                   <select
-                    value={sourceLocationId}
-                    onChange={(e) => setSourceLocationId(e.target.value)}
+                    value={fromLocationId}
+                    onChange={(e) => setFromLocationId(e.target.value)}
                     className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
                     required
                   >
                     <option value="">-- Select Source Location --</option>
                     {locations.filter(l => l.is_stock_location).map(loc => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.location_code} - {loc.location_name} ({loc.location_type})
+                        {loc.code} - {loc.name} ({loc.location_type})
                       </option>
                     ))}
                   </select>
@@ -248,15 +248,15 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
                     Destination Location <span className="text-rose-500">*</span>
                   </label>
                   <select
-                    value={destinationLocationId}
-                    onChange={(e) => setDestinationLocationId(e.target.value)}
+                    value={toLocationId}
+                    onChange={(e) => setToLocationId(e.target.value)}
                     className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
                     required
                   >
                     <option value="">-- Select Destination Location --</option>
                     {locations.filter(l => l.is_stock_location).map(loc => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.location_code} - {loc.location_name} ({loc.location_type})
+                        {loc.code} - {loc.name} ({loc.location_type})
                       </option>
                     ))}
                   </select>
@@ -330,8 +330,8 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
                 <tbody className="divide-y divide-slate-800/60">
                   {lines.map((line, idx) => {
                     const selectedItem = items.find(i => i.id === line.item_id);
-                    const currentStock = sourceLocationId && line.item_id
-                      ? getCurrentStock(line.item_id, sourceLocationId, line.lot_batch_no)
+                    const currentStock = fromLocationId && line.item_id
+                      ? getCurrentStock(line.item_id, fromLocationId, line.lot_number)
                       : 0;
 
                     const isOverIssue = typeConfig.requiresSource && Number(line.quantity) > currentStock;
@@ -348,7 +348,7 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
                             <option value="">-- Select Item --</option>
                             {items.map(item => (
                               <option key={item.id} value={item.id}>
-                                {item.item_code} - {item.item_name} ({item.base_uom})
+                                {item.item_code} - {item.name} ({item.base_uom_code})
                               </option>
                             ))}
                           </select>
@@ -356,9 +356,9 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
 
                         {typeConfig.requiresSource && (
                           <td className="p-3 font-mono font-semibold">
-                            {line.item_id && sourceLocationId ? (
+                            {line.item_id && fromLocationId ? (
                               <span className={currentStock > 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                                {currentStock} {selectedItem?.base_uom || ''}
+                                {currentStock} {selectedItem?.base_uom_code || ''}
                               </span>
                             ) : (
                               <span className="text-slate-500">--</span>
@@ -399,8 +399,8 @@ export default function StockTransactionModal({ isOpen, onClose, isDarkMode, ini
                         <td className="p-3">
                           <input
                             type="text"
-                            value={line.lot_batch_no}
-                            onChange={(e) => handleLineChange(idx, 'lot_batch_no', e.target.value)}
+                            value={line.lot_number || ''}
+                            onChange={(e) => handleLineChange(idx, 'lot_number', e.target.value)}
                             placeholder="Batch/Lot #"
                             className={`w-full rounded-lg px-2.5 py-1.5 text-xs border font-mono ${tInput}`}
                           />

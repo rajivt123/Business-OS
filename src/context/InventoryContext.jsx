@@ -79,10 +79,10 @@ export function InventoryProvider({ children }) {
         .from('inventory_stock_balances')
         .select(`
           *,
-          item:inventory_items(id, item_code, item_name, base_uom, reorder_level),
-          location:inventory_locations(id, location_code, location_name, location_type)
+          item:inventory_items(id, item_code, name, base_uom_code, reorder_level),
+          location:inventory_locations(id, code, name, location_type)
         `)
-        .order('last_updated_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (opCoId) q = q.eq('tenant_company_id', opCoId);
       else if (tenantId) q = q.eq('tenant_id', tenantId);
@@ -102,11 +102,11 @@ export function InventoryProvider({ children }) {
         .from('inventory_transactions')
         .select(`
           *,
-          source_location:inventory_locations!source_location_id(id, location_code, location_name),
-          destination_location:inventory_locations!destination_location_id(id, location_code, location_name),
+          from_location:inventory_locations!from_location_id(id, code, name),
+          to_location:inventory_locations!to_location_id(id, code, name),
           lines:inventory_transaction_lines(
-            id, item_id, quantity, unit_cost, total_cost, lot_batch_no, notes,
-            item:inventory_items(id, item_code, item_name, base_uom)
+            id, item_id, quantity, unit_cost, line_value, lot_number, notes,
+            item:inventory_items(id, item_code, name, base_uom_code)
           )
         `)
         .order('transaction_date', { ascending: false })
@@ -146,12 +146,12 @@ export function InventoryProvider({ children }) {
   }, [refreshAllInventory]);
 
   // --- AUTHORITATIVE STOCK QUERY HELPER ---
-  const getCurrentStock = useCallback((itemId, locationId, lotBatchNo = '') => {
+  const getCurrentStock = useCallback((itemId, locationId, lotNumber = '') => {
     if (!itemId || !locationId) return 0;
     const balance = stockBalances.find(b => {
       const matchItem = b.item_id === itemId;
       const matchLoc = b.location_id === locationId;
-      const matchLot = lotBatchNo ? (b.lot_batch_no === lotBatchNo) : true;
+      const matchLot = lotNumber ? b.lot_number === lotNumber : true;
       return matchItem && matchLoc && matchLot;
     });
     return balance ? Number(balance.quantity_on_hand) : 0;
@@ -174,11 +174,11 @@ export function InventoryProvider({ children }) {
         tenant_id: tenantId,
         tenant_company_id: activeOperatingCompanyId,
         item_code: itemPayload.item_code?.trim(),
-        item_name: itemPayload.item_name?.trim(),
+        name: itemPayload.name?.trim(),
         description: itemPayload.description?.trim() || '',
         category: itemPayload.category?.trim() || 'General',
         item_type: itemPayload.item_type || 'raw_material',
-        base_uom: itemPayload.base_uom?.trim() || 'NOS',
+        base_uom_code: itemPayload.base_uom_code?.trim() || 'NOS',
         hsn_sac_code: itemPayload.hsn_sac_code?.trim() || '',
         reorder_level: Number(itemPayload.reorder_level) || 0,
         reorder_quantity: Number(itemPayload.reorder_quantity) || 0,
@@ -218,8 +218,8 @@ export function InventoryProvider({ children }) {
       const payload = {
         tenant_id: tenantId,
         tenant_company_id: activeOperatingCompanyId,
-        location_code: locPayload.location_code?.trim(),
-        location_name: locPayload.location_name?.trim(),
+        code: locPayload.code?.trim(),
+        name: locPayload.name?.trim(),
         location_type: locPayload.location_type || 'Warehouse',
         parent_location_id: locPayload.parent_location_id || null,
         is_stock_location: locPayload.is_stock_location !== false,
@@ -256,13 +256,16 @@ export function InventoryProvider({ children }) {
         throw new Error('Tenant or Operating Company context is required');
       }
 
+      const fromLocId = txPayload.from_location_id || null;
+      const toLocId = txPayload.to_location_id || null;
+
       const payload = {
         tenant_id: tenantId,
         tenant_company_id: activeOperatingCompanyId,
         transaction_type: txPayload.transaction_type,
         transaction_date: txPayload.transaction_date || new Date().toISOString(),
-        source_location_id: txPayload.source_location_id || null,
-        destination_location_id: txPayload.destination_location_id || null,
+        from_location_id: fromLocId,
+        to_location_id: toLocId,
         reference_no: txPayload.reference_no?.trim() || '',
         work_id: txPayload.work_id || null,
         notes: txPayload.notes?.trim() || '',
@@ -271,7 +274,7 @@ export function InventoryProvider({ children }) {
           item_id: l.item_id,
           quantity: Number(l.quantity) || 0,
           unit_cost: Number(l.unit_cost) || 0,
-          lot_batch_no: l.lot_batch_no?.trim() || '',
+          lot_number: l.lot_number?.trim() || '',
           notes: l.notes?.trim() || ''
         }))
       };
@@ -303,9 +306,12 @@ export function InventoryProvider({ children }) {
     let lowStockCount = 0;
 
     stockBalances.forEach(bal => {
-      totalStockValue += Number(bal.total_value || 0);
+      const qty = Number(bal.quantity_on_hand) || 0;
+      const avgCost = Number(bal.average_unit_cost) || 0;
+      const val = qty * avgCost;
+      totalStockValue += val;
       const item = items.find(i => i.id === bal.item_id);
-      if (item && item.reorder_level > 0 && Number(bal.quantity_on_hand) <= item.reorder_level) {
+      if (item && item.reorder_level > 0 && qty <= item.reorder_level) {
         lowStockCount += 1;
       }
     });
