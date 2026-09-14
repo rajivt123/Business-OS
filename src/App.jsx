@@ -395,15 +395,15 @@ export default function App() {
                 <AttendanceProvider>
                   <LeaveProvider>
                     <PayrollProvider>
-                      <SalesProvider>
-                        <ProcurementProvider>
-                          <InventoryProvider>
-                            <AccountsProvider>
+                      <AccountsProvider>
+                        <SalesProvider>
+                          <ProcurementProvider>
+                            <InventoryProvider>
                               <BusinessOSWorkspace />
-                            </AccountsProvider>
-                          </InventoryProvider>
-                        </ProcurementProvider>
-                      </SalesProvider>
+                            </InventoryProvider>
+                          </ProcurementProvider>
+                        </SalesProvider>
+                      </AccountsProvider>
                     </PayrollProvider>
                   </LeaveProvider>
                 </AttendanceProvider>

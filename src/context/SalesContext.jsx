@@ -299,41 +299,76 @@ export function SalesProvider({ children }) {
     }
   };
 
-  // 4. Issue Tax Invoice
+  // 4. Issue Tax Invoice with Authoritative Atomic Server Wrapper
   const issueTaxInvoice = async (headerPayload, itemsPayload) => {
     if (!isManagementOrAdmin) throw new Error('Unauthorized: Permission denied');
     setIsLoading(true);
     try {
-      const totalAmount = headerPayload.total_amount || 0;
+      const grandTotal = Number(headerPayload.grand_total || headerPayload.total_amount) || 0;
       const header = {
         tenant_id: tenantId,
         tenant_company_id: activeOperatingCompanyId,
         created_by: authUserId,
         status: 'issued',
         amount_paid: 0,
-        balance_due: totalAmount,
+        balance_due: grandTotal,
         ...headerPayload
       };
 
-      // Server-authoritative RPC call
-      const { data, error: rpcError } = await supabase.rpc('issue_tax_invoice_atomic', {
+      let accountingObj = null;
+      if (grandTotal > 0 && activeOperatingCompanyId) {
+        const { data: coa } = await supabase
+          .from('chart_of_accounts')
+          .select('id, account_type, account_subtype, account_code, control_account_type')
+          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`);
+
+        const arAcc = coa?.find(a => a.control_account_type === 'accounts_receivable' || a.account_subtype === 'receivable' || a.account_code === '1010' || a.account_code === 'QA-1010' || a.account_type === 'asset');
+        const revAcc = coa?.find(a => a.control_account_type === 'sales_revenue' || a.account_subtype === 'sales' || a.account_code === '4010' || a.account_code === 'QA-4010' || a.account_type === 'revenue');
+        const cgstAmt = Number(headerPayload.cgst_amount) || 0;
+        const sgstAmt = Number(headerPayload.sgst_amount) || 0;
+        const igstAmt = Number(headerPayload.igst_amount) || 0;
+
+        const cgstAcc = cgstAmt > 0 ? coa?.find(a => a.control_account_type === 'cgst_payable' || a.account_code === '2010' || a.account_code === 'QA-2010') : null;
+        const sgstAcc = sgstAmt > 0 ? coa?.find(a => a.control_account_type === 'sgst_payable' || a.account_code === '2020' || a.account_code === 'QA-2020') : null;
+        const igstAcc = igstAmt > 0 ? coa?.find(a => a.control_account_type === 'igst_payable' || a.account_code === '2030' || a.account_code === 'QA-2030') : null;
+
+        if (arAcc?.id && revAcc?.id) {
+          accountingObj = {
+            post_accounting: true,
+            ar_account_id: arAcc.id,
+            revenue_account_id: revAcc.id,
+            cgst_account_id: cgstAcc?.id || null,
+            sgst_account_id: sgstAcc?.id || null,
+            igst_account_id: igstAcc?.id || null
+          };
+        }
+      }
+
+      // Sole Production Path: Server-authoritative atomic wrapper RPC
+      const { data, error: rpcError } = await supabase.rpc('issue_tax_invoice_with_accounting_atomic', {
         p_header_json: header,
-        p_items_json: itemsPayload
+        p_items_json: itemsPayload,
+        p_accounting_json: accountingObj
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        if (rpcError.message?.includes('schema cache') || rpcError.code === 'PGRST202') {
+          throw new Error('Database Deployment Error: issue_tax_invoice_with_accounting_atomic wrapper RPC is missing or not deployed on Supabase.');
+        }
+        throw rpcError;
+      }
 
       await refreshAllSalesData();
       return { success: true, data };
     } catch (err) {
-      console.error('[SalesContext] Error issuing tax invoice via RPC:', err);
+      console.error('[SalesContext] Error issuing tax invoice via atomic wrapper RPC:', err);
       return { success: false, error: err.message || err };
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 5. Record Sales Payment
+  // 5. Record Sales Payment with Authoritative Atomic Server Wrapper
   const recordSalesPayment = async (paymentPayload) => {
     if (!isManagementOrAdmin) throw new Error('Unauthorized: Permission denied');
     setIsLoading(true);
@@ -346,17 +381,54 @@ export function SalesProvider({ children }) {
         ...paymentPayload
       };
 
-      // Server-authoritative RPC call
-      const { data, error: rpcError } = await supabase.rpc('record_sales_payment_atomic', {
-        p_payment_json: payload
+      const pmtAmount = Number(payload.amount) || 0;
+      let accountingObj = null;
+
+      if (pmtAmount > 0 && activeOperatingCompanyId) {
+        const { data: coa } = await supabase
+          .from('chart_of_accounts')
+          .select('id, account_type, account_subtype, account_code, control_account_type')
+          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`);
+
+        const arAcc = coa?.find(a => a.control_account_type === 'accounts_receivable' || a.account_subtype === 'receivable' || a.account_code === '1010' || a.account_code === 'QA-1010' || a.account_type === 'asset');
+        const { data: bnkData } = await supabase
+          .from('accounting_bank_accounts')
+          .select('id, ledger_account_id')
+          .or(`tenant_company_id.eq.${activeOperatingCompanyId},tenant_id.eq.${tenantId}`)
+          .limit(1);
+
+        let bankOrCashAccId = bnkData && bnkData.length > 0 ? bnkData[0].ledger_account_id : null;
+        if (!bankOrCashAccId) {
+          const bankAcc = coa?.find(a => a.control_account_type === 'bank' || a.control_account_type === 'cash' || a.account_subtype === 'bank' || a.account_subtype === 'cash' || a.account_code === '1020' || a.account_code === 'QA-1020');
+          if (bankAcc) bankOrCashAccId = bankAcc.id;
+        }
+
+        if (arAcc?.id && bankOrCashAccId) {
+          accountingObj = {
+            post_accounting: true,
+            ar_account_id: arAcc.id,
+            bank_account_id: bankOrCashAccId
+          };
+        }
+      }
+
+      // Sole Production Path: Server-authoritative atomic wrapper RPC
+      const { data, error: rpcError } = await supabase.rpc('record_sales_payment_with_accounting_atomic', {
+        p_payment_json: payload,
+        p_accounting_json: accountingObj
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        if (rpcError.message?.includes('schema cache') || rpcError.code === 'PGRST202') {
+          throw new Error('Database Deployment Error: record_sales_payment_with_accounting_atomic wrapper RPC is missing or not deployed on Supabase.');
+        }
+        throw rpcError;
+      }
 
       await refreshAllSalesData();
       return { success: true, data };
     } catch (err) {
-      console.error('[SalesContext] Error recording payment via RPC:', err);
+      console.error('[SalesContext] Error recording sales payment via atomic wrapper RPC:', err);
       return { success: false, error: err.message || err };
     } finally {
       setIsLoading(false);
