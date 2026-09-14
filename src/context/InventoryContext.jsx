@@ -39,6 +39,7 @@ export function InventoryProvider({ children }) {
   const [stockBalances, setStockBalances] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [reservations, setReservations] = useState([]);
+  const [fulfilments, setFulfilments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -131,7 +132,7 @@ export function InventoryProvider({ children }) {
         .from('inventory_reservations')
         .select(`
           *,
-          sales_order:sales_orders(id, sales_order_number, order_number, customer_name, status),
+          sales_order:sales_orders(id, customer_name, total_amount, status),
           lines:inventory_reservation_lines(
             *,
             sales_order_item:sales_order_items(id, item_description, quantity, unit_price),
@@ -167,6 +168,42 @@ export function InventoryProvider({ children }) {
     }
   }, [tenantId]);
 
+  const fetchFulfilments = useCallback(async (opCoId) => {
+    try {
+      let q = supabase
+        .from('inventory_fulfilment_lines')
+        .select(`
+          *,
+          sales_order_item:sales_order_items(id, item_description, quantity, unit_price),
+          item:inventory_items(id, item_code, name, base_uom_code),
+          location:inventory_locations(id, code, name, location_type),
+          transaction:inventory_transactions!inventory_fulfilment_lines_inventory_transaction_id_fkey(id, reference_no, transaction_type, transaction_date)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (opCoId) q = q.eq('tenant_company_id', opCoId);
+      else if (tenantId) q = q.eq('tenant_id', tenantId);
+
+      const { data, error: err } = await q;
+      if (err) {
+        let q2 = supabase
+          .from('inventory_fulfilment_lines')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (opCoId) q2 = q2.eq('tenant_company_id', opCoId);
+        else if (tenantId) q2 = q2.eq('tenant_id', tenantId);
+        const { data: data2, error: err2 } = await q2;
+        if (err2) throw err2;
+        setFulfilments(data2 || []);
+      } else {
+        setFulfilments(data || []);
+      }
+    } catch (err) {
+      console.error('[InventoryContext] Error fetching fulfilments:', err);
+      setFulfilments([]);
+    }
+  }, [tenantId]);
+
   const refreshAllInventory = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -176,14 +213,15 @@ export function InventoryProvider({ children }) {
         fetchLocations(activeOperatingCompanyId),
         fetchStockBalances(activeOperatingCompanyId),
         fetchTransactions(activeOperatingCompanyId),
-        fetchReservations(activeOperatingCompanyId)
+        fetchReservations(activeOperatingCompanyId),
+        fetchFulfilments(activeOperatingCompanyId)
       ]);
     } catch (err) {
       setError(err.message || 'Failed to load inventory data');
     } finally {
       setIsLoading(false);
     }
-  }, [activeOperatingCompanyId, fetchItems, fetchLocations, fetchStockBalances, fetchTransactions, fetchReservations]);
+  }, [activeOperatingCompanyId, fetchItems, fetchLocations, fetchStockBalances, fetchTransactions, fetchReservations, fetchFulfilments]);
 
   useEffect(() => {
     refreshAllInventory();
@@ -454,6 +492,49 @@ export function InventoryProvider({ children }) {
     }
   }, [tenantId, activeOperatingCompanyId, submitting, refreshAllInventory]);
 
+  // 6. Issue Inventory Against Reservation Atomic (P1-C)
+  const issueInventoryAgainstReservation = useCallback(async (issuePayload, customIdempotencyKey = null) => {
+    if (submitting) return { success: false, error: 'Submission in progress' };
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      if (!activeOperatingCompanyId && !tenantId) {
+        throw new Error('Tenant or Operating Company context is required');
+      }
+
+      const payload = {
+        tenant_company_id: activeOperatingCompanyId,
+        reservation_id: issuePayload.reservation_id,
+        transaction_date: issuePayload.transaction_date || new Date().toISOString(),
+        reference_no: issuePayload.reference_no?.trim() || '',
+        notes: issuePayload.notes?.trim() || '',
+        idempotency_key: customIdempotencyKey || issuePayload.idempotency_key || crypto.randomUUID(),
+        lines: (issuePayload.lines || []).map(l => ({
+          reservation_line_id: l.reservation_line_id,
+          quantity: Number(l.quantity) || 0,
+          notes: l.notes?.trim() || ''
+        }))
+      };
+
+      const { data, error: rpcErr } = await supabase.rpc('issue_inventory_against_reservation_atomic', {
+        p_payload: payload
+      });
+
+      if (rpcErr) throw rpcErr;
+
+      await refreshAllInventory();
+      return { success: true, data };
+    } catch (err) {
+      console.error('[InventoryContext] issueInventoryAgainstReservation Error:', err);
+      const msg = err.message || err.details || 'Failed to issue inventory against reservation';
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setSubmitting(false);
+    }
+  }, [tenantId, activeOperatingCompanyId, submitting, refreshAllInventory]);
+
   // Derived Dashboard Metrics
   const metrics = useMemo(() => {
     const totalItems = items.length;
@@ -496,6 +577,7 @@ export function InventoryProvider({ children }) {
     stockBalances,
     transactions,
     reservations,
+    fulfilments,
     isLoading,
     submitting,
     error,
@@ -505,11 +587,13 @@ export function InventoryProvider({ children }) {
     getReservedStock,
     getAvailableStock,
     refreshAllInventory,
+    fetchFulfilments,
     createItem,
     createLocation,
     postTransaction,
     createReservation,
     releaseReservation,
+    issueInventoryAgainstReservation,
     isManagementOrAdmin,
     works
   };
