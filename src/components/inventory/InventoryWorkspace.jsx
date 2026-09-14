@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import {
   Boxes, Package, MapPin, Layers, ArrowRightLeft, TrendingUp, AlertTriangle,
   Plus, RefreshCw, Search, Filter, CheckCircle2, XCircle, ArrowUpRight, ArrowDownLeft,
-  Building, ShieldCheck, Tag, DollarSign, Activity, FileSpreadsheet
+  Building, ShieldCheck, Tag, DollarSign, Activity, FileSpreadsheet, BookmarkCheck
 } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import ItemMasterModal from './ItemMasterModal';
 import LocationModal from './LocationModal';
 import StockTransactionModal from './StockTransactionModal';
+import ReservationModal from './ReservationModal';
+import ReleaseReservationModal from './ReleaseReservationModal';
 
 export default function InventoryWorkspace({ isDarkMode }) {
   const {
@@ -15,22 +17,30 @@ export default function InventoryWorkspace({ isDarkMode }) {
     locations,
     stockBalances,
     transactions,
+    reservations,
     isLoading,
     metrics,
+    getCurrentStock,
+    getReservedStock,
+    getAvailableStock,
     refreshAllInventory,
     isManagementOrAdmin
   } = useInventory();
 
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'items' | 'locations' | 'stock' | 'transactions'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'items' | 'locations' | 'stock' | 'transactions' | 'reservations'
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterReservationStatus, setFilterReservationStatus] = useState('');
 
   // Modals
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [txModalType, setTxModalType] = useState('RECEIPT');
+  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
+  const [selectedReservationToRelease, setSelectedReservationToRelease] = useState(null);
 
   // Styling helper classes
   const tBg = isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900';
@@ -107,6 +117,13 @@ export default function InventoryWorkspace({ isDarkMode }) {
           </button>
 
           <button
+            onClick={() => setIsReservationModalOpen(true)}
+            className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border border-sky-500/30 transition-colors flex items-center gap-1.5"
+          >
+            <BookmarkCheck className="w-3.5 h-3.5" /> Reserve Stock
+          </button>
+
+          <button
             onClick={() => setIsItemModalOpen(true)}
             className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md shadow-amber-500/20 transition-colors flex items-center gap-1.5"
           >
@@ -122,6 +139,7 @@ export default function InventoryWorkspace({ isDarkMode }) {
           { id: 'items', label: 'Item Master', icon: Package, count: items.length },
           { id: 'locations', label: 'Locations', icon: MapPin, count: locations.length },
           { id: 'stock', label: 'Stock On Hand', icon: Boxes, count: stockBalances.length },
+          { id: 'reservations', label: 'Reservations & Allocation', icon: BookmarkCheck, count: reservations.length },
           { id: 'transactions', label: 'Transactions History', icon: ArrowRightLeft, count: transactions.length }
         ].map(tab => {
           const Icon = tab.icon;
@@ -473,16 +491,18 @@ export default function InventoryWorkspace({ isDarkMode }) {
                     <th className="p-3.5">Item Name</th>
                     <th className="p-3.5">Location</th>
                     <th className="p-3.5">Lot / Batch</th>
-                    <th className="p-3.5 text-right">Quantity On Hand</th>
-                    <th className="p-3.5 text-right">Average Unit Cost (₹)</th>
-                    <th className="p-3.5 text-right">Total Stock Value (₹)</th>
+                    <th className="p-3.5 text-right">Physical Stock</th>
+                    <th className="p-3.5 text-right">Reserved Qty</th>
+                    <th className="p-3.5 text-right">Available Stock</th>
+                    <th className="p-3.5 text-right">Avg Unit Cost (₹)</th>
+                    <th className="p-3.5 text-right">Total Value (₹)</th>
                     <th className="p-3.5 text-right">Last Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {stockBalances.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-500 text-xs">
+                      <td colSpan={10} className="p-8 text-center text-slate-500 text-xs">
                         No stock balances recorded. Perform a Stock Receipt or Opening Stock transaction.
                       </td>
                     </tr>
@@ -491,14 +511,23 @@ export default function InventoryWorkspace({ isDarkMode }) {
                       const item = bal.item || items.find(i => i.id === bal.item_id);
                       const loc = bal.location || locations.find(l => l.id === bal.location_id);
                       const stockVal = Number(bal.quantity_on_hand || 0) * Number(bal.average_unit_cost || 0);
+                      const reserved = getReservedStock(bal.item_id, bal.location_id, bal.lot_number);
+                      const available = getAvailableStock(bal.item_id, bal.location_id, bal.lot_number);
+
                       return (
                         <tr key={bal.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
                           <td className="p-3.5 font-mono font-bold text-amber-500">{item?.item_code || 'ITEM'}</td>
                           <td className="p-3.5 font-semibold">{item?.name || 'Item'}</td>
                           <td className="p-3.5 font-mono">{loc ? `${loc.code} (${loc.name})` : 'Location'}</td>
                           <td className="p-3.5 font-mono text-slate-400">{bal.lot_number || '--'}</td>
-                          <td className="p-3.5 text-right font-mono font-bold text-emerald-400">
+                          <td className="p-3.5 text-right font-mono font-bold text-slate-100">
                             {bal.quantity_on_hand} {item?.base_uom_code || ''}
+                          </td>
+                          <td className="p-3.5 text-right font-mono font-bold text-amber-400">
+                            {reserved}
+                          </td>
+                          <td className="p-3.5 text-right font-mono font-bold text-emerald-400">
+                            {available}
                           </td>
                           <td className="p-3.5 text-right font-mono">
                             ₹{Number(bal.average_unit_cost || 0).toFixed(2)}
@@ -519,7 +548,151 @@ export default function InventoryWorkspace({ isDarkMode }) {
           </div>
         )}
 
-        {/* 5. TRANSACTIONS HISTORY TAB */}
+        {/* 5. RESERVATIONS & ALLOCATION TAB */}
+        {activeTab === 'reservations' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <p className={`text-xs ${tMuted}`}>
+                Active and historical material allocations against Sales Orders (does not reduce physical stock)
+              </p>
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <select
+                  value={filterReservationStatus}
+                  onChange={(e) => setFilterReservationStatus(e.target.value)}
+                  className={`px-3 py-2 text-xs rounded-lg border ${tInput}`}
+                >
+                  <option value="">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="partially_released">Partially Released</option>
+                  <option value="released">Released</option>
+                  <option value="fulfilled">Fulfilled</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+
+                <button
+                  onClick={() => setIsReservationModalOpen(true)}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-sky-500 hover:bg-sky-600 text-white shadow-md transition-colors flex items-center gap-1.5 shrink-0"
+                >
+                  <Plus className="w-4 h-4" /> Create Reservation
+                </button>
+              </div>
+            </div>
+
+            <div className={`rounded-xl border overflow-hidden ${tCard}`}>
+              <table className="w-full text-left text-xs">
+                <thead className={isDarkMode ? 'bg-slate-900 text-slate-400 border-b border-slate-800' : 'bg-slate-100 text-slate-700 font-semibold border-b border-slate-200'}>
+                  <tr>
+                    <th className="p-3.5">Reservation No.</th>
+                    <th className="p-3.5">Sales Order</th>
+                    <th className="p-3.5">Line Allocation Details</th>
+                    <th className="p-3.5 text-right">Requested Qty</th>
+                    <th className="p-3.5 text-right">Reserved Qty</th>
+                    <th className="p-3.5 text-right">Released Qty</th>
+                    <th className="p-3.5 text-right">Remaining Reserved</th>
+                    <th className="p-3.5 text-center">Status</th>
+                    <th className="p-3.5 text-right">Created Date</th>
+                    <th className="p-3.5 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {reservations
+                    .filter(r => !filterReservationStatus || (r.status || 'active').toLowerCase() === filterReservationStatus.toLowerCase())
+                    .length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="p-8 text-center text-slate-500 text-xs">
+                        No inventory reservations found. Click "Create Reservation" to allocate stock.
+                      </td>
+                    </tr>
+                  ) : (
+                    reservations
+                      .filter(r => !filterReservationStatus || (r.status || 'active').toLowerCase() === filterReservationStatus.toLowerCase())
+                      .map(res => {
+                        const statusLower = (res.status || 'active').toLowerCase();
+                        let totalReq = 0;
+                        let totalRes = 0;
+                        let totalRel = 0;
+                        let totalRem = 0;
+
+                        (res.lines || []).forEach(l => {
+                          const req = Number(l.requested_quantity || l.reserved_quantity || l.quantity) || 0;
+                          const rsv = Number(l.reserved_quantity || l.quantity) || 0;
+                          const rel = Number(l.released_quantity) || 0;
+                          const rem = Math.max(0, rsv - rel);
+                          totalReq += req;
+                          totalRes += rsv;
+                          totalRel += rel;
+                          totalRem += rem;
+                        });
+
+                        return (
+                          <tr key={res.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
+                            <td className="p-3.5 font-mono font-bold text-sky-400">
+                              {res.reservation_number || res.code || `RES-${res.id.slice(0, 6)}`}
+                            </td>
+
+                            <td className="p-3.5">
+                              <p className="font-semibold">{res.sales_order?.sales_order_number || res.sales_order?.order_number || 'Sales Order'}</p>
+                              <p className={`text-[11px] ${tMuted}`}>{res.sales_order?.customer_name || 'Customer'}</p>
+                            </td>
+
+                            <td className="p-3.5">
+                              {(res.lines || []).map((l, idx) => (
+                                <div key={l.id || idx} className="text-[11px] mb-1">
+                                  <span className="font-semibold text-slate-200">{l.item?.name || l.sales_order_item?.item_description || 'Item'}</span>
+                                  <span className={`text-[10px] block ${tMuted} font-mono`}>
+                                    Loc: {l.location?.code || 'Warehouse'} {l.lot_number ? `• Lot: ${l.lot_number}` : ''}
+                                  </span>
+                                </div>
+                              ))}
+                            </td>
+
+                            <td className="p-3.5 text-right font-mono font-bold text-slate-300">{totalReq}</td>
+                            <td className="p-3.5 text-right font-mono font-bold text-blue-400">{totalRes}</td>
+                            <td className="p-3.5 text-right font-mono text-slate-400">{totalRel}</td>
+                            <td className="p-3.5 text-right font-mono font-bold text-amber-400">{totalRem}</td>
+
+                            <td className="p-3.5 text-center">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                statusLower === 'active' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                statusLower === 'partially_released' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                statusLower === 'released' ? 'bg-slate-800 text-slate-400' :
+                                statusLower === 'fulfilled' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                'bg-rose-500/20 text-rose-400'
+                              }`}>
+                                {statusLower.replace('_', ' ')}
+                              </span>
+                            </td>
+
+                            <td className="p-3.5 text-right text-slate-400 text-[11px]">
+                              {new Date(res.created_at).toLocaleDateString()}
+                            </td>
+
+                            <td className="p-3.5 text-center">
+                              {totalRem > 0 && statusLower !== 'released' && statusLower !== 'cancelled' ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedReservationToRelease(res);
+                                    setIsReleaseModalOpen(true);
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-bold rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 transition-colors"
+                                >
+                                  Release
+                                </button>
+                              ) : (
+                                <span className="text-slate-600 text-[11px]">--</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 6. TRANSACTIONS HISTORY TAB */}
         {activeTab === 'transactions' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -611,6 +784,22 @@ export default function InventoryWorkspace({ isDarkMode }) {
         onClose={() => setIsTxModalOpen(false)}
         isDarkMode={isDarkMode}
         initialType={txModalType}
+      />
+
+      <ReservationModal
+        isOpen={isReservationModalOpen}
+        onClose={() => setIsReservationModalOpen(false)}
+        isDarkMode={isDarkMode}
+      />
+
+      <ReleaseReservationModal
+        isOpen={isReleaseModalOpen}
+        onClose={() => {
+          setIsReleaseModalOpen(false);
+          setSelectedReservationToRelease(null);
+        }}
+        reservation={selectedReservationToRelease}
+        isDarkMode={isDarkMode}
       />
     </div>
   );
