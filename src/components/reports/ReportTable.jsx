@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import * as XLSX from 'xlsx';
 import {
   FileSpreadsheet, Download, RefreshCw, ChevronLeft, ChevronRight,
-  AlertCircle, ShieldAlert, CheckCircle2, FileText, Filter
+  AlertCircle, ShieldAlert, FileText
 } from 'lucide-react';
 
 export default function ReportTable({
@@ -76,25 +76,57 @@ export default function ReportTable({
     setOffset(0);
   }, [tenantId, operatingCompanyId, fromDate, toDate, reportKey]);
 
+  // Dynamic fallback for columns if explicit columns array is not supplied or empty
+  const effectiveColumns = useMemo(() => {
+    if (columns && columns.length > 0) return columns;
+    if (rows && rows.length > 0) {
+      return Object.keys(rows[0]).map(key => {
+        const kLower = key.toLowerCase();
+        let type = 'string';
+        let align = 'left';
+        if (kLower.includes('amount') || kLower.includes('cost') || kLower.includes('value') || kLower.includes('revenue') || kLower.includes('price') || kLower.includes('balance') || kLower.includes('debit') || kLower.includes('credit') || kLower.includes('net') || kLower.includes('pay') || kLower.includes('earnings') || kLower.includes('deduction')) {
+          type = 'currency';
+          align = 'right';
+        } else if (kLower.includes('date') || kLower.includes('_at')) {
+          type = 'date';
+        } else if (kLower.includes('status') || kLower.includes('is_') || kLower.includes('flag') || kLower.includes('overdue')) {
+          type = 'status';
+        } else if (kLower.includes('count') || kLower.includes('qty') || kLower.includes('quantity') || kLower.includes('days') || kLower.includes('level') || kLower.includes('tasks') || kLower.includes('number') || kLower.includes('age')) {
+          type = 'number';
+          align = 'right';
+        }
+        return {
+          label: key.replace(/_/g, ' ').toUpperCase(),
+          key: key,
+          type,
+          align
+        };
+      });
+    }
+    return [];
+  }, [columns, rows]);
+
   // Value formatters
   const formatCellValue = (val, type, row) => {
-    if (val === null || val === undefined || val === '') return '—';
+    if (val === null || val === undefined || val === '') {
+      return <span className="text-slate-400 dark:text-slate-500 font-normal italic text-[11px]">Unavailable</span>;
+    }
 
     switch (type) {
       case 'currency': {
         const num = Number(val);
-        if (isNaN(num)) return '—';
+        if (isNaN(num)) return <span className="text-slate-400 dark:text-slate-500 font-normal italic text-[11px]">Unavailable</span>;
         return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       }
       case 'number':
       case 'integer': {
         const num = Number(val);
-        if (isNaN(num)) return '—';
+        if (isNaN(num)) return <span className="text-slate-400 dark:text-slate-500 font-normal italic text-[11px]">Unavailable</span>;
         return num.toLocaleString('en-IN');
       }
       case 'percent': {
         const num = Number(val);
-        if (isNaN(num)) return '—';
+        if (isNaN(num)) return <span className="text-slate-400 dark:text-slate-500 font-normal italic text-[11px]">Unavailable</span>;
         return `${num.toFixed(1)}%`;
       }
       case 'date': {
@@ -107,11 +139,11 @@ export default function ReportTable({
       case 'status': {
         const statusStr = String(val).toLowerCase();
         let badgeStyle = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-        if (['approved', 'active', 'paid', 'posted', 'completed', 'verified', 'present'].includes(statusStr)) {
+        if (['approved', 'active', 'paid', 'posted', 'completed', 'verified', 'present', 'false', 'no'].includes(statusStr)) {
           badgeStyle = 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300';
         } else if (['pending', 'draft', 'in_progress', 'open', 'partially_paid', 'late'].includes(statusStr)) {
           badgeStyle = 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300';
-        } else if (['rejected', 'cancelled', 'overdue', 'absent', 'revoked'].includes(statusStr)) {
+        } else if (['rejected', 'cancelled', 'overdue', 'absent', 'revoked', 'true', 'yes'].includes(statusStr)) {
           badgeStyle = 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-300';
         }
         return (
@@ -121,6 +153,10 @@ export default function ReportTable({
         );
       }
       case 'calculated_contribution': {
+        if (val !== undefined && val !== null && val !== '') {
+          const cNum = Number(val);
+          if (!isNaN(cNum)) return `₹${cNum.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
         const rev = Number(row?.revenue || row?.total_amount || 0);
         const cost = Number(row?.procurement_cost || row?.po_cost || 0);
         const mat = Number(row?.material_issue_value || row?.material_cost || 0);
@@ -136,18 +172,18 @@ export default function ReportTable({
   const handleExport = (exportType = 'xlsx') => {
     if (rows.length === 0) return;
 
-    // Map rows using column headers
+    // Map rows using effective column headers
     const exportData = rows.map(r => {
       const rowObj = {};
-      columns.forEach(col => {
+      effectiveColumns.forEach(col => {
         let val = r[col.key];
-        if (col.type === 'calculated_contribution') {
+        if (col.type === 'calculated_contribution' && (val === undefined || val === null)) {
           const rev = Number(r.revenue || r.total_amount || 0);
           const cost = Number(r.procurement_cost || r.po_cost || 0);
           const mat = Number(r.material_issue_value || r.material_cost || 0);
           val = rev - cost - mat;
         }
-        rowObj[col.label] = val !== undefined && val !== null ? val : '';
+        rowObj[col.label] = val !== undefined && val !== null ? val : 'Unavailable';
       });
       return rowObj;
     });
@@ -239,7 +275,7 @@ export default function ReportTable({
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 text-[9px] font-black uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-900">
                 <th className="px-4 py-3 text-center w-12">#</th>
-                {columns.map(col => (
+                {effectiveColumns.map(col => (
                   <th key={col.key || col.label} className={`px-4 py-3 ${col.align === 'right' ? 'text-right' : 'text-left'}`}>
                     {col.label}
                   </th>
@@ -250,7 +286,7 @@ export default function ReportTable({
               {rows.map((row, idx) => (
                 <tr key={row.id || idx} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition">
                   <td className="px-4 py-3 text-center text-[10px] font-mono text-slate-400">{offset + idx + 1}</td>
-                  {columns.map(col => {
+                  {effectiveColumns.map(col => {
                     const val = row[col.key];
                     const isRight = col.align === 'right' || col.type === 'currency' || col.type === 'number';
                     return (
@@ -292,7 +328,7 @@ export default function ReportTable({
             <button
               onClick={() => setOffset(Math.max(0, offset - limit))}
               disabled={offset === 0 || isLoading}
-              className="p-1.5 rounded border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="p-1.5 rounded border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             >
               <ChevronLeft size={14} />
             </button>
@@ -300,7 +336,7 @@ export default function ReportTable({
             <button
               onClick={() => setOffset(offset + limit)}
               disabled={rows.length < limit || isLoading}
-              className="p-1.5 rounded border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="p-1.5 rounded border border-slate-200 dark:border-slate-800 disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             >
               <ChevronRight size={14} />
             </button>
