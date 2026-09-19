@@ -68,8 +68,8 @@ export default function CompanySettingsWorkspace() {
     operatingCompanies = [], fetchOperatingCompanies
   } = crm || {};
 
-  // Check Owner Access Security
-  const isOwner = ['OWNER', 'ADMIN'].includes((tenantRole || '').toUpperCase()) || userRole === 'admin';
+  // Check Owner Access Security (Strict Owner restriction)
+  const isOwner = (tenantRole || '').toUpperCase() === 'OWNER';
 
   // Navigation & View State
   const [currentView, setCurrentView] = useState('list'); // 'list' | 'create' | 'edit'
@@ -245,11 +245,11 @@ export default function CompanySettingsWorkspace() {
         console.warn('[CompanySettings] RPC get_owner_company_settings notice:', settingsErr.message);
       }
 
-      if (settingsData && settingsData.tenant_company) {
-        const tc = settingsData.tenant_company || {};
-        const cp = settingsData.company_profile || {};
-        const cb = settingsData.company_branding || {};
-        const cs = settingsData.company_settings || {};
+      if (settingsData && (settingsData.tenant_company || settingsData.company || settingsData.company_profile)) {
+        const tc = settingsData.tenant_company || settingsData.company || settingsData.company_info || settingsData;
+        const cp = settingsData.company_profile || settingsData.profile || {};
+        const cb = settingsData.company_branding || settingsData.branding || {};
+        const cs = settingsData.company_settings || settingsData.settings || {};
 
         setFormData({
           name: tc.name || cp.company_name || '',
@@ -277,12 +277,19 @@ export default function CompanySettingsWorkspace() {
           time_zone: cp.time_zone || 'Asia/Kolkata',
           is_primary: Boolean(cp.is_primary),
 
-          registrations: settingsData.company_registrations || [],
-          addresses: settingsData.company_addresses || [],
-          contacts: settingsData.company_contacts || [],
-          bank_profiles: (settingsData.company_bank_profiles || []).map(b => ({
+          registrations: settingsData.company_registrations || settingsData.registrations || [],
+          addresses: (settingsData.company_addresses || settingsData.addresses || []).map(a => ({
+            ...a,
+            address_line_1: a.address_line_1 || a.address_line1 || '',
+            address_line_2: a.address_line_2 || a.address_line2 || '',
+            postal_code: a.postal_code || a.pincode || ''
+          })),
+          contacts: settingsData.company_contacts || settingsData.contacts || [],
+          bank_profiles: (settingsData.company_bank_profiles || settingsData.bank_profiles || settingsData.banks || []).map(b => ({
             ...b,
-            masked_account_number: maskAccountNumber(b.account_number || b.masked_account_number)
+            branch: b.branch_name || b.branch || '',
+            ifsc: b.ifsc_code || b.ifsc || '',
+            masked_account_number: maskAccountNumber(b.masked_account_number || b.account_number)
           })),
 
           gst_registration_type: cs.gst_registration_type || 'Regular',
@@ -290,11 +297,11 @@ export default function CompanySettingsWorkspace() {
           tds_applicable: cs.tds_applicable !== false,
           pf_applicable: cs.pf_applicable !== false,
           esic_applicable: cs.esic_applicable !== false,
-          pt_applicable: cs.pt_applicable !== false,
+          pt_applicable: cs.professional_tax_applicable !== false && cs.pt_applicable !== false,
           default_tax_region: cs.default_tax_region || '36',
 
-          logo_file: cb.logo_metadata || null,
-          favicon_file: cb.favicon_metadata || null,
+          logo_file: cb.logo_url ? { preview: cb.logo_url } : (cb.logo_metadata || null),
+          favicon_file: cb.favicon_url ? { preview: cb.favicon_url } : (cb.favicon_metadata || null),
           primary_color: cb.primary_color || '#0284c7',
           secondary_color: cb.secondary_color || '#4f46e5',
           accent_color: cb.accent_color || '#f59e0b',
@@ -303,10 +310,10 @@ export default function CompanySettingsWorkspace() {
           welcome_message: cb.welcome_message || 'Welcome to RAJIV Business OS',
           contact_display_text: cb.contact_display_text || '',
 
-          documents: settingsData.company_documents || []
+          documents: settingsData.company_documents || settingsData.documents || []
         });
 
-        setAuditHistory(settingsData.company_settings_audit || []);
+        setAuditHistory(settingsData.company_settings_audit || settingsData.audit_history || settingsData.audits || []);
       } else {
         // Fallback: Query tables individually
         await loadCompanySettingsFallback(companyId);
@@ -335,7 +342,7 @@ export default function CompanySettingsWorkspace() {
       is_primary: Boolean(targetComp.is_primary)
     }));
 
-    // Fetch child records if present
+    // Fetch child records matching live schema columns
     const [regRes, addrRes, contRes, bankRes, docRes, auditRes] = await Promise.all([
       supabase.from('company_registrations').select('*').eq('tenant_company_id', companyId),
       supabase.from('company_addresses').select('*').eq('tenant_company_id', companyId),
@@ -348,11 +355,18 @@ export default function CompanySettingsWorkspace() {
     setFormData(prev => ({
       ...prev,
       registrations: regRes.data || [],
-      addresses: addrRes.data || [],
+      addresses: (addrRes.data || []).map(a => ({
+        ...a,
+        address_line_1: a.address_line_1 || a.address_line1 || '',
+        address_line_2: a.address_line_2 || a.address_line2 || '',
+        postal_code: a.postal_code || a.pincode || ''
+      })),
       contacts: contRes.data || [],
       bank_profiles: (bankRes.data || []).map(b => ({
         ...b,
-        masked_account_number: maskAccountNumber(b.account_number || b.masked_account_number)
+        branch: b.branch_name || b.branch || '',
+        ifsc: b.ifsc_code || b.ifsc || '',
+        masked_account_number: maskAccountNumber(b.masked_account_number || b.account_number)
       })),
       documents: docRes.data || []
     }));
@@ -432,9 +446,105 @@ export default function CompanySettingsWorkspace() {
 
     try {
       const isEdit = currentView === 'edit';
+
+      const formattedRegistrations = (formData.registrations || []).map(r => ({
+        registration_type: r.registration_type,
+        registration_number: r.registration_number,
+        issuing_authority: r.issuing_authority || '',
+        state_code: r.state_code || '',
+        issue_date: r.issue_date || null,
+        expiry_date: r.expiry_date || null,
+        status: r.status || 'active',
+        is_primary: Boolean(r.is_primary),
+        notes: r.notes || ''
+      }));
+
+      const formattedAddresses = (formData.addresses || []).map(a => ({
+        label: a.label || 'Office',
+        address_line_1: a.address_line_1 || a.address_line1 || '',
+        address_line_2: a.address_line_2 || a.address_line2 || '',
+        landmark: a.landmark || '',
+        city: a.city || '',
+        district: a.district || '',
+        state: a.state || '',
+        state_code: a.state_code || '',
+        postal_code: a.postal_code || a.pincode || '',
+        country: a.country || 'India',
+        is_primary: Boolean(a.is_primary),
+        is_active: a.is_active !== false
+      }));
+
+      const formattedContacts = (formData.contacts || []).map(c => ({
+        contact_type: c.contact_type || 'General',
+        name: c.name || '',
+        designation: c.designation || '',
+        department: c.department || '',
+        email: c.email || '',
+        phone: c.phone || '',
+        alternate_phone: c.alternate_phone || '',
+        is_primary: Boolean(c.is_primary),
+        is_active: c.is_active !== false,
+        notes: c.notes || ''
+      }));
+
+      const formattedBankProfiles = (formData.bank_profiles || []).map(b => ({
+        bank_name: b.bank_name || '',
+        branch_name: b.branch_name || b.branch || '',
+        account_name: b.account_name || '',
+        masked_account_number: maskAccountNumber(b.masked_account_number || b.raw_account_number || b.account_number),
+        account_type: b.account_type || 'Current',
+        upi_id: b.upi_id || '',
+        ifsc_code: b.ifsc_code || b.ifsc || '',
+        is_primary: Boolean(b.is_primary),
+        is_active: b.is_active !== false,
+        notes: b.notes || ''
+      }));
+
+      const formattedSettings = {
+        gst_registration_type: formData.gst_registration_type || 'Regular',
+        gst_filing_frequency: formData.gst_filing_frequency || 'Monthly',
+        tds_applicable: formData.tds_applicable !== false,
+        pf_applicable: formData.pf_applicable !== false,
+        esic_applicable: formData.esic_applicable !== false,
+        professional_tax_applicable: formData.pt_applicable !== false && formData.professional_tax_applicable !== false,
+        default_tax_region: formData.default_tax_region || '36'
+      };
+
+      const formattedBranding = {
+        logo_url: formData.logo_file?.preview || formData.logo_url || null,
+        favicon_url: formData.favicon_file?.preview || formData.favicon_url || null,
+        primary_color: formData.primary_color || '#0284c7',
+        secondary_color: formData.secondary_color || '#4f46e5',
+        accent_color: formData.accent_color || '#f59e0b',
+        font_family: formData.font_family || 'Inter',
+        login_template: formData.login_template || 'Modern Glass',
+        welcome_message: formData.welcome_message || 'Welcome to RAJIV Business OS',
+        contact_display_text: formData.contact_display_text || ''
+      };
+
+      const formattedDocuments = (formData.documents || []).map(d => ({
+        document_type: d.document_type || 'Other',
+        document_name: d.document_name || '',
+        document_number: d.document_number || '',
+        issue_date: d.issue_date || null,
+        expiry_date: d.expiry_date || null,
+        verification_status: d.verification_status || 'Pending',
+        notes: d.notes || '',
+        file_name: d.file_name || '',
+        mime_type: d.mime_type || '',
+        version: d.version || '1.0',
+        is_archived: Boolean(d.is_archived),
+        storage_provider: d.storage_provider || 'r2',
+        storage_key: d.storage_key || ''
+      }));
       
       const payload = {
         tenant_company_id: selectedCompanyId || undefined,
+        id: selectedCompanyId || undefined,
+        name: formData.name.trim(),
+        code: (formData.company_code?.trim() || formData.name.substring(0, 4)).toUpperCase(),
+        status: formData.status || 'active',
+
         company_name: formData.name.trim(),
         legal_name: formData.legal_name?.trim() || formData.name.trim(),
         display_name: formData.display_name?.trim() || formData.name.trim(),
@@ -445,7 +555,6 @@ export default function CompanySettingsWorkspace() {
         industry: formData.industry,
         nature_of_business: formData.nature_of_business,
         company_description: formData.description,
-        status: formData.status,
 
         official_email: formData.official_email?.trim() || '',
         official_phone: formData.official_phone?.trim() || '',
@@ -460,35 +569,26 @@ export default function CompanySettingsWorkspace() {
         time_zone: formData.time_zone,
         is_primary: Boolean(formData.is_primary),
 
-        registrations: formData.registrations,
-        addresses: formData.addresses,
-        contacts: formData.contacts,
-        bank_profiles: formData.bank_profiles.map(b => ({
-          ...b,
-          account_number: maskAccountNumber(b.raw_account_number || b.masked_account_number || b.account_number)
-        })),
+        registrations: formattedRegistrations,
+        company_registrations: formattedRegistrations,
 
-        gst_registration_type: formData.gst_registration_type,
-        gst_filing_frequency: formData.gst_filing_frequency,
-        tds_applicable: formData.tds_applicable,
-        pf_applicable: formData.pf_applicable,
-        esic_applicable: formData.esic_applicable,
-        pt_applicable: formData.pt_applicable,
-        default_tax_region: formData.default_tax_region,
+        addresses: formattedAddresses,
+        company_addresses: formattedAddresses,
 
-        branding: {
-          logo_metadata: formData.logo_file,
-          favicon_metadata: formData.favicon_file,
-          primary_color: formData.primary_color,
-          secondary_color: formData.secondary_color,
-          accent_color: formData.accent_color,
-          font_family: formData.font_family,
-          login_template: formData.login_template,
-          welcome_message: formData.welcome_message,
-          contact_display_text: formData.contact_display_text
-        },
+        contacts: formattedContacts,
+        company_contacts: formattedContacts,
 
-        documents: formData.documents,
+        bank_profiles: formattedBankProfiles,
+        company_bank_profiles: formattedBankProfiles,
+
+        settings: formattedSettings,
+        company_settings: formattedSettings,
+
+        branding: formattedBranding,
+        company_branding: formattedBranding,
+
+        documents: formattedDocuments,
+        company_documents: formattedDocuments,
         updated_by: currentUser?.email || 'Owner'
       };
 
@@ -499,12 +599,12 @@ export default function CompanySettingsWorkspace() {
 
       if (rpcErr) {
         console.error(`[CompanySettings] RPC ${rpcName} error:`, rpcErr);
-        // If RPC returns error, attempt fallback creation/update
-        await saveCompanyFallback(payload, isEdit);
-      } else {
-        setSuccessMessage(isEdit ? 'Company settings updated successfully!' : 'New company created successfully!');
+        // Show actual backend error and abort immediately without silent database writes
+        setErrorMessage(`Backend Error (${rpcErr.code || 'RPC'}): ${rpcErr.message || rpcErr.details || 'Operation failed'}`);
+        return;
       }
 
+      setSuccessMessage(isEdit ? 'Company settings updated successfully!' : 'New company created successfully!');
       setIsDirty(false);
       await fetchCompanyList();
       if (fetchOperatingCompanies) await fetchOperatingCompanies();
@@ -519,66 +619,6 @@ export default function CompanySettingsWorkspace() {
     } finally {
       setIsSaving(false);
     }
-  }
-
-  async function saveCompanyFallback(payload, isEdit) {
-    if (isEdit && selectedCompanyId) {
-      // 1. Update tenant_companies (only valid columns: name, code, status, updated_at)
-      const { error: tcErr } = await supabase
-        .from('tenant_companies')
-        .update({
-          name: payload.company_name,
-          code: payload.company_code,
-          status: payload.status,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedCompanyId);
-
-      if (tcErr) console.warn('[CompanySettings] Fallback tenant_companies update notice:', tcErr.message);
-
-      // 2. Update company_profiles (contains is_primary column)
-      const { error: cpErr } = await supabase
-        .from('company_profiles')
-        .upsert({
-          tenant_company_id: selectedCompanyId,
-          company_name: payload.company_name,
-          legal_name: payload.legal_name,
-          display_name: payload.display_name,
-          trading_name: payload.trading_name,
-          company_code: payload.company_code,
-          company_type: payload.company_type,
-          business_type: payload.business_type,
-          industry: payload.industry,
-          nature_of_business: payload.nature_of_business,
-          description: payload.company_description,
-          official_email: payload.official_email,
-          official_phone: payload.official_phone,
-          alternate_phone: payload.alternate_phone,
-          website: payload.website,
-          incorporation_date: payload.incorporation_date,
-          commencement_date: payload.commencement_date,
-          employee_count: payload.employee_count,
-          financial_year_start: payload.financial_year_start,
-          currency: payload.currency,
-          time_zone: payload.time_zone,
-          is_primary: payload.is_primary,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'tenant_company_id' });
-
-      if (cpErr) console.warn('[CompanySettings] Fallback company_profiles update notice:', cpErr.message);
-    } else {
-      const { data: newComp, error } = await supabase
-        .from('companies')
-        .insert([{
-          name: payload.company_name
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      if (newComp) setSelectedCompanyId(newComp.id);
-    }
-    setSuccessMessage('Company saved successfully via database fallback.');
   }
 
   // Handle Company Status Change (Active / Inactive / Archived)
