@@ -4,7 +4,7 @@ import TaskPanel from './TaskPanel';
 import Modals from './Modals';
 import AiChatModal from '../ai/AiChatModal';
 import { 
-  Search, FileText, Building, MapPin, Plus, X, ChevronDown, 
+  FileText, Building, MapPin, Plus, X, ChevronDown, 
   Check, RefreshCw, Briefcase, CalendarClock, Users, ListChecks, Bell 
 } from 'lucide-react'; 
 import { useCrm } from '../../context/CrmContext';
@@ -22,7 +22,6 @@ export default function CrmWorkspace({ embedded = false }) {
     activeUnitId,
     setActiveUnitId,
     fontSize,
-    searchQuery, handleSearch, searchResults, jumpToSearchResult, setSearchQuery,
     handleAddCompany, handleAddUnit,
     openNewWorkModal, openNewTask, openGlobalReminderModal, openNewContactModal,
     openNewEnquiryModal, openNewFollowUpModal,
@@ -41,7 +40,6 @@ export default function CrmWorkspace({ embedded = false }) {
   const mainContentRef = useRef(null);
 
   const opCompanyDropdownRef = useRef(null);
-  const searchContainerRef = useRef(null);
   const companyDropdownRef = useRef(null);
   const unitDropdownRef = useRef(null);
   const createMenuRef = useRef(null);
@@ -52,9 +50,6 @@ export default function CrmWorkspace({ embedded = false }) {
   // Close popovers on click outside
   useEffect(() => {
     function handleClickOutside(event) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
-        if (setSearchQuery) setSearchQuery('');
-      }
       if (opCompanyDropdownRef.current && !opCompanyDropdownRef.current.contains(event.target)) {
         setIsOpCompanyOpen(false);
       }
@@ -70,7 +65,7 @@ export default function CrmWorkspace({ embedded = false }) {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [setSearchQuery]);
+  }, []);
 
   // Touch handlers for Mobile Pull-To-Refresh
   const handleTouchStart = (e) => {
@@ -115,7 +110,7 @@ export default function CrmWorkspace({ embedded = false }) {
       <Modals />
       <AiChatModal />
 
-      {/* CRM CONTEXT & SEARCH TOOLBAR ROW */}
+      {/* CRM CONTEXT TOOLBAR ROW */}
       <div className="space-y-3 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:flex lg:items-center gap-2">
           
@@ -257,60 +252,6 @@ export default function CrmWorkspace({ embedded = false }) {
                     <Plus size={13} /> Add New Unit
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* CRM SEARCH BAR */}
-          <div className="relative flex-1 min-w-0" ref={searchContainerRef}>
-            <div className="os-global-search w-full">
-              <Search size={14} className="shrink-0 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search customers, projects, contacts, enquiries..."
-                value={searchQuery || ''}
-                onChange={handleSearch}
-              />
-              {searchQuery && (
-                <button 
-                  onClick={() => handleSearch({ target: { value: '' } })} 
-                  className="text-slate-400 hover:text-rose-500 cursor-pointer"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-
-            {/* Search Results Dropdown */}
-            {searchResults && searchResults.length > 0 && (
-              <div className="os-popover left-0 right-0 top-11 z-50 overflow-hidden p-0 max-h-72 overflow-y-auto custom-scrollbar">
-                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-slate-400">
-                  <span>Search Results ({searchResults.length})</span>
-                  <button onClick={() => handleSearch({ target: { value: '' } })} className="hover:text-rose-500"><X size={12} /></button>
-                </div>
-                {searchResults.map((result, idx) => (
-                  <button
-                    key={result.id || idx}
-                    onClick={() => {
-                      jumpToSearchResult(result);
-                      handleSearch({ target: { value: '' } });
-                    }}
-                    className="os-company-option rounded-none border-b border-slate-100 dark:border-slate-800/60 last:border-0"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText size={14} className="text-sky-500 shrink-0" />
-                      <div className="truncate">
-                        <b className="truncate block">{result.label || result.title || result.name}</b>
-                        <small className="truncate block">{result.subtext || result.po_number || ''}</small>
-                      </div>
-                    </div>
-                    {result.result_type && (
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
-                        {result.result_type}
-                      </span>
-                    )}
-                  </button>
-                ))}
               </div>
             )}
           </div>
