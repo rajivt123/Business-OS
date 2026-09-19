@@ -535,15 +535,134 @@ export default function CompanySettingsWorkspace() {
         }
       }
 
+      if (!targetCompanyId) {
+        setErrorMessage('Company Settings could not be saved: Target company ID missing');
+        return;
+      }
+
+      // Build payload for save_owner_company_settings_details_atomic
+      const detailsPayload = {
+        tenant_company_id: targetCompanyId,
+
+        registrations: (formData.registrations || []).map(r => ({
+          ...(isRealUuid(r.id) ? { id: r.id } : {}),
+          registration_type: r.registration_type,
+          registration_number: r.registration_number,
+          issuing_authority: r.issuing_authority || '',
+          state_code: r.state_code || '',
+          issue_date: r.issue_date || null,
+          expiry_date: r.expiry_date || null,
+          status: r.status || 'active',
+          is_primary: Boolean(r.is_primary),
+          notes: r.notes || ''
+        })),
+
+        addresses: (formData.addresses || []).map(a => ({
+          ...(isRealUuid(a.id) ? { id: a.id } : {}),
+          address_type: a.address_type || a.label || 'Office',
+          label: a.label || 'Office',
+          address_line_1: a.address_line_1 || a.address_line1 || '',
+          address_line_2: a.address_line_2 || a.address_line2 || '',
+          landmark: a.landmark || '',
+          city: a.city || '',
+          district: a.district || '',
+          state: a.state || '',
+          state_code: a.state_code || '',
+          postal_code: a.postal_code || a.pincode || '',
+          country: a.country || 'India',
+          latitude: a.latitude ? parseFloat(a.latitude) : null,
+          longitude: a.longitude ? parseFloat(a.longitude) : null,
+          is_primary: Boolean(a.is_primary)
+        })),
+
+        contacts: (formData.contacts || []).map(c => ({
+          ...(isRealUuid(c.id) ? { id: c.id } : {}),
+          contact_type: c.contact_type || 'General',
+          name: c.name || '',
+          designation: c.designation || '',
+          department: c.department || '',
+          email: c.email || '',
+          phone: c.phone || '',
+          alternate_phone: c.alternate_phone || '',
+          is_primary: Boolean(c.is_primary),
+          notes: c.notes || ''
+        })),
+
+        bank_profiles: (formData.bank_profiles || formData.banks || []).map(b => ({
+          ...(isRealUuid(b.id) ? { id: b.id } : {}),
+          bank_name: b.bank_name || '',
+          branch_name: b.branch_name || b.branch || '',
+          account_name: b.account_name || '',
+          masked_account_number: maskAccountNumber(b.masked_account_number || b.raw_account_number || b.account_number),
+          ifsc_code: b.ifsc_code || b.ifsc || '',
+          account_type: b.account_type || 'Current',
+          upi_id: b.upi_id || '',
+          is_primary: Boolean(b.is_primary),
+          notes: b.notes || ''
+        })),
+
+        settings: {
+          date_format: formData.date_format || 'YYYY-MM-DD',
+          number_format: formData.number_format || 'en-IN',
+          default_address_id: formData.default_address_id || null,
+          default_bank_profile_id: formData.default_bank_profile_id || null,
+          gst_registration_type: formData.gst_registration_type || 'Regular',
+          gst_filing_frequency: formData.gst_filing_frequency || 'Monthly',
+          tds_applicable: formData.tds_applicable !== false,
+          pf_applicable: formData.pf_applicable !== false,
+          esic_applicable: formData.esic_applicable !== false,
+          professional_tax_applicable: formData.pt_applicable !== false && formData.professional_tax_applicable !== false,
+          default_tax_region: formData.default_tax_region || '36',
+          metadata: formData.settings_metadata || {}
+        },
+
+        branding: {
+          logo_file_id: null,
+          logo_url: null,
+          favicon_file_id: null,
+          favicon_url: null,
+          primary_color: formData.primary_color || '#0284c7',
+          secondary_color: formData.secondary_color || '#4f46e5',
+          accent_color: formData.accent_color || '#f59e0b',
+          font_family: formData.font_family || 'Inter',
+          login_template: formData.login_template || 'Modern Glass',
+          welcome_message: formData.welcome_message || 'Welcome to RAJIV Business OS',
+          contact_display_text: formData.contact_display_text || ''
+        },
+
+        documents: (formData.documents || []).map(d => ({
+          ...(isRealUuid(d.id) ? { id: d.id } : {}),
+          document_type: d.document_type || 'Other',
+          document_name: d.document_name || '',
+          document_number: d.document_number || '',
+          issue_date: d.issue_date || null,
+          expiry_date: d.expiry_date || null,
+          verification_status: (d.verification_status || 'pending').toLowerCase(),
+          file_name: d.file_name || '',
+          mime_type: d.mime_type || '',
+          version: d.version || '1.0',
+          is_archived: Boolean(d.is_archived),
+          notes: d.notes || ''
+        }))
+      };
+
+      const { error: detailsErr } = await supabase.rpc('save_owner_company_settings_details_atomic', {
+        p_payload: detailsPayload
+      });
+
+      if (detailsErr) {
+        console.error('[CompanySettings] RPC save_owner_company_settings_details_atomic error:', detailsErr);
+        setErrorMessage(`Company Settings details could not be saved: ${detailsErr.message || detailsErr.details || 'Operation failed'}`);
+        return;
+      }
+
       setSuccessMessage(isEdit ? 'Company settings updated successfully!' : 'New company created successfully!');
       setIsDirty(false);
 
       await fetchCompanyList();
       if (fetchOperatingCompanies) await fetchOperatingCompanies();
 
-      if (targetCompanyId) {
-        await loadCompanySettings(targetCompanyId);
-      }
+      await loadCompanySettings(targetCompanyId);
 
       setTimeout(() => {
         setSuccessMessage('');
