@@ -23,27 +23,40 @@ import {
   DollarSign
 } from 'lucide-react';
 
+const generateUuid = () => (typeof crypto !== 'undefined' && crypto?.randomUUID ? crypto.randomUUID() : 'uuid-' + Math.random().toString(36).substring(2, 10) + '-' + Date.now().toString(36));
+
 export default function SalesWorkspace() {
+  const salesContext = useSales() || {};
   const {
-    quotations,
-    salesOrders,
-    proformaInvoices,
-    taxInvoices,
-    salesPayments,
+    quotations = [],
+    salesOrders = [],
+    proformaInvoices = [],
+    taxInvoices = [],
+    salesPayments = [],
     bankAccounts = [],
-    isLoading,
-    error,
-    isManagementOrAdmin,
-    companies,
-    enquiries,
-    works,
+    isLoading = false,
+    error = null,
+    isManagementOrAdmin = false,
+    companies = [],
+    enquiries = [],
+    works = [],
     createSalesQuotation,
     convertQuotationToSalesOrder,
     createProformaInvoice,
     issueTaxInvoice,
     recordSalesPayment,
     refreshAllSalesData
-  } = useSales();
+  } = salesContext;
+
+  const safeQuotations = Array.isArray(quotations) ? quotations : [];
+  const safeSalesOrders = Array.isArray(salesOrders) ? salesOrders : [];
+  const safeProformaInvoices = Array.isArray(proformaInvoices) ? proformaInvoices : [];
+  const safeTaxInvoices = Array.isArray(taxInvoices) ? taxInvoices : [];
+  const safeSalesPayments = Array.isArray(salesPayments) ? salesPayments : [];
+  const safeBankAccounts = Array.isArray(bankAccounts) ? bankAccounts : [];
+  const safeCompanies = Array.isArray(companies) ? companies : [];
+  const safeEnquiries = Array.isArray(enquiries) ? enquiries : [];
+  const safeWorks = Array.isArray(works) ? works : [];
 
   const [activeTab, setActiveTab] = useState('quotations'); // 'quotations' | 'proforma' | 'orders' | 'invoices' | 'payments'
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,7 +111,7 @@ export default function SalesWorkspace() {
     customer_gstin: '',
     place_of_supply: 'Maharashtra (27)',
     notes: '',
-    operation_key: crypto.randomUUID()
+    operation_key: generateUuid()
   });
   const [invItems, setInvItems] = useState([
     { item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }
@@ -112,25 +125,25 @@ export default function SalesWorkspace() {
     reference_number: '',
     bank_account_id: '',
     notes: '',
-    operation_key: crypto.randomUUID()
+    operation_key: generateUuid()
   });
 
   // Calculate Summary Metrics
-  const openQuotationsValue = quotations
-    .filter(q => q.status === 'draft' || q.status === 'sent')
-    .reduce((acc, q) => acc + (Number(q.total_amount) || 0), 0);
+  const openQuotationsValue = safeQuotations
+    .filter(q => q && (q.status === 'draft' || q.status === 'sent'))
+    .reduce((acc, q) => acc + (Number(q?.total_amount) || 0), 0);
 
-  const activeOrdersValue = salesOrders
-    .filter(o => o.status !== 'cancelled')
-    .reduce((acc, o) => acc + (Number(o.total_amount) || 0), 0);
+  const activeOrdersValue = safeSalesOrders
+    .filter(o => o && o.status !== 'cancelled')
+    .reduce((acc, o) => acc + (Number(o?.total_amount) || 0), 0);
 
-  const totalInvoicedValue = taxInvoices
-    .filter(i => i.status !== 'cancelled')
-    .reduce((acc, i) => acc + (Number(i.total_amount) || 0), 0);
+  const totalInvoicedValue = safeTaxInvoices
+    .filter(i => i && i.status !== 'cancelled')
+    .reduce((acc, i) => acc + (Number(i?.total_amount) || 0), 0);
 
-  const totalReceivablesBalance = taxInvoices
-    .filter(i => i.status !== 'cancelled')
-    .reduce((acc, i) => acc + (Number(i.balance_due) || 0), 0);
+  const totalReceivablesBalance = safeTaxInvoices
+    .filter(i => i && i.status !== 'cancelled')
+    .reduce((acc, i) => acc + (Number(i?.balance_due) || 0), 0);
 
   // Line Items Calculation Helper
   const computeLineTotals = (items) => {
@@ -183,7 +196,7 @@ export default function SalesWorkspace() {
     }
     const computedItems = computeLineTotals(qtnItems);
     const totals = computeHeaderTotals(computedItems);
-    const selectedCompany = companies.find(c => c.id === qtnForm.company_id);
+    const selectedCompany = safeCompanies.find(c => c.id === qtnForm.company_id);
 
     const header = {
       company_id: qtnForm.company_id,
@@ -250,7 +263,7 @@ export default function SalesWorkspace() {
     try {
       const computedItems = computeLineTotals(piItems);
       const totals = computeHeaderTotals(computedItems);
-      const selectedCompany = companies.find(c => c.id === piForm.company_id);
+      const selectedCompany = safeCompanies.find(c => c.id === piForm.company_id);
 
       const header = {
         company_id: piForm.company_id,
@@ -295,7 +308,7 @@ export default function SalesWorkspace() {
       return;
     }
     if (invForm.sales_order_id) {
-      const selectedSo = salesOrders.find(so => so.id === invForm.sales_order_id);
+      const selectedSo = safeSalesOrders.find(so => so.id === invForm.sales_order_id);
       if (selectedSo && selectedSo.company_id && selectedSo.company_id !== invForm.company_id) {
         setSalesModalError('Cross-company validation error: Sales Order does not belong to the selected customer company.');
         return;
@@ -306,7 +319,7 @@ export default function SalesWorkspace() {
     try {
       const computedItems = computeLineTotals(invItems);
       const totals = computeHeaderTotals(computedItems);
-      const selectedCompany = companies.find(c => c.id === invForm.company_id);
+      const selectedCompany = safeCompanies.find(c => c.id === invForm.company_id);
 
       const header = {
         company_id: invForm.company_id,
@@ -331,7 +344,7 @@ export default function SalesWorkspace() {
       const res = await issueTaxInvoice(header, computedItems);
       if (res.success) {
         setIsTaxInvoiceModalOpen(false);
-        setInvForm({ company_id: '', enquiry_id: '', work_id: '', sales_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), customer_gstin: '', place_of_supply: 'Maharashtra (27)', notes: '', operation_key: crypto.randomUUID() });
+        setInvForm({ company_id: '', enquiry_id: '', work_id: '', sales_order_id: '', invoice_date: new Date().toISOString().slice(0, 10), due_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), customer_gstin: '', place_of_supply: 'Maharashtra (27)', notes: '', operation_key: generateUuid() });
         setInvItems([{ item_description: '', hsn_sac_code: '998311', quantity: 1, unit_price: 0, gst_rate_pct: 18 }]);
       } else {
         setSalesModalError(res.error || 'Failed to issue Tax Invoice');
@@ -363,7 +376,7 @@ export default function SalesWorkspace() {
 
     if (res.success) {
       setIsPaymentModalOpen(false);
-      setPayForm({ tax_invoice_id: '', amount: 0, payment_mode: 'bank_transfer', reference_number: '', bank_account_id: '', notes: '', operation_key: crypto.randomUUID() });
+      setPayForm({ tax_invoice_id: '', amount: 0, payment_mode: 'bank_transfer', reference_number: '', bank_account_id: '', notes: '', operation_key: generateUuid() });
     } else {
       setSalesModalError(res.error || 'Failed to record payment');
     }
@@ -425,7 +438,7 @@ export default function SalesWorkspace() {
           <div>
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Open Quotations</span>
             <span className="text-lg font-black text-slate-900 dark:text-white mt-1 block">₹{openQuotationsValue.toLocaleString('en-IN')}</span>
-            <span className="text-[10px] text-slate-400 mt-0.5 block">{quotations.length} total quotes</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">{safeQuotations.length} total quotes</span>
           </div>
           <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400">
             <FileText size={22} />
@@ -436,7 +449,7 @@ export default function SalesWorkspace() {
           <div>
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Active Sales Orders</span>
             <span className="text-lg font-black text-slate-900 dark:text-white mt-1 block">₹{activeOrdersValue.toLocaleString('en-IN')}</span>
-            <span className="text-[10px] text-slate-400 mt-0.5 block">{salesOrders.length} confirmed orders</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">{safeSalesOrders.length} confirmed orders</span>
           </div>
           <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
             <TrendingUp size={22} />
@@ -447,7 +460,7 @@ export default function SalesWorkspace() {
           <div>
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Invoiced</span>
             <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1 block">₹{totalInvoicedValue.toLocaleString('en-IN')}</span>
-            <span className="text-[10px] text-slate-400 mt-0.5 block">{taxInvoices.length} tax invoices</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">{safeTaxInvoices.length} tax invoices</span>
           </div>
           <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
             <Receipt size={22} />
@@ -458,7 +471,7 @@ export default function SalesWorkspace() {
           <div>
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Balance Receivables</span>
             <span className="text-lg font-black text-rose-600 dark:text-rose-400 mt-1 block">₹{totalReceivablesBalance.toLocaleString('en-IN')}</span>
-            <span className="text-[10px] text-slate-400 mt-0.5 block">{salesPayments.length} payments recorded</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">{safeSalesPayments.length} payments recorded</span>
           </div>
           <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
             <DollarSign size={22} />
@@ -476,7 +489,7 @@ export default function SalesWorkspace() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <FileText size={15} /> Quotations ({quotations.length})
+          <FileText size={15} /> Quotations ({safeQuotations.length})
         </button>
 
         <button
@@ -487,7 +500,7 @@ export default function SalesWorkspace() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <Receipt size={15} /> Proforma Invoices ({proformaInvoices.length})
+          <Receipt size={15} /> Proforma Invoices ({safeProformaInvoices.length})
         </button>
 
         <button
@@ -498,7 +511,7 @@ export default function SalesWorkspace() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <TrendingUp size={15} /> Sales Orders ({salesOrders.length})
+          <TrendingUp size={15} /> Sales Orders ({safeSalesOrders.length})
         </button>
 
         <button
@@ -509,7 +522,7 @@ export default function SalesWorkspace() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <Receipt size={15} /> Tax Invoices ({taxInvoices.length})
+          <Receipt size={15} /> Tax Invoices ({safeTaxInvoices.length})
         </button>
 
         <button
@@ -520,7 +533,7 @@ export default function SalesWorkspace() {
               : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <CreditCard size={15} /> Payments & Receivables ({salesPayments.length})
+          <CreditCard size={15} /> Payments & Receivables ({safeSalesPayments.length})
         </button>
       </div>
 
@@ -529,12 +542,12 @@ export default function SalesWorkspace() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Quotations Register</h3>
-            <span className="text-xs text-slate-400 font-medium">{quotations.length} records</span>
+            <span className="text-xs text-slate-400 font-medium">{safeQuotations.length} records</span>
           </div>
 
           {isLoading ? (
             <div className="p-8 text-center text-xs text-slate-400">Loading quotations...</div>
-          ) : quotations.length === 0 ? (
+          ) : safeQuotations.length === 0 ? (
             <div className="p-12 text-center">
               <FileText size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
               <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Quotations Found</p>
@@ -557,7 +570,7 @@ export default function SalesWorkspace() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {quotations.map(q => (
+                  {safeQuotations.map(q => (
                     <tr key={q.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 font-bold text-sky-600 dark:text-sky-400">{q.quotation_no || `QT-${q.id.slice(0,6)}`}</td>
                       <td className="px-4 py-3">
@@ -613,10 +626,10 @@ export default function SalesWorkspace() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Proforma Invoices Register</h3>
-            <span className="text-xs text-slate-400 font-medium">{proformaInvoices.length} records</span>
+            <span className="text-xs text-slate-400 font-medium">{safeProformaInvoices.length} records</span>
           </div>
 
-          {proformaInvoices.length === 0 ? (
+          {safeProformaInvoices.length === 0 ? (
             <div className="p-12 text-center">
               <Receipt size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
               <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Proforma Invoices Issued</p>
@@ -637,7 +650,7 @@ export default function SalesWorkspace() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {proformaInvoices.map(pi => (
+                  {safeProformaInvoices.map(pi => (
                     <tr key={pi.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 font-bold text-sky-600 dark:text-sky-400">{pi.pi_no || `PI-${pi.id.slice(0,6)}`}</td>
                       <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">{pi.company?.name || pi.customer_name}</td>
@@ -665,10 +678,10 @@ export default function SalesWorkspace() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Sales Orders Register</h3>
-            <span className="text-xs text-slate-400 font-medium">{salesOrders.length} records</span>
+            <span className="text-xs text-slate-400 font-medium">{safeSalesOrders.length} records</span>
           </div>
 
-          {salesOrders.length === 0 ? (
+          {safeSalesOrders.length === 0 ? (
             <div className="p-12 text-center">
               <TrendingUp size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
               <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Sales Orders Confirmed</p>
@@ -689,7 +702,7 @@ export default function SalesWorkspace() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {salesOrders.map(so => (
+                  {safeSalesOrders.map(so => (
                     <tr key={so.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">{so.so_no || `SO-${so.id.slice(0,6)}`}</td>
                       <td className="px-4 py-3 text-slate-500">{so.quotation?.quotation_no || '-'}</td>
@@ -717,10 +730,10 @@ export default function SalesWorkspace() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Tax Invoices & Receivables Register</h3>
-            <span className="text-xs text-slate-400 font-medium">{taxInvoices.length} records</span>
+            <span className="text-xs text-slate-400 font-medium">{safeTaxInvoices.length} records</span>
           </div>
 
-          {taxInvoices.length === 0 ? (
+          {safeTaxInvoices.length === 0 ? (
             <div className="p-12 text-center">
               <Receipt size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
               <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Tax Invoices Issued</p>
@@ -740,7 +753,7 @@ export default function SalesWorkspace() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {taxInvoices.map(inv => (
+                  {safeTaxInvoices.map(inv => (
                     <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">{inv.invoice_no || `INV-${inv.id.slice(0,6)}`}</td>
                       <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">{inv.company?.name || inv.customer_name}</td>
@@ -771,10 +784,10 @@ export default function SalesWorkspace() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">Sales Payment Receipts Ledger</h3>
-            <span className="text-xs text-slate-400 font-medium">{salesPayments.length} payments</span>
+            <span className="text-xs text-slate-400 font-medium">{safeSalesPayments.length} payments</span>
           </div>
 
-          {salesPayments.length === 0 ? (
+          {safeSalesPayments.length === 0 ? (
             <div className="p-12 text-center">
               <CreditCard size={32} className="mx-auto text-slate-300 dark:text-slate-700 mb-2" />
               <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Payments Recorded</p>
@@ -793,7 +806,7 @@ export default function SalesWorkspace() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
-                  {salesPayments.map(p => (
+                  {safeSalesPayments.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 text-slate-500">{p.payment_date ? p.payment_date.slice(0, 10) : '-'}</td>
                       <td className="px-4 py-3 font-bold text-sky-600 dark:text-sky-400">{p.tax_invoice?.invoice_no || `INV-${p.tax_invoice_id?.slice(0,6)}`}</td>
@@ -836,7 +849,7 @@ export default function SalesWorkspace() {
                     className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold"
                   >
                     <option value="">-- Select Customer Company --</option>
-                    {companies.map(c => (
+                    {safeCompanies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -852,7 +865,7 @@ export default function SalesWorkspace() {
                     className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold"
                   >
                     <option value="">-- None / Select Enquiry --</option>
-                    {enquiries.map(enq => (
+                    {safeEnquiries.map(enq => (
                       <option key={enq.id} value={enq.id}>{enq.title}</option>
                     ))}
                   </select>
@@ -868,7 +881,7 @@ export default function SalesWorkspace() {
                     className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold"
                   >
                     <option value="">-- None / Select Project --</option>
-                    {works.map(w => (
+                    {safeWorks.map(w => (
                       <option key={w.id} value={w.id}>{w.title}</option>
                     ))}
                   </select>
@@ -1057,7 +1070,7 @@ export default function SalesWorkspace() {
                     className="os-input"
                   >
                     <option value="">-- Select Customer Company --</option>
-                    {companies.map(c => (
+                    {safeCompanies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -1069,7 +1082,7 @@ export default function SalesWorkspace() {
                     value={piForm.sales_order_id || ''}
                     onChange={(e) => {
                       const soId = e.target.value;
-                      const so = salesOrders.find(o => o.id === soId);
+                      const so = safeSalesOrders.find(o => o.id === soId);
                       if (so) {
                         setPiForm({
                           ...piForm,
@@ -1096,7 +1109,7 @@ export default function SalesWorkspace() {
                     className="os-input"
                   >
                     <option value="">-- Direct Proforma (No Order Linkage) --</option>
-                    {salesOrders.map(so => (
+                    {safeSalesOrders.map(so => (
                       <option key={so.id} value={so.id}>
                         {so.so_no || `SO-${so.id.slice(0,6)}`} - {so.company?.name || so.customer_name} (₹{Number(so.total_amount || 0).toLocaleString('en-IN')})
                       </option>
@@ -1112,7 +1125,7 @@ export default function SalesWorkspace() {
                     className="os-input"
                   >
                     <option value="">-- None / Select Project --</option>
-                    {works.map(w => (
+                    {safeWorks.map(w => (
                       <option key={w.id} value={w.id}>{w.title}</option>
                     ))}
                   </select>
@@ -1351,7 +1364,7 @@ export default function SalesWorkspace() {
                     value={invForm.sales_order_id || ''}
                     onChange={(e) => {
                       const soId = e.target.value;
-                      const so = salesOrders.find(o => o.id === soId);
+                      const so = safeSalesOrders.find(o => o.id === soId);
                       if (so) {
                         setInvForm({
                           ...invForm,
@@ -1378,7 +1391,7 @@ export default function SalesWorkspace() {
                     className="os-input"
                   >
                     <option value="">-- Select Sales Order --</option>
-                    {salesOrders.map(so => (
+                    {safeSalesOrders.map(so => (
                       <option key={so.id} value={so.id}>
                         {so.so_no || `SO-${so.id.slice(0,6)}`} - {so.company?.name || so.customer_name} (Total: ₹{Number(so.total_amount || 0).toLocaleString('en-IN')})
                       </option>
@@ -1395,7 +1408,7 @@ export default function SalesWorkspace() {
                     className="os-input"
                   >
                     <option value="">-- Select Customer Company --</option>
-                    {companies.map(c => (
+                    {safeCompanies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -1409,7 +1422,7 @@ export default function SalesWorkspace() {
                     className="os-input"
                   >
                     <option value="">-- None / Select Project --</option>
-                    {works.map(w => (
+                    {safeWorks.map(w => (
                       <option key={w.id} value={w.id}>{w.title}</option>
                     ))}
                   </select>
@@ -1648,7 +1661,7 @@ export default function SalesWorkspace() {
                   value={payForm.tax_invoice_id}
                   onChange={(e) => {
                     const invId = e.target.value;
-                    const inv = taxInvoices.find(i => i.id === invId);
+                    const inv = safeTaxInvoices.find(i => i.id === invId);
                     setPayForm({
                       ...payForm,
                       tax_invoice_id: invId,
@@ -1658,7 +1671,7 @@ export default function SalesWorkspace() {
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold"
                 >
                   <option value="">-- Select Tax Invoice --</option>
-                  {taxInvoices
+                  {safeTaxInvoices
                     .filter(i => i.status !== 'paid' && i.status !== 'cancelled')
                     .map(inv => (
                       <option key={inv.id} value={inv.id}>
@@ -1678,7 +1691,7 @@ export default function SalesWorkspace() {
                   className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs font-semibold"
                 >
                   <option value="">-- Primary Bank / Cash Account (Auto-Detect) --</option>
-                  {bankAccounts.map(b => (
+                  {safeBankAccounts.map(b => (
                     <option key={b.id} value={b.id}>
                       {b.bank_name ? `${b.bank_name} - ${b.account_name}` : b.account_name} ({b.account_number || 'Bank Account'})
                     </option>

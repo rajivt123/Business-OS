@@ -155,6 +155,10 @@ export function SalesProvider({ children }) {
     works = []
   } = crm;
 
+  const safeCrmCompanies = Array.isArray(companies) ? companies : [];
+  const safeCrmEnquiries = Array.isArray(enquiries) ? enquiries : [];
+  const safeCrmWorks = Array.isArray(works) ? works : [];
+
   const authUserId = session?.user?.id || currentUser?.id;
 
   // Role Permission Guard (OWNER / ADMIN / MANAGER allowed full write access)
@@ -595,18 +599,18 @@ export function SalesProvider({ children }) {
   };
 
   const value = {
-    quotations,
-    salesOrders,
-    proformaInvoices,
-    taxInvoices,
-    salesPayments,
-    bankAccounts,
-    isLoading,
+    quotations: Array.isArray(quotations) ? quotations : [],
+    salesOrders: Array.isArray(salesOrders) ? salesOrders : [],
+    proformaInvoices: Array.isArray(proformaInvoices) ? proformaInvoices : [],
+    taxInvoices: Array.isArray(taxInvoices) ? taxInvoices : [],
+    salesPayments: Array.isArray(salesPayments) ? salesPayments : [],
+    bankAccounts: Array.isArray(bankAccounts) ? bankAccounts : [],
+    isLoading: Boolean(isLoading),
     error,
-    isManagementOrAdmin,
-    companies,
-    enquiries,
-    works,
+    isManagementOrAdmin: Boolean(isManagementOrAdmin),
+    companies: safeCrmCompanies,
+    enquiries: safeCrmEnquiries,
+    works: safeCrmWorks,
     createSalesQuotation,
     convertQuotationToSalesOrder,
     createProformaInvoice,
