@@ -27,6 +27,7 @@ import ProcurementWorkspace from './procurement/ProcurementWorkspace';
 import InventoryWorkspace from './inventory/InventoryWorkspace';
 import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
+import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -82,6 +83,7 @@ const navSections = [
     label: 'Administration',
     items: [
       ['admin', 'Administration', Settings],
+      ['company-settings', 'Company Settings', Building2],
     ],
   },
 ];
@@ -102,6 +104,7 @@ const pageMeta = {
   reports: ['Reports & Analytics', 'Operational, financial, project and people intelligence.'],
   ai: ['RAJIV AI', 'Permission-aware business intelligence and assisted workflows.'],
   admin: ['Administration', 'Organization, users, permissions, workflows and system controls.'],
+  'company-settings': ['Company Settings', 'Owner workspace for managing company profiles, registrations, addresses, contacts, bank details, tax settings, branding, documents and audit history.'],
 };
 
 function Badge({ children, tone = 'slate' }) {
@@ -525,10 +528,10 @@ function AIPage() {
   return <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Ask RAJIV AI" subtitle="Use the existing RAJIV AI assistant from the top bar or classic CRM workspace." icon={Sparkles}><div className="p-5"><p className="text-xs italic text-slate-400">This dashboard page has no connected AI request handler.</p></div></SectionCard><SectionCard title="AI-Assisted Workflows" icon={Zap}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable until workflow backends are connected.</p></div></SectionCard></div>;
 }
 
-function AdminPage({ onOpenClassic, data = {} }) {
+function AdminPage({ onNavigate, onOpenClassic, data = {} }) {
   const cards = [
-    ['Organization', 'Companies, departments, designations', Building2, false],
-    ['Users & Access', 'Users, roles, company access', UserCog, true],
+    ['Company Settings', 'Company profiles, registrations, tax, branding & documents', Building2, true, 'company-settings'],
+    ['Users & Access', 'Users, roles, company access', UserCog, true, 'admin-panel'],
     ['Permissions', 'View, create, edit, approve, assign, export', KeyRound, false],
     ['Hierarchy', 'Reporting managers and delegation', Network, false],
     ['Workflow', 'Stages, approval rules, numbering', Workflow, false],
@@ -540,8 +543,15 @@ function AdminPage({ onOpenClassic, data = {} }) {
     <div className="space-y-4">
       <SectionCard title="Administration" subtitle="System controls and user access management." icon={Settings}>
         <div className="p-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {cards.map(([a, b, I, isLive]) => isLive ? (
-            <button key={a} onClick={() => { data?.openAdminPanel?.(); onOpenClassic?.(); }} className="text-left p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 bg-sky-50/50 dark:bg-sky-950/20 hover:border-sky-500 transition cursor-pointer">
+          {cards.map(([a, b, I, isLive, navTarget]) => isLive ? (
+            <button key={a} onClick={() => {
+              if (navTarget === 'company-settings') {
+                onNavigate('company-settings');
+              } else {
+                data?.openAdminPanel?.();
+                onOpenClassic?.();
+              }
+            }} className="text-left p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 bg-sky-50/50 dark:bg-sky-950/20 hover:border-sky-500 transition cursor-pointer">
               <div className="h-9 w-9 rounded-xl bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-300"><I size={17} /></div>
               <h3 className="text-xs font-black mt-3 text-sky-900 dark:text-sky-200">{a}</h3>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-4">{b}</p>
@@ -938,7 +948,8 @@ export default function BusinessOSWorkspace() {
         {page === 'documents' && <DocumentsPage />}
         {page === 'reports' && <ReportsPage />}
         {page === 'ai' && <AIPage />}
-        {page === 'admin' && <AdminPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />}
+        {page === 'admin' && <AdminPage onNavigate={go} onOpenClassic={() => setShowClassic(true)} data={dashboardData} />}
+        {page === 'company-settings' && <CompanySettingsWorkspace />}
       </div>
       <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
     </main>

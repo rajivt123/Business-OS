@@ -866,6 +866,29 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   }, [session?.user?.id, currentUser?.id]);
 
   // --- Database Fetches ---
+  async function fetchOperatingCompanies(authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
+    const currentTenantId = tenantId;
+    if (!currentTenantId) return;
+    try {
+      const { data, error } = await supabase
+        .from('tenant_companies')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .order('created_at', { ascending: true });
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
+      if (error) {
+        console.error('[Supabase Query Error - tenant_companies]:', error);
+        return;
+      }
+      if (data) {
+        setOperatingCompanies(data);
+      }
+    } catch (err) {
+      console.error('[CrmContext] Error fetching operating companies:', err);
+    }
+  }
+
   async function fetchCompanies(targetOpCoId, authGeneration) {
     if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return;
     const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
@@ -3707,6 +3730,7 @@ USER REQUEST: ${trimmedMsg}`;
     activeOperatingCompanyId,
     activeOperatingCompany,
     setActiveOperatingCompanyId,
+    fetchOperatingCompanies,
     clientCompanies: companies,
     activeClientCompanyId: activeCompanyId,
 
