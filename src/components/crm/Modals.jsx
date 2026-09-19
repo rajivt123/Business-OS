@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { X, AlertCircle, Bell, Trash2, RotateCcw, History, Paperclip, Loader2, ChevronUp, ChevronDown, Plus, ShieldCheck, ArrowRightLeft, CalendarClock, Search, Users, UserPlus, UserCheck, UserX, UserMinus, Lock, Copy, Check, Database, AlertTriangle, Download, ExternalLink, Eye, FileText, FileSpreadsheet } from 'lucide-react'
-import { useCrm, getUserDisplayName } from '../context/CrmContext'
+import { useCrm, getUserDisplayName } from '../../context/CrmContext'
 
 export default function Modals() {
   const {

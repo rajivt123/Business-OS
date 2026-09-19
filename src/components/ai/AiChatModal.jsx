@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, Bot, User, X, Trash2, Loader2 } from 'lucide-react';
-import { useCrm } from '../context/CrmContext';
+import { useCrm } from '../../context/CrmContext';
 
 export default function AiChatModal() {
   const {

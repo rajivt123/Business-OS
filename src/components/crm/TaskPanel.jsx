@@ -3,7 +3,7 @@ import {
   AlertTriangle, CalendarClock, CheckCircle2, Circle, ClipboardList, Edit2,
   Plus, Save, Trash2, UserMinus, UserPlus, X
 } from 'lucide-react';
-import { useCrm } from '../context/CrmContext';
+import { useCrm } from '../../context/CrmContext';
 
 export default function TaskPanel() {
   const {

@@ -1,13 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Sidebar from './Sidebar';
 import CenterPanel from './CenterPanel';
 import TaskPanel from './TaskPanel';
 import Modals from './Modals';
-import AiChatModal from './AiChatModal';
+import AiChatModal from '../ai/AiChatModal';
 import { Menu, Search, FileText, Sparkles, ShieldCheck, Sun, Moon, LogOut, Flame, ChevronRight, Building, MapPin, Plus, X, ChevronDown, Check, RefreshCw, Briefcase } from 'lucide-react'; 
-import { useCrm } from '../context/CrmContext';
+import { useCrm } from '../../context/CrmContext';
 
-export default function CrmWorkspace() {
+export default function CrmWorkspace({ embedded = false }) {
   const { 
     isDarkMode,
     setIsDarkMode,
@@ -121,6 +120,7 @@ export default function CrmWorkspace() {
       <AiChatModal />
 
       {/* Top Navigation Header */}
+      {!embedded && (
       <header className={`px-3 py-2 border-b flex flex-col md:flex-row md:items-center justify-between gap-2 shrink-0 transition-colors ${tHeader}`}>
         
         {/* Main Header Row */}
@@ -501,8 +501,7 @@ export default function CrmWorkspace() {
           )}
         </div>
       </header>
-
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      )}
 
       {/* Pull-To-Refresh Mobile Indicator Banner */}
       {(pullDistance > 0 || isRefreshing) && (
@@ -528,14 +527,16 @@ export default function CrmWorkspace() {
       </div>
 
       {/* Floating AI Assistant Button (Bottom Right Corner) */}
-      <button
-        onClick={() => setIsAiChatOpen(true)}
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2 sm:gap-2.5 px-3 py-2.5 sm:px-4.5 sm:py-3 rounded-full bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 hover:from-sky-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm shadow-2xl shadow-indigo-600/40 border border-indigo-400/30 transition-all duration-300 transform hover:scale-105 active:scale-95 cursor-pointer"
-        title="Open AI Assistant"
-      >
-        <Sparkles size={16} className="animate-pulse text-amber-300 shrink-0" />
-        <span className="text-xs sm:text-sm">AI Assistant</span>
-      </button>
+      {!embedded && (
+        <button
+          onClick={() => setIsAiChatOpen(true)}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2 sm:gap-2.5 px-3 py-2.5 sm:px-4.5 sm:py-3 rounded-full bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 hover:from-sky-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm shadow-2xl shadow-indigo-600/40 border border-indigo-400/30 transition-all duration-300 transform hover:scale-105 active:scale-95 cursor-pointer"
+          title="Open AI Assistant"
+        >
+          <Sparkles size={16} className="animate-pulse text-amber-300 shrink-0" />
+          <span className="text-xs sm:text-sm">AI Assistant</span>
+        </button>
+      )}
 
       {/* Floating Toast Notification */}
       {toastMessage && (

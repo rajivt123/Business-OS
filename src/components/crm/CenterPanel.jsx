@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { ChevronRight, Plus, FileText, Edit2, Trash2, Settings, AlertCircle, CheckCircle2, Circle, History, Check, Paperclip, Send, Loader2, Bell, X, ArrowRightLeft, Sparkles, Eye, Users, UserPlus, Shield, Phone, Mail, CalendarClock, Tag, Filter, CheckSquare, Square, Building2 } from 'lucide-react'
-import { useCrm } from '../context/CrmContext'
+import { useCrm } from '../../context/CrmContext'
 
 export default function CenterPanel() {
   const {

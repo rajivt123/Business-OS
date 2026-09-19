@@ -12,7 +12,7 @@ import {
   TriangleAlert, Factory, MapPin, Briefcase, UserCog, Network, KeyRound, History, Layers3, Palmtree
 } from 'lucide-react';
 import { useCrm, getUserDisplayName } from '../context/CrmContext';
-import CrmWorkspace from './CrmWorkspace';
+import CrmWorkspace from './crm/CrmWorkspace';
 import EmployeeWorkspace from './hr/EmployeeWorkspace';
 import HrPolicyCenter from './hr/HrPolicyCenter';
 import RecruitmentWorkspace from './hr/RecruitmentWorkspace';
@@ -603,7 +603,6 @@ export default function BusinessOSWorkspace() {
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
-  const [showClassic, setShowClassic] = useState(false);
 
   const searchContainerRef = useRef(null);
 
@@ -641,6 +640,7 @@ export default function BusinessOSWorkspace() {
     openGlobalReminderModal,
     navigateToContext,
     openAdminPanel: () => {
+      setPage('crm');
       if (setIsAdminPanelOpen) setIsAdminPanelOpen(true);
       if (fetchProfiles) fetchProfiles();
     }
@@ -669,7 +669,7 @@ export default function BusinessOSWorkspace() {
         if (targetWork) {
           navigateToContext?.(targetWork.company_id, targetWork.unit_id, targetWork.id);
         }
-        setShowClassic(true);
+        setPage('crm');
         if (crm?.openEditTask) {
           crm.openEditTask(task);
         }
@@ -681,25 +681,20 @@ export default function BusinessOSWorkspace() {
       const targetWork = (works || []).find(w => w.id === n.entity_id);
       if (targetWork) {
         navigateToContext?.(targetWork.company_id, targetWork.unit_id, targetWork.id);
-        setShowClassic(true);
+        setPage('crm');
         return;
       }
     }
 
-    setShowClassic(true);
+    setPage('crm');
   };
 
   const go = (next) => {
     setPage(next);
-    setShowClassic(false);
     if (typeof window !== 'undefined' && window.innerWidth <= 800) {
       setSidebarCollapsed(true);
     }
   };
-
-  if (showClassic) {
-    return <div className="h-full w-full"><button onClick={() => setShowClassic(false)} className="fixed top-3 left-3 z-[100] os-primary shadow-xl cursor-pointer"><ArrowDownRight size={14} className="rotate-90" /> Back to Business OS</button><CrmWorkspace /></div>;
-  }
 
   const meta = pageMeta[page] || pageMeta.dashboard;
 
@@ -708,7 +703,7 @@ export default function BusinessOSWorkspace() {
     <aside className={`os-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <div className="os-brand"><div className="os-logo"><FlameIcon /></div>{!sidebarCollapsed && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
       <div className="os-sidebar-scroll">
-        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => id === 'crm' ? setShowClassic(true) : go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className={`os-nav-count ${unreadNotificationsCount > 0 ? 'bg-rose-500 text-white' : ''}`}>{unreadNotificationsCount > 0 ? unreadNotificationsCount : 0}</span>}</button>)}</div>)}
+        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className={`os-nav-count ${unreadNotificationsCount > 0 ? 'bg-rose-500 text-white' : ''}`}>{unreadNotificationsCount > 0 ? unreadNotificationsCount : 0}</span>}</button>)}</div>)}
       </div>
       <div className="os-sidebar-bottom"><button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />} {!sidebarCollapsed && <span>Collapse</span>}</button></div>
     </aside>
@@ -754,7 +749,7 @@ export default function BusinessOSWorkspace() {
                     onClick={() => {
                       jumpToSearchResult(result);
                       handleSearch({ target: { value: '' } });
-                      setShowClassic(true);
+                      go('crm');
                     }}
                     className={`w-full text-left px-3 py-2 border-b last:border-0 transition flex items-center justify-between gap-2 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/60' : 'border-slate-100 hover:bg-sky-50/70'}`}
                   >
@@ -808,13 +803,13 @@ export default function BusinessOSWorkspace() {
               </button>
               {showCreateMenu && (
                 <div className={`absolute right-0 top-10 w-52 z-50 p-1.5 rounded-2xl shadow-2xl border transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <button onClick={() => { openNewWorkModal?.(); setShowClassic(true); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
+                  <button onClick={() => { openNewWorkModal?.(); go('crm'); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
                     <Briefcase size={14} className="text-sky-500" /><span>New Project</span>
                   </button>
-                  <button onClick={() => { openNewTask?.(); setShowClassic(true); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
+                  <button onClick={() => { openNewTask?.(); go('crm'); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
                     <ListChecks size={14} className="text-emerald-500" /><span>New 7F Task</span>
                   </button>
-                  <button onClick={() => { openGlobalReminderModal?.(); setShowClassic(true); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
+                  <button onClick={() => { openGlobalReminderModal?.(); go('crm'); setShowCreateMenu(false); }} className="w-full text-left p-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-sky-50 dark:hover:bg-slate-800 transition cursor-pointer">
                     <Bell size={14} className="text-amber-500" /><span>New Reminder</span>
                   </button>
                 </div>
@@ -822,9 +817,9 @@ export default function BusinessOSWorkspace() {
             </div>
           </div>
         </div>
-        {page === 'dashboard' && <Dashboard role={effectiveRole} onNavigate={go} onOpenClassic={() => setShowClassic(true)} companyName={companyName} companies={operatingCompanies || []} data={dashboardData} />}
+        {page === 'dashboard' && <Dashboard role={effectiveRole} onNavigate={go} onOpenClassic={() => go('crm')} companyName={companyName} companies={operatingCompanies || []} data={dashboardData} />}
         {page === 'my-work' && (
-          <MyWorkPage onNavigate={go} onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
+          <MyWorkPage onNavigate={go} onOpenClassic={() => go('crm')} data={dashboardData} />
         )}
         {page === 'approvals' && <ApprovalCenter />}
         {page === 'notifications' && (
@@ -841,7 +836,7 @@ export default function BusinessOSWorkspace() {
         {page === 'sales' && <SalesWorkspace />}
         {page === 'procurement' && <ProcurementWorkspace />}
         {page === 'inventory' && <InventoryWorkspace isDarkMode={isDarkMode} />}
-        {page === 'crm' && <DataModulePage module="crm" onNavigate={go} />}
+        {page === 'crm' && <CrmWorkspace embedded />}
         {page === 'accounts' && <AccountsWorkspace />}
         {page === 'hr' && (
           <div className="space-y-4">
@@ -943,12 +938,12 @@ export default function BusinessOSWorkspace() {
           </div>
         )}
         {page === 'projects' && (
-          <ProjectsPage onOpenClassic={() => setShowClassic(true)} data={dashboardData} />
+          <ProjectsPage onOpenClassic={() => go('crm')} data={dashboardData} />
         )}
         {page === 'documents' && <DocumentsPage />}
         {page === 'reports' && <ReportsPage />}
         {page === 'ai' && <AIPage />}
-        {page === 'admin' && <AdminPage onNavigate={go} onOpenClassic={() => setShowClassic(true)} data={dashboardData} />}
+        {page === 'admin' && <AdminPage onNavigate={go} onOpenClassic={() => go('crm')} data={dashboardData} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
       </div>
       <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
