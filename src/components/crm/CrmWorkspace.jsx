@@ -112,10 +112,10 @@ export default function CrmWorkspace({ embedded = false }) {
 
       {/* CRM CONTEXT TOOLBAR ROW */}
       <div className="space-y-3 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:flex lg:items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
           
           {/* OPERATING COMPANY SELECTOR */}
-          <div className="relative min-w-0" ref={opCompanyDropdownRef}>
+          <div className="w-full sm:w-1/3 lg:w-64 relative min-w-0" ref={opCompanyDropdownRef}>
             <button
               onClick={() => { setIsOpCompanyOpen(!isOpCompanyOpen); setIsCompanyOpen(false); setIsUnitOpen(false); }}
               className="os-secondary w-full justify-between gap-2 text-xs cursor-pointer"
@@ -160,100 +160,103 @@ export default function CrmWorkspace({ embedded = false }) {
             )}
           </div>
 
-          {/* CUSTOMER / CLIENT COMPANY SELECTOR */}
-          <div className="relative min-w-0" ref={companyDropdownRef}>
-            <button
-              onClick={() => { setIsCompanyOpen(!isCompanyOpen); setIsOpCompanyOpen(false); setIsUnitOpen(false); }}
-              className="os-secondary w-full justify-between gap-2 text-xs cursor-pointer"
-              title="Filter by Customer / Client"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <Building size={14} className="text-indigo-500 shrink-0" />
-                <span className="truncate font-bold">{activeCompany ? activeCompany.name : 'All Customers'}</span>
-              </div>
-              <ChevronDown size={13} className="text-slate-400 shrink-0" />
-            </button>
+          {/* CUSTOMER & UNIT SELECTORS */}
+          <div className="grid grid-cols-2 gap-2 flex-1 min-w-0">
+            {/* CUSTOMER / CLIENT COMPANY SELECTOR */}
+            <div className="relative min-w-0" ref={companyDropdownRef}>
+              <button
+                onClick={() => { setIsCompanyOpen(!isCompanyOpen); setIsOpCompanyOpen(false); setIsUnitOpen(false); }}
+                className="os-secondary w-full justify-between gap-2 text-xs cursor-pointer"
+                title="Filter by Customer / Client"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Building size={14} className="text-indigo-500 shrink-0" />
+                  <span className="truncate font-bold">{activeCompany ? activeCompany.name : 'All Customers'}</span>
+                </div>
+                <ChevronDown size={13} className="text-slate-400 shrink-0" />
+              </button>
 
-            {isCompanyOpen && (
-              <div className="os-popover left-0 top-11 w-72 z-50">
-                <div className="os-popover-label">Select Customer / Client</div>
-                <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                  <button
-                    onClick={() => { setActiveCompanyId(null); setIsCompanyOpen(false); }}
-                    className={`os-company-option ${activeCompanyId === null ? 'selected' : ''}`}
-                  >
-                    <div><b>All Customers</b></div>
-                    {activeCompanyId === null && <Check size={14} className="text-sky-500 shrink-0" />}
-                  </button>
-                  {(companies || []).map(c => (
+              {isCompanyOpen && (
+                <div className="os-popover left-0 top-11 w-72 z-50">
+                  <div className="os-popover-label">Select Customer / Client</div>
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
                     <button
-                      key={c.id}
-                      onClick={() => { setActiveCompanyId(c.id); setIsCompanyOpen(false); }}
-                      className={`os-company-option ${activeCompanyId === c.id ? 'selected' : ''}`}
+                      onClick={() => { setActiveCompanyId(null); setIsCompanyOpen(false); }}
+                      className={`os-company-option ${activeCompanyId === null ? 'selected' : ''}`}
                     >
-                      <div><b>{c.name}</b></div>
-                      {activeCompanyId === c.id && <Check size={14} className="text-sky-500 shrink-0" />}
+                      <div><b>All Customers</b></div>
+                      {activeCompanyId === null && <Check size={14} className="text-sky-500 shrink-0" />}
                     </button>
-                  ))}
-                </div>
-                <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    onClick={() => { setIsCompanyOpen(false); handleAddCompany(); }}
-                    className="w-full os-link justify-center py-1.5"
-                  >
-                    <Plus size={13} /> Add New Customer
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* UNIT SELECTOR */}
-          <div className="relative min-w-0" ref={unitDropdownRef}>
-            <button
-              onClick={() => { setIsUnitOpen(!isUnitOpen); setIsOpCompanyOpen(false); setIsCompanyOpen(false); }}
-              className="os-secondary w-full justify-between gap-2 text-xs cursor-pointer"
-              title="Filter by Unit / Site"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <MapPin size={14} className="text-sky-500 shrink-0" />
-                <span className="truncate font-bold">{activeUnit ? activeUnit.name : 'All Units'}</span>
-              </div>
-              <ChevronDown size={13} className="text-slate-400 shrink-0" />
-            </button>
-
-            {isUnitOpen && (
-              <div className="os-popover left-0 top-11 w-64 z-50">
-                <div className="os-popover-label">Select Unit / Site</div>
-                <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                  <button
-                    onClick={() => { setActiveUnitId(null); setIsUnitOpen(false); }}
-                    className={`os-company-option ${activeUnitId === null ? 'selected' : ''}`}
-                  >
-                    <div><b>All Units</b></div>
-                    {activeUnitId === null && <Check size={14} className="text-sky-500 shrink-0" />}
-                  </button>
-                  {(units || []).map(u => (
+                    {(companies || []).map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setActiveCompanyId(c.id); setIsCompanyOpen(false); }}
+                        className={`os-company-option ${activeCompanyId === c.id ? 'selected' : ''}`}
+                      >
+                        <div><b>{c.name}</b></div>
+                        {activeCompanyId === c.id && <Check size={14} className="text-sky-500 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
                     <button
-                      key={u.id}
-                      onClick={() => { setActiveUnitId(u.id); setIsUnitOpen(false); }}
-                      className={`os-company-option ${activeUnitId === u.id ? 'selected' : ''}`}
+                      onClick={() => { setIsCompanyOpen(false); handleAddCompany(); }}
+                      className="w-full os-link justify-center py-1.5"
                     >
-                      <div><b>{u.name}</b></div>
-                      {activeUnitId === u.id && <Check size={14} className="text-sky-500 shrink-0" />}
+                      <Plus size={13} /> Add New Customer
                     </button>
-                  ))}
+                  </div>
                 </div>
-                <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    onClick={() => { setIsUnitOpen(false); handleAddUnit(activeCompanyId); }}
-                    className="w-full os-link justify-center py-1.5"
-                  >
-                    <Plus size={13} /> Add New Unit
-                  </button>
+              )}
+            </div>
+
+            {/* UNIT SELECTOR */}
+            <div className="relative min-w-0" ref={unitDropdownRef}>
+              <button
+                onClick={() => { setIsUnitOpen(!isUnitOpen); setIsOpCompanyOpen(false); setIsCompanyOpen(false); }}
+                className="os-secondary w-full justify-between gap-2 text-xs cursor-pointer"
+                title="Filter by Unit / Site"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <MapPin size={14} className="text-sky-500 shrink-0" />
+                  <span className="truncate font-bold">{activeUnit ? activeUnit.name : 'All Units'}</span>
                 </div>
-              </div>
-            )}
+                <ChevronDown size={13} className="text-slate-400 shrink-0" />
+              </button>
+
+              {isUnitOpen && (
+                <div className="os-popover right-0 sm:left-0 top-11 w-64 z-50">
+                  <div className="os-popover-label">Select Unit / Site</div>
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    <button
+                      onClick={() => { setActiveUnitId(null); setIsUnitOpen(false); }}
+                      className={`os-company-option ${activeUnitId === null ? 'selected' : ''}`}
+                    >
+                      <div><b>All Units</b></div>
+                      {activeUnitId === null && <Check size={14} className="text-sky-500 shrink-0" />}
+                    </button>
+                    {(units || []).map(u => (
+                      <button
+                        key={u.id}
+                        onClick={() => { setActiveUnitId(u.id); setIsUnitOpen(false); }}
+                        className={`os-company-option ${activeUnitId === u.id ? 'selected' : ''}`}
+                      >
+                        <div><b>{u.name}</b></div>
+                        {activeUnitId === u.id && <Check size={14} className="text-sky-500 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={() => { setIsUnitOpen(false); handleAddUnit(activeCompanyId); }}
+                      className="w-full os-link justify-center py-1.5"
+                    >
+                      <Plus size={13} /> Add New Unit
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
         </div>

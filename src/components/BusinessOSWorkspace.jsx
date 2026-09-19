@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
-  Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bell, BriefcaseBusiness,
+  Activity, AlertTriangle, ArrowDownRight, ArrowLeft, ArrowUpRight, BarChart3, Bell, BriefcaseBusiness,
   Building2, CalendarDays, Check, ChevronDown, ChevronRight, CircleDollarSign, ClipboardCheck,
   Clock3, CreditCard, FileBarChart, FileCheck2, FilePlus2, FileText, Filter, FolderKanban,
   Gauge, Grid2X2, HandCoins, HeartPulse, HelpCircle, Inbox, LayoutDashboard, ListChecks,
@@ -603,6 +603,7 @@ export default function BusinessOSWorkspace() {
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   const searchContainerRef = useRef(null);
 
@@ -773,6 +774,13 @@ export default function BusinessOSWorkspace() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsMobileSearchOpen(true)}
+            className="os-top-action lg:hidden"
+            title="Search Business OS"
+          >
+            <Search size={16} />
+          </button>
           <button onClick={() => setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15} /><span className="hidden xl:inline">AI</span></button>
           <button onClick={() => go('notifications')} className="os-top-action relative" title="Notifications">
             <Bell size={16} />
@@ -787,6 +795,102 @@ export default function BusinessOSWorkspace() {
           <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><UnavailableAction className="os-company-option"><UserRound size={15} /><b>My Profile</b></UnavailableAction><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
         </div>
       </header>
+
+      {/* MOBILE SEARCH OVERLAY / DRAWER */}
+      {isMobileSearchOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-xs flex flex-col p-3 sm:p-6 overflow-hidden">
+          <div className={`w-full max-w-2xl mx-auto flex-1 flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+            <div className={`px-4 py-3 border-b flex items-center justify-between gap-3 ${isDarkMode ? 'border-slate-800 bg-slate-950/50' : 'border-slate-100 bg-slate-50'}`}>
+              <button 
+                onClick={() => {
+                  setIsMobileSearchOpen(false);
+                  if (handleSearch) handleSearch({ target: { value: '' } });
+                }} 
+                className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+              >
+                <ArrowLeft size={18} />
+                <span>Search Business OS</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setIsMobileSearchOpen(false);
+                  if (handleSearch) handleSearch({ target: { value: '' } });
+                }} 
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3.5 border-b border-slate-100 dark:border-slate-800">
+              <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}>
+                <Search size={16} className="shrink-0 text-slate-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchQuery || ''}
+                  onChange={handleSearch}
+                  placeholder="Search customers, units, projects, contacts, enquiries..."
+                  className="w-full bg-transparent text-xs font-semibold outline-none"
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => handleSearch({ target: { value: '' } })} 
+                    className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+              {searchResults && searchResults.length > 0 ? (
+                <>
+                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Search Results ({searchResults.length})
+                  </div>
+                  {searchResults.map((result, idx) => (
+                    <button
+                      key={result.id || idx}
+                      onClick={() => {
+                        jumpToSearchResult(result);
+                        if (handleSearch) handleSearch({ target: { value: '' } });
+                        setIsMobileSearchOpen(false);
+                        go('crm');
+                      }}
+                      className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between gap-3 cursor-pointer ${isDarkMode ? 'hover:bg-slate-800/70 border border-transparent hover:border-slate-700' : 'hover:bg-sky-50/70 border border-transparent hover:border-sky-100'}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500 shrink-0">
+                          <FileText size={16} />
+                        </div>
+                        <div className="truncate">
+                          <span className="text-xs font-bold block truncate">{result.label || result.title || result.name}</span>
+                          <span className="text-[10px] text-slate-400 truncate block mt-0.5">{result.subtext || result.po_number || ''}</span>
+                        </div>
+                      </div>
+                      {result.result_type && (
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+                          {result.result_type}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              ) : searchQuery ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No matching results found for "{searchQuery}"
+                </div>
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  Type above to search customers, projects, contacts, enquiries...
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="os-content custom-scrollbar">
         <div className="os-page-head">
