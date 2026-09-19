@@ -35,12 +35,12 @@ export default function TaskPanel() {
   const activeTaskAssignees = (taskAssignees || []).filter(assignment => assignment.status === 'active');
   const endedTaskAssignees = (taskAssignees || []).filter(assignment => assignment.status === 'ended');
 
-  const tCard = isDarkMode ? 'bg-slate-900/60 border-slate-800/80' : 'bg-white border-slate-200 shadow-xs';
-  const tHeader = isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50/80 border-slate-200';
-  const tText = isDarkMode ? 'text-slate-200' : 'text-slate-800 font-medium';
-  const tMuted = isDarkMode ? 'text-slate-400' : 'text-slate-500';
-  const inputClass = `rounded-xl p-2.5 text-xs border outline-none ${isDarkMode ? 'bg-slate-950 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-800'}`;
-  const customScrollbar = `[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full ${isDarkMode ? '[&::-webkit-scrollbar-thumb]:bg-slate-700' : '[&::-webkit-scrollbar-thumb]:bg-slate-300'}`;
+  const tCard = 'os-card';
+  const tHeader = 'border-b border-[var(--os-border)] bg-[var(--os-surface-2)]';
+  const tText = 'text-[var(--os-text)] font-semibold';
+  const tMuted = 'text-[var(--os-muted)]';
+  const inputClass = 'os-input';
+  const customScrollbar = 'custom-scrollbar';
 
   const renderAlerts = () => (
     <div className={`flex-1 overflow-y-auto p-2.5 space-y-2 ${customScrollbar}`}>
@@ -103,35 +103,35 @@ export default function TaskPanel() {
   );
 
   return (
-    <div className={`w-full lg:w-72 xl:w-80 min-h-[45vh] lg:min-h-0 rounded-xl flex flex-col overflow-hidden border shrink-0 transition-colors ${tCard}`}>
-      <div className={`px-3 py-2 flex justify-between items-center border-b shrink-0 ${tHeader}`}>
-        <div className="p-0.5 rounded-xl flex items-center gap-1 text-xs font-bold border bg-slate-100/90 border-slate-200 dark:bg-slate-950/70 dark:border-slate-800">
-          <button onClick={() => { setRightView('tasks'); setTaskMode('7f'); }} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold ${rightView === 'tasks' && taskMode === '7f' ? 'bg-sky-600 text-white' : tMuted}`}>7F Tasks</button>
-          <button onClick={() => { setRightView('tasks'); setTaskMode('reminders'); }} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold ${rightView === 'tasks' && taskMode === 'reminders' ? 'bg-amber-600 text-white' : tMuted}`}>Reminders</button>
-          <button onClick={() => setRightView('alerts')} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold ${rightView === 'alerts' ? 'bg-rose-600 text-white' : tMuted}`}>Alerts</button>
+    <div className="os-card w-full lg:w-72 xl:w-80 min-h-[45vh] lg:min-h-0 flex flex-col overflow-hidden shrink-0">
+      <div className={`px-3.5 py-2.5 flex justify-between items-center ${tHeader}`}>
+        <div className="p-0.5 rounded-full flex items-center gap-1 text-xs font-bold border border-[var(--os-border)] bg-[var(--os-surface)]">
+          <button onClick={() => { setRightView('tasks'); setTaskMode('7f'); }} className={`os-tab ${rightView === 'tasks' && taskMode === '7f' ? 'active' : ''}`}>7F Tasks</button>
+          <button onClick={() => { setRightView('tasks'); setTaskMode('reminders'); }} className={`os-tab ${rightView === 'tasks' && taskMode === 'reminders' ? 'active' : ''}`}>Reminders</button>
+          <button onClick={() => setRightView('alerts')} className={`os-tab ${rightView === 'alerts' ? 'active text-rose-600' : ''}`}>Alerts</button>
         </div>
-        <button onClick={taskMode === '7f' ? openNewTask : openGlobalReminderModal} disabled={taskMode === '7f' && !activeWorkId} className={`p-1.5 rounded-xl border text-sky-500 disabled:opacity-40 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-white'}`} title={taskMode === '7f' ? 'Create project task' : 'Add reminder'}><Plus size={16} /></button>
+        <button onClick={taskMode === '7f' ? openNewTask : openGlobalReminderModal} disabled={taskMode === '7f' && !activeWorkId} className="os-primary py-1 px-2.5 text-xs disabled:opacity-40 cursor-pointer" title={taskMode === '7f' ? 'Create project task' : 'Add reminder'}><Plus size={14} /></button>
       </div>
 
       {rightView === 'tasks' && taskMode === 'reminders' && (
-        <div className={`flex border-b text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-          <button onClick={() => setActiveReminderTab('pending')} className={`flex-1 py-1.5 ${activeReminderTab === 'pending' ? 'text-amber-600 border-b-2 border-amber-500' : tMuted}`}>Pending {pendingReminders.length > 0 && `(${pendingReminders.length})`}</button>
-          <button onClick={() => setActiveReminderTab('completed')} className={`flex-1 py-1.5 ${activeReminderTab === 'completed' ? 'text-emerald-600 border-b-2 border-emerald-500' : tMuted}`}>Completed</button>
+        <div className="flex border-b border-[var(--os-border)] text-[10px] font-bold uppercase tracking-wider bg-[var(--os-surface-2)]">
+          <button onClick={() => setActiveReminderTab('pending')} className={`flex-1 py-1.5 text-center ${activeReminderTab === 'pending' ? 'text-amber-600 border-b-2 border-amber-500 font-extrabold' : tMuted}`}>Pending {pendingReminders.length > 0 && `(${pendingReminders.length})`}</button>
+          <button onClick={() => setActiveReminderTab('completed')} className={`flex-1 py-1.5 text-center ${activeReminderTab === 'completed' ? 'text-emerald-600 border-b-2 border-emerald-500 font-extrabold' : tMuted}`}>Completed</button>
         </div>
       )}
 
       {rightView === 'alerts' ? renderAlerts() : rightView === 'tasks' && taskMode === '7f' ? renderTasks() : renderReminders()}
 
       {isTaskEditorOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className={`${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'} border rounded-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto p-5 shadow-2xl`}>
-            <div className="flex items-center justify-between mb-4"><h3 className={`text-base font-black flex items-center gap-2 ${tText}`}><ClipboardList size={17} className="text-sky-500" /> {taskForm.title ? 'Edit Task' : 'Create Task'}</h3><button onClick={closeTaskEditor} className={tMuted}><X size={18} /></button></div>
+        <div className="os-modal-backdrop">
+          <div className="os-modal-content os-modal-md p-5 my-auto">
+            <div className="os-modal-head border-b-0 p-0 mb-4"><h3 className={`text-base font-extrabold flex items-center gap-2 ${tText}`}><ClipboardList size={17} className="text-sky-500" /> {taskForm.title ? 'Edit Task' : 'Create Task'}</h3><button onClick={closeTaskEditor} className="os-icon-btn"><X size={16} /></button></div>
             <div className="space-y-3">
               <input className={`w-full ${inputClass}`} placeholder="Task title" value={taskForm.title} onChange={event => setTaskForm({ ...taskForm, title: event.target.value })} />
-              <textarea className={`w-full ${inputClass}`} rows="3" placeholder="Description (optional)" value={taskForm.description} onChange={event => setTaskForm({ ...taskForm, description: event.target.value })} />
+              <textarea className={`w-full ${inputClass} min-h-[70px]`} rows="3" placeholder="Description (optional)" value={taskForm.description} onChange={event => setTaskForm({ ...taskForm, description: event.target.value })} />
               <div className="grid grid-cols-2 gap-2"><select className={inputClass} value={taskForm.status} onChange={event => setTaskForm({ ...taskForm, status: event.target.value })}>{['not_started', 'in_progress', 'blocked', 'completed', 'cancelled'].map(value => <option key={value} value={value}>{value.replace('_', ' ')}</option>)}</select><select className={inputClass} value={taskForm.priority} onChange={event => setTaskForm({ ...taskForm, priority: event.target.value })}>{['low', 'medium', 'high', 'critical'].map(value => <option key={value} value={value}>{value}</option>)}</select></div>
               <div className="grid grid-cols-2 gap-2"><input type="datetime-local" className={inputClass} value={taskForm.due_date} onChange={event => setTaskForm({ ...taskForm, due_date: event.target.value })} /><select className={inputClass} value={taskForm.stage_id} onChange={event => setTaskForm({ ...taskForm, stage_id: event.target.value })}><option value="">Project-level task</option>{(stageDefinitions || []).filter(stage => stage.status === 'active' && stage.work_id === activeWorkId).map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></div>
-              <button onClick={saveTask} className="w-full rounded-xl bg-sky-600 hover:bg-sky-500 text-white py-2.5 text-xs font-black flex items-center justify-center gap-2"><Save size={14} /> Save Task</button>
+              <button onClick={saveTask} className="os-primary w-full py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"><Save size={14} /> Save Task</button>
             </div>
 
             {taskForm.title && (

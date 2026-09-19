@@ -44,38 +44,38 @@ export default function CenterPanel() {
     if (activeWorkId) { const activeCard = document.getElementById(`work-card-${activeWorkId}`); if (activeCard) activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }) }
   }, [activeWorkId])
 
-  const tCard = isDarkMode ? "bg-slate-900/70 border-slate-800/60 shadow-lg" : "bg-white border-slate-200/70 shadow-xs"
-  const tHeader = isDarkMode ? "bg-slate-900/90 border-slate-800/80" : "bg-slate-50/80 border-slate-200/70"
-  const tText = isDarkMode ? "text-slate-200" : "text-slate-800 font-medium"
-  const tMuted = isDarkMode ? "text-slate-400" : "text-slate-500"
-  const tInput = isDarkMode ? "bg-slate-950 border-slate-800/80 text-slate-200 focus:border-sky-500" : "bg-white border-slate-200/80 text-slate-900 shadow-xs placeholder:text-slate-400 focus:border-sky-500"
-  const customScrollbar = `[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full ${isDarkMode ? '[&::-webkit-scrollbar-thumb]:bg-slate-700 hover:[&::-webkit-scrollbar-thumb]:bg-slate-600' : '[&::-webkit-scrollbar-thumb]:bg-slate-300 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400'}`
+  const tCard = "os-card"
+  const tHeader = "border-b border-[var(--os-border)] bg-[var(--os-surface-2)]"
+  const tText = isDarkMode ? "text-slate-100" : "text-slate-900 font-semibold"
+  const tMuted = "text-[var(--os-muted)]"
+  const tInput = "os-input"
+  const customScrollbar = "custom-scrollbar"
 
   const currentStageName = activeStages[activeStageIndex]?.name || activeWork?.stages?.[activeStageIndex] || ''
   const logPlaceholderText = centerView === 'pipeline' ? `Log update for ${currentStageName}...` : `Log update for issue...`
 
   return (
-    <div className={`flex-1 w-full min-h-[65vh] lg:min-h-0 rounded-xl flex flex-col overflow-hidden border transition-all duration-200 ${tCard}`}>
+    <div className="os-card flex-1 w-full min-h-[65vh] lg:min-h-0 flex flex-col overflow-hidden">
 
       {/* PANEL BODY CONTENT AREA */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         
         {/* PROJECTS / WORKS COLUMN (LEFT SIDE OF CENTER PANEL) */}
-        <div className={`lg:w-64 xl:w-72 border-b lg:border-b-0 lg:border-r flex flex-col shrink-0 ${isDarkMode ? 'bg-slate-950/40 border-slate-800/80' : 'bg-slate-50/60 border-slate-200/70'}`}>
+        <div className="lg:w-64 xl:w-72 border-b lg:border-b-0 lg:border-r border-[var(--os-border)] bg-[var(--os-surface-2)] flex flex-col shrink-0">
           {/* Work Column Header */}
-          <div className="flex justify-between items-center px-3 py-2 border-b border-slate-200/70 dark:border-slate-800/80 shrink-0">
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Projects & POs</span>
+          <div className="flex justify-between items-center px-3.5 py-2.5 border-b border-[var(--os-border)] shrink-0">
+            <span className="os-label font-bold mb-0">Projects & POs</span>
             <button 
               onClick={openNewWorkModal} 
               disabled={!activeUnitId} 
-              className="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg transition-all duration-200 shadow-xs hover:scale-105 active:scale-95 disabled:opacity-40 flex items-center gap-1 cursor-pointer"
+              className="os-primary py-1 px-2.5 text-xs disabled:opacity-40 cursor-pointer"
             >
               <Plus size={13} /> <span>New PO/WO</span>
             </button>
           </div>
 
           {/* Work Cards List */}
-          <div className={`flex-1 flex flex-row lg:flex-col gap-2 p-2.5 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto ${customScrollbar}`}>
+          <div className="flex-1 flex flex-row lg:flex-col gap-2 p-2.5 overflow-x-auto lg:overflow-x-hidden lg:overflow-y-auto custom-scrollbar">
             {(works || []).length === 0 ? (
               <div className="text-[11px] text-slate-400 p-3 italic text-center">No PO/WO projects found.</div>
             ) : (
@@ -86,40 +86,40 @@ export default function CenterPanel() {
                     key={w.id} 
                     id={`work-card-${w.id}`} 
                     onClick={() => setActiveWorkId(w.id)} 
-                    className={`cursor-pointer p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all duration-200 text-xs shrink-0 w-[78vw] sm:w-60 lg:w-auto ${
+                    className={`cursor-pointer p-3 rounded-xl border transition-all text-xs shrink-0 w-[78vw] sm:w-60 lg:w-auto ${
                       isActive 
-                        ? (isDarkMode ? 'border-sky-500/80 bg-sky-500/10 shadow-md shadow-sky-500/10' : 'bg-white border-l-4 border-l-sky-600 border-slate-200/80 shadow-md shadow-sky-500/5') 
-                        : (isDarkMode ? 'border-slate-800/80 bg-slate-900/60 hover:border-slate-700 hover:-translate-y-0.5' : 'border-slate-200/80 bg-white hover:border-sky-300 hover:-translate-y-0.5')
+                        ? 'border-sky-500 bg-sky-50/70 dark:bg-sky-950/30 shadow-xs' 
+                        : 'border-[var(--os-border)] bg-[var(--os-surface)] hover:border-sky-300 dark:hover:border-sky-600'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-1.5">
-                      <div className={`flex gap-1.5 items-center min-w-0 ${isActive ? (isDarkMode ? 'text-sky-400' : 'text-sky-700 font-semibold') : tText}`}>
+                      <div className={`flex gap-1.5 items-center min-w-0 ${isActive ? 'text-sky-600 dark:text-sky-400 font-bold' : tText}`}>
                         <FileText size={15} className="shrink-0 text-sky-500" /> 
                         <span className="font-semibold text-xs leading-snug whitespace-normal truncate">{w.title}</span>
                       </div>
                       {isActive && (
                         <div className="flex gap-0.5 shrink-0">
-                          <button onClick={(e) => { e.stopPropagation(); openEditWorkModal(w) }} className="text-sky-600 hover:text-sky-500 p-1 rounded hover:bg-sky-50 dark:hover:bg-sky-900/30 transition" title="Edit PO/WO"><Edit2 size={13}/></button>
+                          <button onClick={(e) => { e.stopPropagation(); openEditWorkModal(w) }} className="os-link p-1" title="Edit PO/WO"><Edit2 size={13}/></button>
                           {/* RBAC: Only Admins can delete projects */}
                           {userRole === 'admin' && (
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteWork(w.id) }} className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/30 transition" title="Delete Work"><Trash2 size={13}/></button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteWork(w.id) }} className="text-slate-400 hover:text-rose-600 p-1 rounded transition" title="Delete Work"><Trash2 size={13}/></button>
                           )}
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-1 mt-auto pt-0.5">
+                    <div className="flex flex-wrap gap-1 mt-auto pt-1">
                       {w.po_number && (
                         w.po_file_url ? (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); openDocPreview(w.po_file_url, `${w.title} - PO Document`); }}
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border cursor-pointer hover:scale-105 transition flex items-center gap-1 ${isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200/70'}`}
+                            className="os-tab bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
                             title="Instant View PO Document"
                           >
                             <Eye size={10} /> PO: {w.po_number}
                           </button>
                         ) : (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border ${isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200/70'}`}>PO: {w.po_number}</span>
+                          <span className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 py-0.5 px-1.5 rounded text-[9px] font-bold tracking-wider uppercase">PO: {w.po_number}</span>
                         )
                       )}
 
@@ -128,13 +128,13 @@ export default function CenterPanel() {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); openDocPreview(w.wo_file_url, `${w.title} - WO Document`); }}
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border cursor-pointer hover:scale-105 transition flex items-center gap-1 ${isDarkMode ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-sky-50 text-sky-700 border-sky-200/70'}`}
+                            className="os-tab bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
                             title="Instant View WO Document"
                           >
                             <Eye size={10} /> WO: {w.wo_number}
                           </button>
                         ) : (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200/70'}`}>WO: {w.wo_number}</span>
+                          <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 py-0.5 px-1.5 rounded text-[9px] font-bold tracking-wider uppercase">WO: {w.wo_number}</span>
                         )
                       )}
 
@@ -142,7 +142,7 @@ export default function CenterPanel() {
                         <button 
                           type="button" 
                           onClick={(e) => { e.stopPropagation(); openDocPreview(w.boq_url, `${w.title} - BOQ`); }} 
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border cursor-pointer hover:scale-105 transition flex items-center gap-1 ${isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border-indigo-200/70'}`}
+                          className="os-tab bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
                           title="Instant View BOQ Document"
                         >
                           <Eye size={10} /> BOQ
@@ -159,75 +159,73 @@ export default function CenterPanel() {
         {/* WORK CONTENT AREA (CRM VIEWS, STAGE STEPPER & LOG FEED) */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-transparent">
           {/* TAB SWITCHER & ASSIGNED TEAM BAR */}
-          <div className={`px-4 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800/80 shrink-0 ${tHeader}`}>
-            <div className="flex gap-3 sm:gap-5 items-center overflow-x-auto">
-              <button onClick={() => setCenterView('pipeline')} className={`text-xs font-semibold whitespace-nowrap transition-colors ${centerView === 'pipeline' ? 'text-sky-600 dark:text-sky-400 border-b-2 border-sky-500 pb-1 -mb-2' : tMuted + ' hover:text-slate-700 dark:hover:text-slate-300'}`}>
+          <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--os-border)] bg-[var(--os-surface)] shrink-0">
+            <div className="flex gap-1 items-center overflow-x-auto custom-scrollbar py-0.5">
+              <button onClick={() => setCenterView('pipeline')} className={`os-tab ${centerView === 'pipeline' ? 'active' : ''}`}>
                 Pipeline Status
               </button>
-              <button onClick={() => setCenterView('contacts')} className={`text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${centerView === 'contacts' ? 'text-sky-600 dark:text-sky-400 border-b-2 border-sky-500 pb-1 -mb-2' : tMuted + ' hover:text-slate-700 dark:hover:text-slate-300'}`}>
+              <button onClick={() => setCenterView('contacts')} className={`os-tab flex items-center gap-1 ${centerView === 'contacts' ? 'active' : ''}`}>
                 Contacts {(contacts || []).length > 0 && <span className="bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[9px] px-1.5 py-0.2 rounded-full font-bold">{(contacts || []).length}</span>}
               </button>
-              <button onClick={() => setCenterView('enquiries')} className={`text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${centerView === 'enquiries' ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500 pb-1 -mb-2' : tMuted + ' hover:text-indigo-500'}`}>
+              <button onClick={() => setCenterView('enquiries')} className={`os-tab flex items-center gap-1 ${centerView === 'enquiries' ? 'active' : ''}`}>
                 Enquiries {(enquiries || []).length > 0 && <span className="bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[9px] px-1.5 py-0.2 rounded-full font-bold">{(enquiries || []).length}</span>}
               </button>
-              <button onClick={() => setCenterView('follow_ups')} className={`text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${centerView === 'follow_ups' ? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-500 pb-1 -mb-2' : tMuted + ' hover:text-amber-500'}`}>
+              <button onClick={() => setCenterView('follow_ups')} className={`os-tab flex items-center gap-1 ${centerView === 'follow_ups' ? 'active' : ''}`}>
                 Follow-ups {pendingFollowUpsCount > 0 && <span className="bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] px-1.5 py-0.2 rounded-full font-bold">{pendingFollowUpsCount}</span>}
               </button>
-              <button onClick={() => setCenterView('issues')} className={`text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${centerView === 'issues' ? 'text-rose-600 border-b-2 border-rose-500 pb-1 -mb-2' : tMuted + ' hover:text-rose-500'}`}>
+              <button onClick={() => setCenterView('issues')} className={`os-tab flex items-center gap-1 ${centerView === 'issues' ? 'active' : ''}`}>
                 Issues & Snags {openIssuesCount > 0 && <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">{openIssuesCount}</span>}
               </button>
             </div>
 
-                 {/* ASSIGNED TEAM STACK & MANAGE BUTTON */}
-                 <div className="flex items-center gap-2 text-xs">
-                   <div className="flex items-center gap-1.5">
-                     <Users size={14} className="text-purple-500 shrink-0" />
-                     <span className={`text-[11px] font-bold ${tMuted}`}>Team:</span>
-                     {activeAssignments.length === 0 ? (
-                       <span className="text-[11px] italic text-slate-400">Unassigned</span>
-                     ) : (
-                       <div className="flex items-center gap-1 max-w-[280px] overflow-x-auto">
-                         {activeAssignments.slice(0, 3).map(assignment => {
-                           const displayName = getUserDisplayName ? getUserDisplayName(assignment.user_id, profiles, tenantMembers) : assignment.user_id;
-                           const userLabel = displayName.includes('@') ? displayName.split('@')[0] : displayName;
-                           const roleLabel = assignment.project_role === 'lead' ? 'Lead' : assignment.project_role === 'reviewer' ? 'Reviewer' : 'Member';
-                           const badgeStyle = assignment.project_role === 'lead'
-                             ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 font-bold'
-                             : assignment.project_role === 'reviewer'
-                             ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-bold'
-                             : 'bg-sky-500/15 text-sky-400 border-sky-500/30 font-bold';
+            {/* ASSIGNED TEAM STACK & MANAGE BUTTON */}
+            <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <Users size={14} className="text-purple-500 shrink-0" />
+                <span className="text-[11px] font-bold text-[var(--os-muted)]">Team:</span>
+                {activeAssignments.length === 0 ? (
+                  <span className="text-[11px] italic text-slate-400">Unassigned</span>
+                ) : (
+                  <div className="flex items-center gap-1 max-w-[280px] overflow-x-auto custom-scrollbar">
+                    {activeAssignments.slice(0, 3).map(assignment => {
+                      const displayName = getUserDisplayName ? getUserDisplayName(assignment.user_id, profiles, tenantMembers) : assignment.user_id;
+                      const userLabel = displayName.includes('@') ? displayName.split('@')[0] : displayName;
+                      const roleLabel = assignment.project_role === 'lead' ? 'Lead' : assignment.project_role === 'reviewer' ? 'Reviewer' : 'Member';
+                      const badgeStyle = assignment.project_role === 'lead'
+                        ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30 font-bold'
+                        : assignment.project_role === 'reviewer'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold'
+                        : 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30 font-bold';
 
-                           return (
-                             <span key={assignment.id} className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${badgeStyle}`} title={`${displayName} - ${roleLabel}`}>
-                               <span>{userLabel}</span>
-                               <span className="text-[9px] opacity-75">({roleLabel})</span>
-                             </span>
-                           );
-                         })}
-                         {activeAssignments.length > 3 && (
-                           <span className="text-[10px] font-bold text-slate-400">+{activeAssignments.length - 3} more</span>
-                         )}
-                       </div>
-                     )}
-                   </div>
-
-                   {canManageAssignments && (
-                     <button
-                       onClick={() => setIsProjectTeamModalOpen(true)}
-                       className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 transition cursor-pointer ${
-                         isDarkMode ? 'bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25' : 'bg-purple-50 border-purple-200 text-purple-800 hover:bg-purple-100 shadow-xs'
-                       }`}
-                       title="Manage Project Team Assignments"
-                     >
-                       <UserPlus size={12} />
-                       <span>Manage Team</span>
-                     </button>
-                   )}
-                 </div>
+                      return (
+                        <span key={assignment.id} className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${badgeStyle}`} title={`${displayName} - ${roleLabel}`}>
+                          <span>{userLabel}</span>
+                          <span className="text-[9px] opacity-75">({roleLabel})</span>
+                        </span>
+                      );
+                    })}
+                    {activeAssignments.length > 3 && (
+                      <span className="text-[10px] font-bold text-slate-400">+{activeAssignments.length - 3} more</span>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* STAGE PROCESS STEPPER BAR */}
-              <div className={`px-3.5 py-2 border-b border-slate-200/70 dark:border-slate-800/80 flex items-center gap-2 overflow-x-auto shrink-0 ${tHeader} ${customScrollbar}`}>
+              {canManageAssignments && (
+                <button
+                  onClick={() => setIsProjectTeamModalOpen(true)}
+                  className="os-secondary text-[11px] h-7 px-2.5 cursor-pointer"
+                  title="Manage Project Team Assignments"
+                >
+                  <UserPlus size={12} />
+                  <span>Manage Team</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* STAGE PROCESS STEPPER BAR */}
+          <div className="px-3.5 py-2 border-b border-[var(--os-border)] bg-[var(--os-surface-2)] flex items-center gap-2 overflow-x-auto shrink-0 custom-scrollbar">
                 {centerView === 'pipeline' ? (
                   <div className="flex items-center flex-1 min-w-0">
                     {isStageDefinitionsLoading ? (
@@ -245,10 +243,10 @@ export default function CenterPanel() {
                               <div className="flex items-center gap-1">
                                 <button
                                   onClick={() => setActiveStageIndex(index)}
-                                  className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
+                                  className={`os-tab px-3 py-1 font-semibold whitespace-nowrap ${
                                     isActive
-                                      ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-md shadow-sky-500/20 scale-105'
-                                      : (isDarkMode ? 'bg-slate-800/80 text-slate-400 hover:bg-slate-700 hover:text-slate-200' : 'bg-slate-200/70 text-slate-600 hover:bg-slate-300 hover:text-slate-900')
+                                      ? 'active font-bold'
+                                      : 'hover:bg-slate-200 dark:hover:bg-slate-800'
                                   }`}
                                 >
                                   <span className="opacity-75 mr-1">{index + 1}.</span> {stage.name}
@@ -257,11 +255,7 @@ export default function CenterPanel() {
                                   <button
                                     type="button"
                                     onClick={() => openStageAssignmentModal(stage.id)}
-                                    className={`p-1.5 rounded-full border transition ${
-                                      isDarkMode
-                                        ? 'border-purple-500/20 text-purple-300 hover:bg-purple-500/10'
-                                        : 'border-purple-200 text-purple-600 hover:bg-purple-50'
-                                    }`}
+                                    className="p-1 rounded-full border border-purple-200 dark:border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 transition"
                                     title={`Manage ${stage.name} responsibility`}
                                   >
                                     <Users size={11} />
@@ -269,7 +263,7 @@ export default function CenterPanel() {
                                 )}
                               </div>
                               {index < activeStages.length - 1 && (
-                                <div className={`w-4 sm:w-6 h-0.5 mx-1.5 shrink-0 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`} />
+                                <div className="w-4 sm:w-6 h-0.5 mx-1.5 shrink-0 bg-[var(--os-border)]" />
                               )}
                             </div>
                           )
@@ -280,7 +274,7 @@ export default function CenterPanel() {
                     {canManageStageDefinitions && (
                       <button
                         onClick={openStageManager}
-                        className={`ml-auto flex items-center whitespace-nowrap gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition shrink-0 ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100 shadow-xs'}`}
+                        className="ml-auto os-secondary text-[11px] h-7 px-2.5 shrink-0 cursor-pointer"
                       >
                         <Settings size={13} /> Manage Stages
                       </button>
@@ -288,13 +282,13 @@ export default function CenterPanel() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setIsIssueModalOpen(true)} className="px-2.5 py-1 rounded-lg border border-rose-500/30 text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 text-xs font-semibold whitespace-nowrap transition flex items-center gap-1 shadow-xs">
+                    <button onClick={() => setIsIssueModalOpen(true)} className="os-secondary text-rose-600 dark:text-rose-400 h-7 px-2.5 text-xs font-semibold cursor-pointer">
                       <Plus size={13}/> Report Issue
                     </button>
                     {(issues || []).map(issue => (
-                      <div key={issue.id} className={`flex rounded-lg overflow-hidden border transition-all ${activeIssueId === issue.id ? 'border-rose-600 shadow-xs' : isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                        <button onClick={() => setActiveIssueId(issue.id)} className={`px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-colors ${activeIssueId === issue.id ? 'bg-rose-600 text-white' : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{issue.title}</button>
-                        <button onClick={() => toggleIssueStatus(issue.id, issue.status)} className={`px-2 py-1 text-[9px] font-bold tracking-wider uppercase border-l transition-colors ${activeIssueId === issue.id ? (issue.status === 'open' ? 'bg-rose-800 border-rose-700 text-white' : 'bg-emerald-600 border-emerald-500 text-white') : (isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-500')}`}>{issue.status === 'open' ? 'RESOLVE' : 'REOPEN'}</button>
+                      <div key={issue.id} className={`flex rounded-lg overflow-hidden border transition-all ${activeIssueId === issue.id ? 'border-rose-600 shadow-xs' : 'border-[var(--os-border)]'}`}>
+                        <button onClick={() => setActiveIssueId(issue.id)} className={`px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-colors ${activeIssueId === issue.id ? 'bg-rose-600 text-white' : 'bg-[var(--os-surface-2)] text-[var(--os-text)]'}`}>{issue.title}</button>
+                        <button onClick={() => toggleIssueStatus(issue.id, issue.status)} className={`px-2 py-1 text-[9px] font-bold tracking-wider uppercase border-l transition-colors ${activeIssueId === issue.id ? (issue.status === 'open' ? 'bg-rose-800 border-rose-700 text-white' : 'bg-emerald-600 border-emerald-500 text-white') : 'bg-[var(--os-surface)] border-[var(--os-border)] text-slate-500'}`}>{issue.status === 'open' ? 'RESOLVE' : 'REOPEN'}</button>
                       </div>
                     ))}
                   </div>

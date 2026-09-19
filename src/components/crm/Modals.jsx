@@ -34,11 +34,11 @@ export default function Modals() {
 
   useEffect(() => { if (promptModal?.isOpen) setPromptInput(promptModal.defaultValue || '') }, [promptModal])
 
-  const tText = isDarkMode ? "text-slate-200" : "text-slate-800 font-medium"
-  const tMuted = isDarkMode ? "text-slate-400" : "text-slate-500"
-  const tInput = isDarkMode ? "bg-slate-950 border-slate-700 text-slate-200" : "bg-white border-slate-300 text-slate-800 shadow-sm placeholder:text-slate-400"
-  const tModal = isDarkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200 shadow-2xl"
-  const customScrollbar = `[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full ${isDarkMode ? '[&::-webkit-scrollbar-thumb]:bg-slate-700 hover:[&::-webkit-scrollbar-thumb]:bg-slate-600' : '[&::-webkit-scrollbar-thumb]:bg-slate-300 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400'}`
+  const tText = "text-[var(--os-text)] font-semibold"
+  const tMuted = "text-[var(--os-muted)]"
+  const tInput = "os-input"
+  const tModal = "os-modal-content"
+  const customScrollbar = "custom-scrollbar"
 
   return (
     <>
