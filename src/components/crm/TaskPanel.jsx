@@ -103,7 +103,7 @@ export default function TaskPanel() {
   );
 
   return (
-    <div className="os-card w-full lg:w-72 xl:w-80 min-h-[45vh] lg:min-h-0 flex flex-col overflow-hidden shrink-0">
+    <div className="os-card w-full lg:w-72 xl:w-80 min-h-0 flex flex-col overflow-hidden shrink-0">
       <div className={`px-3.5 py-2.5 flex justify-between items-center ${tHeader}`}>
         <div className="p-0.5 rounded-full flex items-center gap-1 text-xs font-bold border border-[var(--os-border)] bg-[var(--os-surface)]">
           <button onClick={() => { setRightView('tasks'); setTaskMode('7f'); }} className={`os-tab ${rightView === 'tasks' && taskMode === '7f' ? 'active' : ''}`}>7F Tasks</button>

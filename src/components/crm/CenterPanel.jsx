@@ -55,7 +55,7 @@ export default function CenterPanel() {
   const logPlaceholderText = centerView === 'pipeline' ? `Log update for ${currentStageName}...` : `Log update for issue...`
 
   return (
-    <div className="os-card flex-1 w-full min-h-[65vh] lg:min-h-0 flex flex-col overflow-hidden">
+    <div className="os-card flex-1 w-full min-h-0 flex flex-col overflow-hidden">
 
       {/* PANEL BODY CONTENT AREA */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">

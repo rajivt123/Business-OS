@@ -5,7 +5,7 @@ import Modals from './Modals';
 import AiChatModal from '../ai/AiChatModal';
 import { 
   FileText, Building, MapPin, Plus, X, ChevronDown, 
-  Check, RefreshCw, Briefcase, CalendarClock, Users, ListChecks, Bell 
+  Check, Briefcase, CalendarClock, Users, ListChecks, Bell 
 } from 'lucide-react'; 
 import { useCrm } from '../../context/CrmContext';
 
@@ -32,12 +32,6 @@ export default function CrmWorkspace({ embedded = false }) {
   const [isCompanyOpen, setIsCompanyOpen] = useState(false);
   const [isUnitOpen, setIsUnitOpen] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
-  
-  // Pull to Refresh State & Refs
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const touchStartY = useRef(0);
-  const mainContentRef = useRef(null);
 
   const opCompanyDropdownRef = useRef(null);
   const companyDropdownRef = useRef(null);
@@ -66,44 +60,6 @@ export default function CrmWorkspace({ embedded = false }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Touch handlers for Mobile Pull-To-Refresh
-  const handleTouchStart = (e) => {
-    if (mainContentRef.current && mainContentRef.current.scrollTop === 0) {
-      touchStartY.current = e.touches[0].clientY;
-    } else {
-      touchStartY.current = 0;
-    }
-  };
-
-  const handleTouchMove = (e) => {
-    if (touchStartY.current <= 0 || isRefreshing) return;
-    if (mainContentRef.current && mainContentRef.current.scrollTop > 0) return;
-
-    const currentY = e.touches[0].clientY;
-    const dy = currentY - touchStartY.current;
-    if (dy > 0) {
-      const dist = Math.min(Math.pow(dy, 0.85), 90);
-      setPullDistance(dist);
-    }
-  };
-
-  const handleTouchEnd = async () => {
-    if (pullDistance >= 50 && !isRefreshing) {
-      setIsRefreshing(true);
-      setPullDistance(50);
-      if (refreshAllData) {
-        await refreshAllData();
-      }
-      setTimeout(() => {
-        setIsRefreshing(false);
-        setPullDistance(0);
-      }, 500);
-    } else {
-      setPullDistance(0);
-    }
-    touchStartY.current = 0;
-  };
 
   return (
     <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto custom-scrollbar relative font-scale-${fontSize || 'md'}`}>
@@ -262,25 +218,8 @@ export default function CrmWorkspace({ embedded = false }) {
         </div>
       </div>
 
-      {/* Mobile Pull-To-Refresh Banner */}
-      {(pullDistance > 0 || isRefreshing) && (
-        <div 
-          className="w-full flex items-center justify-center gap-2 text-xs font-bold transition-all duration-200 overflow-hidden bg-sky-500/10 text-sky-600 dark:text-sky-400 border-b border-sky-500/20 shrink-0 mb-3"
-          style={{ height: `${isRefreshing ? 36 : pullDistance}px`, opacity: Math.min(1, pullDistance / 40) }}
-        >
-          <RefreshCw size={14} className={`shrink-0 ${isRefreshing ? 'animate-spin text-sky-500' : ''}`} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />
-          <span>{isRefreshing ? 'Refreshing CRM data...' : pullDistance >= 50 ? 'Release to refresh' : 'Pull down to refresh'}</span>
-        </div>
-      )}
-
       {/* MAIN CONTENT AREA */}
-      <div 
-        ref={mainContentRef}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] gap-4 min-h-0"
-      >
+      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] gap-4 min-h-0 w-full min-w-0">
         <CenterPanel />
         <TaskPanel />
       </div>
