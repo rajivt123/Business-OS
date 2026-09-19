@@ -54,6 +54,10 @@ const STATE_CODES = [
   { code: '37', name: 'Andhra Pradesh' },
 ];
 
+function isRealUuid(val) {
+  return typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+}
+
 function maskAccountNumber(accNum) {
   if (!accNum) return '••••••••';
   const clean = String(accNum).replace(/\s/g, '');
@@ -236,27 +240,32 @@ export default function CompanySettingsWorkspace() {
     setSelectedCompanyId(companyId);
 
     try {
-      // Call Supabase RPC get_owner_company_settings
+      // 1. Call RPC get_owner_company_settings
       const { data: settingsData, error: settingsErr } = await supabase.rpc('get_owner_company_settings', {
         p_tenant_company_id: companyId
       });
 
       if (settingsErr) {
-        console.warn('[CompanySettings] RPC get_owner_company_settings notice:', settingsErr.message);
+        console.warn('[CompanySettings] RPC get_owner_company_settings error:', settingsErr.message);
+        setErrorMessage('Failed to load company settings: ' + settingsErr.message);
+        setIsLoadingDetails(false);
+        return;
       }
 
-      if (settingsData && (settingsData.tenant_company || settingsData.company || settingsData.company_profile)) {
-        const tc = settingsData.tenant_company || settingsData.company || settingsData.company_info || settingsData;
-        const cp = settingsData.company_profile || settingsData.profile || {};
-        const cb = settingsData.company_branding || settingsData.branding || {};
-        const cs = settingsData.company_settings || settingsData.settings || {};
+      if (settingsData) {
+        const tc = settingsData.tenant_company || {};
+        const cp = settingsData.profile || {};
+        const cb = settingsData.branding || {};
+        const cs = settingsData.settings || {};
+
+        const finMonth = cp.financial_year_start_month || '04';
 
         setFormData({
-          name: tc.name || cp.company_name || '',
+          name: tc.name || cp.display_name || cp.legal_name || '',
           legal_name: cp.legal_name || '',
           display_name: cp.display_name || tc.name || '',
           trading_name: cp.trading_name || '',
-          company_code: tc.code || cp.company_code || '',
+          company_code: tc.code || '',
           company_type: cp.company_type || 'Private Limited',
           business_type: cp.business_type || 'Contracting',
           industry: cp.industry || 'Fire Safety & Engineering',
@@ -264,44 +273,62 @@ export default function CompanySettingsWorkspace() {
           description: cp.description || '',
           status: tc.status || 'active',
 
-          official_email: cp.official_email || cp.email || '',
-          official_phone: cp.official_phone || cp.phone || '',
+          official_email: cp.official_email || '',
+          official_phone: cp.official_phone || '',
           alternate_phone: cp.alternate_phone || '',
           website: cp.website || '',
 
           incorporation_date: cp.incorporation_date || '',
           commencement_date: cp.commencement_date || '',
           employee_count: cp.employee_count || '',
-          financial_year_start: cp.financial_year_start || '04-01',
-          currency: cp.currency || 'INR',
-          time_zone: cp.time_zone || 'Asia/Kolkata',
+          financial_year_start_month: finMonth,
+          financial_year_start: `${finMonth}-01`,
+          currency_code: cp.currency_code || 'INR',
+          currency: cp.currency_code || 'INR',
+          timezone: cp.timezone || 'Asia/Kolkata',
+          time_zone: cp.timezone || 'Asia/Kolkata',
           is_primary: Boolean(cp.is_primary),
 
-          registrations: settingsData.company_registrations || settingsData.registrations || [],
-          addresses: (settingsData.company_addresses || settingsData.addresses || []).map(a => ({
-            ...a,
-            address_line_1: a.address_line_1 || a.address_line1 || '',
-            address_line_2: a.address_line_2 || a.address_line2 || '',
-            postal_code: a.postal_code || a.pincode || ''
+          registrations: (settingsData.registrations || []).map(r => ({
+            ...r,
+            id: isRealUuid(r.id) ? r.id : undefined
           })),
-          contacts: settingsData.company_contacts || settingsData.contacts || [],
-          bank_profiles: (settingsData.company_bank_profiles || settingsData.bank_profiles || settingsData.banks || []).map(b => ({
+          addresses: (settingsData.addresses || []).map(a => ({
+            ...a,
+            id: isRealUuid(a.id) ? a.id : undefined,
+            address_line_1: a.address_line_1 || '',
+            address_line_2: a.address_line_2 || '',
+            postal_code: a.postal_code || ''
+          })),
+          contacts: (settingsData.contacts || []).map(c => ({
+            ...c,
+            id: isRealUuid(c.id) ? c.id : undefined
+          })),
+          bank_profiles: (settingsData.banks || []).map(b => ({
             ...b,
-            branch: b.branch_name || b.branch || '',
-            ifsc: b.ifsc_code || b.ifsc || '',
-            masked_account_number: maskAccountNumber(b.masked_account_number || b.account_number)
+            id: isRealUuid(b.id) ? b.id : undefined,
+            branch: b.branch_name || '',
+            branch_name: b.branch_name || '',
+            ifsc: b.ifsc_code || '',
+            ifsc_code: b.ifsc_code || '',
+            masked_account_number: maskAccountNumber(b.masked_account_number)
           })),
 
+          date_format: cs.date_format || 'YYYY-MM-DD',
+          number_format: cs.number_format || 'en-IN',
+          default_address_id: cs.default_address_id || null,
+          default_bank_profile_id: cs.default_bank_profile_id || null,
           gst_registration_type: cs.gst_registration_type || 'Regular',
           gst_filing_frequency: cs.gst_filing_frequency || 'Monthly',
           tds_applicable: cs.tds_applicable !== false,
           pf_applicable: cs.pf_applicable !== false,
           esic_applicable: cs.esic_applicable !== false,
-          pt_applicable: cs.professional_tax_applicable !== false && cs.pt_applicable !== false,
+          professional_tax_applicable: cs.professional_tax_applicable !== false,
+          pt_applicable: cs.professional_tax_applicable !== false,
           default_tax_region: cs.default_tax_region || '36',
 
-          logo_file: cb.logo_url ? { preview: cb.logo_url } : (cb.logo_metadata || null),
-          favicon_file: cb.favicon_url ? { preview: cb.favicon_url } : (cb.favicon_metadata || null),
+          logo_file: cb.logo_url ? { preview: cb.logo_url } : null,
+          favicon_file: cb.favicon_url ? { preview: cb.favicon_url } : null,
           primary_color: cb.primary_color || '#0284c7',
           secondary_color: cb.secondary_color || '#4f46e5',
           accent_color: cb.accent_color || '#f59e0b',
@@ -310,13 +337,24 @@ export default function CompanySettingsWorkspace() {
           welcome_message: cb.welcome_message || 'Welcome to RAJIV Business OS',
           contact_display_text: cb.contact_display_text || '',
 
-          documents: settingsData.company_documents || settingsData.documents || []
+          documents: (settingsData.documents || []).map(d => ({
+            ...d,
+            id: isRealUuid(d.id) ? d.id : undefined,
+            verification_status: (d.verification_status || 'pending').toLowerCase()
+          }))
         });
+      }
 
-        setAuditHistory(settingsData.company_settings_audit || settingsData.audit_history || settingsData.audits || []);
-      } else {
-        // Fallback: Query tables individually
-        await loadCompanySettingsFallback(companyId);
+      // 2. Separately fetch Audit History via get_owner_company_settings_audit
+      try {
+        const { data: auditData, error: auditErr } = await supabase.rpc('get_owner_company_settings_audit', {
+          p_tenant_company_id: companyId
+        });
+        if (!auditErr && auditData) {
+          setAuditHistory(auditData);
+        }
+      } catch (ae) {
+        console.warn('[CompanySettings] get_owner_company_settings_audit notice:', ae);
       }
 
       setCurrentView('edit');
@@ -330,48 +368,20 @@ export default function CompanySettingsWorkspace() {
     }
   }
 
-  async function loadCompanySettingsFallback(companyId) {
-    const targetComp = companyList.find(c => c.id === companyId || c.tenant_company_id === companyId);
-    if (!targetComp) return;
-
-    setFormData(prev => ({
-      ...getInitialFormState(),
-      name: targetComp.name || '',
-      company_code: targetComp.code || targetComp.name?.substring(0, 4).toUpperCase() || 'COMP',
-      status: targetComp.status || 'active',
-      is_primary: Boolean(targetComp.is_primary)
-    }));
-
-    // Fetch child records matching live schema columns
-    const [regRes, addrRes, contRes, bankRes, docRes, auditRes] = await Promise.all([
-      supabase.from('company_registrations').select('*').eq('tenant_company_id', companyId),
-      supabase.from('company_addresses').select('*').eq('tenant_company_id', companyId),
-      supabase.from('company_contacts').select('*').eq('tenant_company_id', companyId),
-      supabase.from('company_bank_profiles').select('*').eq('tenant_company_id', companyId),
-      supabase.from('company_documents').select('*').eq('tenant_company_id', companyId),
-      supabase.from('company_settings_audit').select('*').eq('tenant_company_id', companyId).order('created_at', { ascending: false })
-    ]);
-
-    setFormData(prev => ({
-      ...prev,
-      registrations: regRes.data || [],
-      addresses: (addrRes.data || []).map(a => ({
-        ...a,
-        address_line_1: a.address_line_1 || a.address_line1 || '',
-        address_line_2: a.address_line_2 || a.address_line2 || '',
-        postal_code: a.postal_code || a.pincode || ''
-      })),
-      contacts: contRes.data || [],
-      bank_profiles: (bankRes.data || []).map(b => ({
-        ...b,
-        branch: b.branch_name || b.branch || '',
-        ifsc: b.ifsc_code || b.ifsc || '',
-        masked_account_number: maskAccountNumber(b.masked_account_number || b.account_number)
-      })),
-      documents: docRes.data || []
-    }));
-
-    setAuditHistory(auditRes.data || []);
+  // Archive child item via archive_owner_company_setting_item_atomic RPC
+  async function archiveChildItem(entityType, item) {
+    if (item && item.id && isRealUuid(item.id) && selectedCompanyId) {
+      try {
+        const { error } = await supabase.rpc('archive_owner_company_setting_item_atomic', {
+          p_tenant_company_id: selectedCompanyId,
+          p_entity: entityType,
+          p_entity_id: item.id
+        });
+        if (error) console.warn(`[CompanySettings] Archive ${entityType} error:`, error.message);
+      } catch (e) {
+        console.warn(`[CompanySettings] Archive ${entityType} exception:`, e);
+      }
+    }
   }
 
   // Handle Input Changes with Dirty Flag
@@ -448,6 +458,7 @@ export default function CompanySettingsWorkspace() {
       const isEdit = currentView === 'edit';
 
       const formattedRegistrations = (formData.registrations || []).map(r => ({
+        ...(isRealUuid(r.id) ? { id: r.id } : {}),
         registration_type: r.registration_type,
         registration_number: r.registration_number,
         issuing_authority: r.issuing_authority || '',
@@ -460,6 +471,8 @@ export default function CompanySettingsWorkspace() {
       }));
 
       const formattedAddresses = (formData.addresses || []).map(a => ({
+        ...(isRealUuid(a.id) ? { id: a.id } : {}),
+        address_type: a.address_type || a.label || 'Office',
         label: a.label || 'Office',
         address_line_1: a.address_line_1 || a.address_line1 || '',
         address_line_2: a.address_line_2 || a.address_line2 || '',
@@ -470,11 +483,14 @@ export default function CompanySettingsWorkspace() {
         state_code: a.state_code || '',
         postal_code: a.postal_code || a.pincode || '',
         country: a.country || 'India',
+        latitude: a.latitude ? parseFloat(a.latitude) : null,
+        longitude: a.longitude ? parseFloat(a.longitude) : null,
         is_primary: Boolean(a.is_primary),
         is_active: a.is_active !== false
       }));
 
       const formattedContacts = (formData.contacts || []).map(c => ({
+        ...(isRealUuid(c.id) ? { id: c.id } : {}),
         contact_type: c.contact_type || 'General',
         name: c.name || '',
         designation: c.designation || '',
@@ -487,119 +503,128 @@ export default function CompanySettingsWorkspace() {
         notes: c.notes || ''
       }));
 
-      const formattedBankProfiles = (formData.bank_profiles || []).map(b => ({
+      const formattedBanks = (formData.bank_profiles || formData.banks || []).map(b => ({
+        ...(isRealUuid(b.id) ? { id: b.id } : {}),
         bank_name: b.bank_name || '',
         branch_name: b.branch_name || b.branch || '',
         account_name: b.account_name || '',
         masked_account_number: maskAccountNumber(b.masked_account_number || b.raw_account_number || b.account_number),
+        ifsc_code: b.ifsc_code || b.ifsc || '',
         account_type: b.account_type || 'Current',
         upi_id: b.upi_id || '',
-        ifsc_code: b.ifsc_code || b.ifsc || '',
         is_primary: Boolean(b.is_primary),
         is_active: b.is_active !== false,
         notes: b.notes || ''
       }));
 
       const formattedSettings = {
+        date_format: formData.date_format || 'YYYY-MM-DD',
+        number_format: formData.number_format || 'en-IN',
+        default_address_id: formData.default_address_id || null,
+        default_bank_profile_id: formData.default_bank_profile_id || null,
         gst_registration_type: formData.gst_registration_type || 'Regular',
         gst_filing_frequency: formData.gst_filing_frequency || 'Monthly',
         tds_applicable: formData.tds_applicable !== false,
         pf_applicable: formData.pf_applicable !== false,
         esic_applicable: formData.esic_applicable !== false,
         professional_tax_applicable: formData.pt_applicable !== false && formData.professional_tax_applicable !== false,
-        default_tax_region: formData.default_tax_region || '36'
+        default_tax_region: formData.default_tax_region || '36',
+        metadata: formData.settings_metadata || {}
       };
 
       const formattedBranding = {
-        logo_url: formData.logo_file?.preview || formData.logo_url || null,
-        favicon_url: formData.favicon_file?.preview || formData.favicon_url || null,
         primary_color: formData.primary_color || '#0284c7',
         secondary_color: formData.secondary_color || '#4f46e5',
         accent_color: formData.accent_color || '#f59e0b',
         font_family: formData.font_family || 'Inter',
         login_template: formData.login_template || 'Modern Glass',
         welcome_message: formData.welcome_message || 'Welcome to RAJIV Business OS',
-        contact_display_text: formData.contact_display_text || ''
+        contact_display_text: formData.contact_display_text || '',
+        logo_url: formData.logo_file?.preview || formData.logo_url || null,
+        favicon_url: formData.favicon_file?.preview || formData.favicon_url || null
       };
 
       const formattedDocuments = (formData.documents || []).map(d => ({
+        ...(isRealUuid(d.id) ? { id: d.id } : {}),
         document_type: d.document_type || 'Other',
         document_name: d.document_name || '',
         document_number: d.document_number || '',
         issue_date: d.issue_date || null,
         expiry_date: d.expiry_date || null,
-        verification_status: d.verification_status || 'Pending',
-        notes: d.notes || '',
+        verification_status: (d.verification_status || 'pending').toLowerCase(),
         file_name: d.file_name || '',
         mime_type: d.mime_type || '',
         version: d.version || '1.0',
         is_archived: Boolean(d.is_archived),
-        storage_provider: d.storage_provider || 'r2',
-        storage_key: d.storage_key || ''
+        notes: d.notes || ''
       }));
-      
-      const payload = {
-        tenant_company_id: selectedCompanyId || undefined,
-        id: selectedCompanyId || undefined,
-        name: formData.name.trim(),
-        code: (formData.company_code?.trim() || formData.name.substring(0, 4)).toUpperCase(),
-        status: formData.status || 'active',
 
-        company_name: formData.name.trim(),
+      const finMonth = formData.financial_year_start ? formData.financial_year_start.substring(0, 2) : (formData.financial_year_start_month || '04');
+
+      const profilePayload = {
         legal_name: formData.legal_name?.trim() || formData.name.trim(),
         display_name: formData.display_name?.trim() || formData.name.trim(),
         trading_name: formData.trading_name?.trim() || '',
-        company_code: (formData.company_code?.trim() || formData.name.substring(0, 4)).toUpperCase(),
-        company_type: formData.company_type,
-        business_type: formData.business_type,
-        industry: formData.industry,
-        nature_of_business: formData.nature_of_business,
-        company_description: formData.description,
-
+        company_type: formData.company_type || 'Private Limited',
+        business_type: formData.business_type || 'Contracting',
+        industry: formData.industry || 'Fire Safety & Engineering',
+        nature_of_business: formData.nature_of_business || '',
+        description: formData.description || '',
+        website: formData.website?.trim() || '',
         official_email: formData.official_email?.trim() || '',
         official_phone: formData.official_phone?.trim() || '',
         alternate_phone: formData.alternate_phone?.trim() || '',
-        website: formData.website?.trim() || '',
-
         incorporation_date: formData.incorporation_date || null,
         commencement_date: formData.commencement_date || null,
         employee_count: formData.employee_count ? parseInt(formData.employee_count, 10) : null,
-        financial_year_start: formData.financial_year_start,
-        currency: formData.currency,
-        time_zone: formData.time_zone,
-        is_primary: Boolean(formData.is_primary),
-
-        registrations: formattedRegistrations,
-        company_registrations: formattedRegistrations,
-
-        addresses: formattedAddresses,
-        company_addresses: formattedAddresses,
-
-        contacts: formattedContacts,
-        company_contacts: formattedContacts,
-
-        bank_profiles: formattedBankProfiles,
-        company_bank_profiles: formattedBankProfiles,
-
-        settings: formattedSettings,
-        company_settings: formattedSettings,
-
-        branding: formattedBranding,
-        company_branding: formattedBranding,
-
-        documents: formattedDocuments,
-        company_documents: formattedDocuments,
-        updated_by: currentUser?.email || 'Owner'
+        financial_year_start_month: finMonth,
+        currency_code: formData.currency_code || formData.currency || 'INR',
+        timezone: formData.timezone || formData.time_zone || 'Asia/Kolkata',
+        is_primary: Boolean(formData.is_primary)
       };
 
-      const rpcName = isEdit ? 'update_owner_company_atomic' : 'create_owner_company_atomic';
+      let rpcName, rpcPayload;
+
+      if (isEdit) {
+        rpcName = 'save_owner_company_settings_atomic';
+        rpcPayload = {
+          tenant_company_id: selectedCompanyId,
+          name: formData.name.trim(),
+          code: (formData.company_code?.trim() || formData.name.substring(0, 4)).toUpperCase(),
+          status: formData.status || 'active',
+          profile: profilePayload,
+          registrations: formattedRegistrations,
+          addresses: formattedAddresses,
+          contacts: formattedContacts,
+          banks: formattedBanks,
+          branding: formattedBranding,
+          settings: formattedSettings,
+          documents: formattedDocuments
+        };
+      } else {
+        rpcName = 'create_owner_company_settings_atomic';
+        rpcPayload = {
+          tenant_id: crm?.tenantId || undefined,
+          name: formData.name.trim(),
+          code: (formData.company_code?.trim() || formData.name.substring(0, 4)).toUpperCase(),
+          status: formData.status || 'active',
+          profile: profilePayload,
+          registrations: formattedRegistrations,
+          addresses: formattedAddresses,
+          contacts: formattedContacts,
+          banks: formattedBanks,
+          branding: formattedBranding,
+          settings: formattedSettings,
+          documents: formattedDocuments
+        };
+      }
+
       const { data: rpcRes, error: rpcErr } = await supabase.rpc(rpcName, {
-        p_payload: payload
+        p_payload: rpcPayload
       });
 
       if (rpcErr) {
         console.error(`[CompanySettings] RPC ${rpcName} error:`, rpcErr);
-        // Show actual backend error and abort immediately without silent database writes
         setErrorMessage(`Backend Error (${rpcErr.code || 'RPC'}): ${rpcErr.message || rpcErr.details || 'Operation failed'}`);
         return;
       }
@@ -1271,6 +1296,7 @@ export default function CompanySettingsWorkspace() {
               <RegistrationsTab
                 registrations={formData.registrations}
                 onChange={regs => handleInputChange('registrations', regs)}
+                onArchive={item => archiveChildItem('registration', item)}
               />
             )}
 
@@ -1279,6 +1305,7 @@ export default function CompanySettingsWorkspace() {
               <AddressesTab
                 addresses={formData.addresses}
                 onChange={addrs => handleInputChange('addresses', addrs)}
+                onArchive={item => archiveChildItem('address', item)}
               />
             )}
 
@@ -1287,6 +1314,7 @@ export default function CompanySettingsWorkspace() {
               <ContactsTab
                 contacts={formData.contacts}
                 onChange={conts => handleInputChange('contacts', conts)}
+                onArchive={item => archiveChildItem('contact', item)}
               />
             )}
 
@@ -1295,6 +1323,7 @@ export default function CompanySettingsWorkspace() {
               <BankProfilesTab
                 bankProfiles={formData.bank_profiles}
                 onChange={banks => handleInputChange('bank_profiles', banks)}
+                onArchive={item => archiveChildItem('bank', item)}
               />
             )}
 
@@ -1386,6 +1415,7 @@ export default function CompanySettingsWorkspace() {
               <DocumentsTab
                 documents={formData.documents}
                 onChange={docs => handleInputChange('documents', docs)}
+                onArchive={item => archiveChildItem('document', item)}
               />
             )}
 
@@ -1466,7 +1496,7 @@ export default function CompanySettingsWorkspace() {
    SUB-COMPONENT TAB IMPLEMENTATIONS (REGISTRATIONS, ADDRESSES, CONTACTS, etc.)
    ========================================================================= */
 
-function RegistrationsTab({ registrations = [], onChange }) {
+function RegistrationsTab({ registrations = [], onChange, onArchive }) {
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({
     registration_type: 'PAN',
@@ -1526,8 +1556,9 @@ function RegistrationsTab({ registrations = [], onChange }) {
     setForm(item);
   }
 
-  function handleDelete(id) {
-    onChange(registrations.filter(r => r.id !== id));
+  function handleDelete(item) {
+    if (onArchive && item) onArchive(item);
+    onChange(registrations.filter(r => r.id !== item.id));
   }
 
   return (
@@ -1705,7 +1736,7 @@ function RegistrationsTab({ registrations = [], onChange }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDelete(item.id)}
+                  onClick={() => handleDelete(item)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 transition"
                 >
                   <Trash2 size={14} />
@@ -1719,7 +1750,7 @@ function RegistrationsTab({ registrations = [], onChange }) {
   );
 }
 
-function AddressesTab({ addresses = [], onChange }) {
+function AddressesTab({ addresses = [], onChange, onArchive }) {
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({
     address_type: 'Registered Office',
@@ -1769,6 +1800,11 @@ function AddressesTab({ addresses = [], onChange }) {
       is_primary: false,
       is_active: true
     });
+  }
+
+  function handleDelete(item) {
+    if (onArchive && item) onArchive(item);
+    onChange(addresses.filter(a => a.id !== item.id));
   }
 
   return (
@@ -1951,7 +1987,7 @@ function AddressesTab({ addresses = [], onChange }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => onChange(addresses.filter(a => a.id !== item.id))}
+                  onClick={() => handleDelete(item)}
                   className="p-1 text-slate-400 hover:text-rose-500"
                 >
                   <Trash2 size={13} />
@@ -1965,7 +2001,7 @@ function AddressesTab({ addresses = [], onChange }) {
   );
 }
 
-function ContactsTab({ contacts = [], onChange }) {
+function ContactsTab({ contacts = [], onChange, onArchive }) {
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({
     contact_type: 'Key Managerial',
@@ -1986,6 +2022,11 @@ function ContactsTab({ contacts = [], onChange }) {
     else onChange([...contacts, item]);
     setEditingItem(null);
     setForm({ contact_type: 'Key Managerial', name: '', designation: '', department: '', email: '', phone: '', alternate_phone: '', is_primary: false, notes: '' });
+  }
+
+  function handleDelete(item) {
+    if (onArchive && item) onArchive(item);
+    onChange(contacts.filter(c => c.id !== item.id));
   }
 
   return (
@@ -2041,7 +2082,7 @@ function ContactsTab({ contacts = [], onChange }) {
               <span className="font-bold text-xs block">{c.name} ({c.designation || 'Contact'})</span>
               <span className="text-[10px] text-slate-400 block">{c.email} | {c.phone}</span>
             </div>
-            <button type="button" onClick={() => onChange(contacts.filter(item => item.id !== c.id))} className="text-slate-400 hover:text-rose-500">
+            <button type="button" onClick={() => handleDelete(c)} className="text-slate-400 hover:text-rose-500">
               <Trash2 size={13} />
             </button>
           </div>
@@ -2051,7 +2092,7 @@ function ContactsTab({ contacts = [], onChange }) {
   );
 }
 
-function BankProfilesTab({ bankProfiles = [], onChange }) {
+function BankProfilesTab({ bankProfiles = [], onChange, onArchive }) {
   const [editingItem, setEditingItem] = useState(null);
   const [form, setForm] = useState({
     bank_name: '',
@@ -2086,6 +2127,11 @@ function BankProfilesTab({ bankProfiles = [], onChange }) {
     else onChange([...bankProfiles, item]);
     setEditingItem(null);
     setForm({ bank_name: '', branch: '', account_name: '', raw_account_number: '', ifsc: '', account_type: 'Current', upi_id: '', is_primary: false, notes: '' });
+  }
+
+  function handleDelete(item) {
+    if (onArchive && item) onArchive(item);
+    onChange(bankProfiles.filter(b => b.id !== item.id));
   }
 
   return (
@@ -2139,7 +2185,7 @@ function BankProfilesTab({ bankProfiles = [], onChange }) {
           <div key={b.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
             <div className="flex justify-between items-center">
               <span className="font-black text-xs">{b.bank_name} ({b.account_type})</span>
-              <button type="button" onClick={() => onChange(bankProfiles.filter(item => item.id !== b.id))} className="text-slate-400 hover:text-rose-500">
+              <button type="button" onClick={() => handleDelete(b)} className="text-slate-400 hover:text-rose-500">
                 <Trash2 size={13} />
               </button>
             </div>
@@ -2203,8 +2249,6 @@ function BrandingTab({ formData, handleInputChange }) {
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-[10px] space-y-1 font-mono">
               <div>File: {formData.logo_file.file_name}</div>
               <div>Size: {formatBytes(formData.logo_file.file_size)}</div>
-              <div>Storage Provider: <span className="text-sky-500 font-bold">{formData.logo_file.storage_provider}</span></div>
-              <div className="truncate">Key: {formData.logo_file.storage_key}</div>
             </div>
           )}
         </div>
@@ -2229,7 +2273,6 @@ function BrandingTab({ formData, handleInputChange }) {
           {formData.favicon_file && (
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-[10px] space-y-1 font-mono">
               <div>File: {formData.favicon_file.file_name}</div>
-              <div>Storage Provider: <span className="text-sky-500 font-bold">{formData.favicon_file.storage_provider}</span></div>
             </div>
           )}
         </div>
@@ -2295,7 +2338,7 @@ function BrandingTab({ formData, handleInputChange }) {
   );
 }
 
-function DocumentsTab({ documents = [], onChange }) {
+function DocumentsTab({ documents = [], onChange, onArchive }) {
   const fileInputRef = useRef(null);
   const [selectedDocType, setSelectedDocType] = useState('GST Certificate');
   const [customType, setCustomType] = useState('');
@@ -2315,7 +2358,7 @@ function DocumentsTab({ documents = [], onChange }) {
         custom_type: selectedDocType === 'Other' ? customType : '',
         document_name: file.name,
         document_number: docNumber || 'DOC-01',
-        verification_status: 'Verified',
+        verification_status: 'verified',
         version: '1.0',
         is_current: true,
         is_archived: false,
@@ -2323,8 +2366,6 @@ function DocumentsTab({ documents = [], onChange }) {
         mime_type: meta.mime_type,
         file_size: meta.file_size,
         preview: meta.preview,
-        storage_provider: meta.storage_provider,
-        storage_key: meta.storage_key,
         created_at: new Date().toISOString()
       };
 
@@ -2335,6 +2376,11 @@ function DocumentsTab({ documents = [], onChange }) {
     } finally {
       setIsUploadingProgress(false);
     }
+  }
+
+  function handleDelete(item) {
+    if (onArchive && item) onArchive(item);
+    onChange(documents.filter(d => d.id !== item.id));
   }
 
   return (
@@ -2399,10 +2445,10 @@ function DocumentsTab({ documents = [], onChange }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                {doc.verification_status || 'Verified'}
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 capitalize">
+                {doc.verification_status || 'verified'}
               </span>
-              <button type="button" onClick={() => onChange(documents.filter(d => d.id !== doc.id))} className="text-slate-400 hover:text-rose-500">
+              <button type="button" onClick={() => handleDelete(doc)} className="text-slate-400 hover:text-rose-500">
                 <Trash2 size={14} />
               </button>
             </div>
