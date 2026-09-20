@@ -651,10 +651,18 @@ export default function BusinessOSWorkspace() {
 
   const filteredNav = useMemo(() => navSections.map(section => ({
     ...section, items: section.items.filter(([id]) => {
-      if (effectiveRole === 'VIEWER' && ['admin', 'accounts', 'hr'].includes(id)) return false;
-      if (['SALES'].includes(effectiveRole) && !['dashboard', 'my-work', 'approvals', 'notifications', 'crm', 'sales', 'documents', 'reports', 'ai'].includes(id)) return false;
-      if (effectiveRole === 'ACCOUNTANT' && ['hr', 'inventory', 'admin'].includes(id)) return false;
-      if (effectiveRole === 'HR' && ['sales', 'procurement', 'inventory'].includes(id)) return false;
+      if (['TEAM', 'VIEWER', 'ENGINEER', 'WORKER'].includes(effectiveRole)) {
+        return ['my-work', 'notifications', 'hr', 'profile'].includes(id);
+      }
+      if (effectiveRole === 'SALES') {
+        return ['dashboard', 'my-work', 'approvals', 'notifications', 'crm', 'sales', 'documents', 'reports', 'ai', 'profile'].includes(id);
+      }
+      if (effectiveRole === 'ACCOUNTANT') {
+        return ['dashboard', 'my-work', 'approvals', 'notifications', 'accounts', 'sales', 'procurement', 'documents', 'reports', 'ai', 'profile'].includes(id);
+      }
+      if (effectiveRole === 'HR') {
+        return ['dashboard', 'my-work', 'approvals', 'notifications', 'hr', 'documents', 'reports', 'ai', 'profile'].includes(id);
+      }
       return true;
     })
   })).filter(s => s.items.length), [effectiveRole]);
@@ -1054,6 +1062,53 @@ export default function BusinessOSWorkspace() {
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
       </div>
       <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
+      
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="os-mobile-bottom-bar">
+        <button
+          type="button"
+          onClick={() => go(effectiveRole === 'TEAM' || effectiveRole === 'WORKER' ? 'my-work' : 'dashboard')}
+          className={`os-mobile-nav-item ${page === 'dashboard' || page === 'my-work' ? 'active' : ''}`}
+        >
+          <LayoutDashboard size={18} />
+          <span>Home</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => go('my-work')}
+          className={`os-mobile-nav-item ${page === 'my-work' ? 'active' : ''}`}
+        >
+          <ListChecks size={18} />
+          <span>My Work</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowCreateMenu(!showCreateMenu)}
+          className="os-mobile-nav-item text-sky-500"
+        >
+          <Plus size={20} className="p-0.5 rounded-full bg-sky-500 text-white" />
+          <span>Action</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => go('notifications')}
+          className={`os-mobile-nav-item relative ${page === 'notifications' ? 'active' : ''}`}
+        >
+          <Bell size={18} />
+          <span>Alerts</span>
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute top-1 right-3 h-2 w-2 rounded-full bg-rose-500 block" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => go('profile')}
+          className={`os-mobile-nav-item ${page === 'profile' ? 'active' : ''}`}
+        >
+          <UserRound size={18} />
+          <span>Profile</span>
+        </button>
+      </div>
     </main>
   </div>;
 }
