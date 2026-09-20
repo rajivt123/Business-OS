@@ -118,7 +118,7 @@ function Badge({ children, tone = 'slate' }) {
     red: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20',
     violet: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/20',
   };
-  return <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-extrabold ${tones[tone] || tones.slate}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md border text-xs font-semibold ${tones[tone] || tones.slate}`}>{children}</span>;
 }
 
 function StatCard({ icon: Icon, label, value, sub, trend, tone = 'blue' }) {
@@ -129,15 +129,26 @@ function StatCard({ icon: Icon, label, value, sub, trend, tone = 'blue' }) {
     amber: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-300',
     rose: 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300',
   };
+  const isUnavailable = value === 'Unavailable';
+
   return (
     <div className="os-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${toneClasses[tone]}`}><Icon size={18} /></div>
-        {trend && <span className={`text-[10px] font-extrabold flex items-center gap-0.5 ${trend.startsWith('-') ? 'text-rose-500' : 'text-emerald-500'}`}>{trend.startsWith('-') ? <ArrowDownRight size={12} /> : <ArrowUpRight size={12} />} {trend}</span>}
+        {trend && <span className={`text-xs font-semibold flex items-center gap-0.5 ${trend.startsWith('-') ? 'text-rose-500' : 'text-emerald-500'}`}>{trend.startsWith('-') ? <ArrowDownRight size={12} /> : <ArrowUpRight size={12} />} {trend}</span>}
       </div>
-      <div className="mt-4 text-2xl font-black tracking-tight">{value}</div>
-      <div className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">{label}</div>
-      {sub && <div className="mt-2 text-[10px] text-slate-400">{sub}</div>}
+      {isUnavailable ? (
+        <div className="mt-4">
+          <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+            <span>Not connected</span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{value}</div>
+      )}
+      <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
+      {sub && <div className="mt-1.5 text-xs text-slate-400 dark:text-slate-500 leading-normal">{sub}</div>}
     </div>
   );
 }
@@ -148,7 +159,7 @@ function SectionCard({ title, subtitle, icon: Icon, action, children, className 
       <div className="px-4 py-3.5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           {Icon && <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300"><Icon size={15} /></div>}
-          <div className="min-w-0"><h3 className="text-xs font-black uppercase tracking-wider truncate">{title}</h3>{subtitle && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{subtitle}</p>}</div>
+          <div className="min-w-0"><h3 className="text-xs font-bold uppercase tracking-wider truncate">{title}</h3>{subtitle && <p className="text-xs text-slate-400 mt-0.5 truncate">{subtitle}</p>}</div>
         </div>
         {action}
       </div>
@@ -158,7 +169,7 @@ function SectionCard({ title, subtitle, icon: Icon, action, children, className 
 }
 
 function MiniTable({ columns, rows }) {
-  return <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr>{columns.map((c) => <th key={c} className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">{c}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition">{row.map((cell, j) => <td key={j} className="px-4 py-3 text-xs font-semibold border-b last:border-0 border-slate-100 dark:border-slate-800/70">{cell}</td>)}</tr>)}</tbody></table></div>;
+  return <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr>{columns.map((c) => <th key={c} className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">{c}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition">{row.map((cell, j) => <td key={j} className="px-4 py-3 text-xs font-medium border-b last:border-0 border-slate-100 dark:border-slate-800/70">{cell}</td>)}</tr>)}</tbody></table></div>;
 }
 
 function UnavailableAction({ children, className = 'os-secondary', title = 'Unavailable: no backend support exists for this action.' }) {
@@ -185,11 +196,14 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
   const companyRows = (companies || []).map(c => {
     const companyWorks = works.filter(work => work.tenant_company_id === c.id);
     return [
-      <div className="flex items-center gap-2"><div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black">{c.name?.charAt(0) || 'C'}</div><span className="font-bold">{c.name}</span></div>,
-      <Badge tone="slate">Unavailable</Badge>,
-      'Unavailable',
-      'Unavailable',
-      `${companyWorks.length} loaded`,
+      <div key={c.id} className="flex items-center gap-2">
+        <div className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs font-bold">{c.name?.charAt(0) || 'C'}</div>
+        <span className="font-semibold text-xs text-slate-800 dark:text-slate-200">{c.name}</span>
+      </div>,
+      <span key="health" className="text-slate-400 text-xs">—</span>,
+      <span key="progress" className="text-slate-400 text-xs">—</span>,
+      <span key="revenue" className="text-slate-400 text-xs">—</span>,
+      <span key="projects" className="text-xs font-medium text-slate-600 dark:text-slate-300">{companyWorks.length} loaded</span>,
     ];
   });
   const attention = [
@@ -200,7 +214,7 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={CircleDollarSign} label="Group Revenue" value="Unavailable" sub="No revenue backend in current application" tone="blue" /><StatCard icon={WalletCards} label="Receivables" value="Unavailable" sub="No receivables backend in current application" tone="amber" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub={multi ? 'Across loaded authorized context' : `${companyName} context`} tone="violet" /><StatCard icon={Users} label="Employees" value="Unavailable" sub="No employee backend in current application" tone="emerald" /></div>
     <div className="grid xl:grid-cols-[1.6fr_1fr] gap-4">
       <SectionCard title={multi ? 'Company Performance' : 'Company Health'} subtitle={multi ? 'Consolidated view across operating companies' : 'Single-company operating overview'} icon={Building2} action={<button onClick={() => onNavigate('reports')} className="os-link">View report <ChevronRight size={13} /></button>}>
-        <MiniTable columns={['Company', 'Health', 'Progress', 'Revenue', 'Projects']} rows={companyRows.length ? companyRows : [[companyName, 'Unavailable', 'Unavailable', 'Unavailable', '0 loaded']]} />
+        <MiniTable columns={['Company', 'Health', 'Progress', 'Revenue', 'Projects']} rows={companyRows.length ? companyRows : [[<span key="name">{companyName}</span>, <span key="h" className="text-slate-400 text-xs">—</span>, <span key="p" className="text-slate-400 text-xs">—</span>, <span key="r" className="text-slate-400 text-xs">—</span>, <span key="l" className="text-xs text-slate-500">0 loaded</span>]]} />
       </SectionCard>
       <SectionCard title="Executive Attention" subtitle="Only exceptions and decisions that need management" icon={TriangleAlert}>
         <div className="p-4 space-y-2.5">
@@ -223,7 +237,7 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
               <div className={`h-2 w-2 rounded-full ${item.tone === 'red' ? 'bg-rose-500' : item.tone === 'amber' ? 'bg-amber-500' : 'bg-sky-500'}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold truncate">{item.text}</p>
-                <p className="text-[10px] text-slate-400">{item.type}</p>
+                <p className="text-xs text-slate-400">{item.type}</p>
               </div>
               <ChevronRight size={14} className="text-slate-400" />
             </button>
@@ -232,9 +246,28 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
       </SectionCard>
     </div>
     <div className="grid lg:grid-cols-3 gap-4">
-      <SectionCard title="Financial Snapshot" icon={BarChart3}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no financial backend is connected to this dashboard.</p></div></SectionCard>
-      <SectionCard title="Project Health" icon={HeartPulse}><div className="p-4 grid grid-cols-3 gap-2">{[['Loaded', '' + works.length, 'blue'], ['At Risk', 'Unavailable', 'amber'], ['Delayed', 'Unavailable', 'red']].map(([a, b, t]) => <div key={a} className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 text-center"><div className={`text-lg font-black ${t === 'blue' ? 'text-sky-500' : t === 'amber' ? 'text-amber-500' : 'text-rose-500'}`}>{b}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">{a}</div></div>)}</div></SectionCard>
-      <SectionCard title="Pending Approvals" icon={ClipboardCheck}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no approval backend is connected to this dashboard.</p></div></SectionCard>
+      <SectionCard title="Financial Snapshot" icon={BarChart3}>
+        <div className="p-4 flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400">
+          <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+          <span>Financial and accounting backend pending module connection.</span>
+        </div>
+      </SectionCard>
+      <SectionCard title="Project Health" icon={HeartPulse}>
+        <div className="p-4 grid grid-cols-3 gap-2">
+          {[['Loaded', '' + works.length, 'blue'], ['At Risk', '—', 'slate'], ['Delayed', '—', 'slate']].map(([a, b, t]) => (
+            <div key={a} className="rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 p-3 text-center">
+              <div className={`text-base font-bold ${t === 'blue' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{b}</div>
+              <div className="text-xs font-medium text-slate-400 mt-1">{a}</div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+      <SectionCard title="Pending Approvals" icon={ClipboardCheck}>
+        <div className="p-4 flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400">
+          <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+          <span>Workflow approval backend pending module connection.</span>
+        </div>
+      </SectionCard>
     </div>
   </div>;
 }
@@ -526,8 +559,27 @@ function NotificationsPage({ notifications = [], isLoading = false, onMarkRead, 
   );
 }
 
-function AIPage() {
-  return <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Ask RAJIV AI" subtitle="Use the existing RAJIV AI assistant from the top bar or CRM workspace." icon={Sparkles}><div className="p-5"><p className="text-xs italic text-slate-400">This dashboard page has no connected AI request handler.</p></div></SectionCard><SectionCard title="AI-Assisted Workflows" icon={Zap}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable until workflow backends are connected.</p></div></SectionCard></div>;
+function AIPage({ onOpenAiChat }) {
+  return (
+    <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4">
+      <SectionCard title="Ask RAJIV AI" subtitle="Permission-aware business intelligence and assisted workflows." icon={Sparkles}>
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            RAJIV AI is ready to assist with project summaries, customer insights, and workflow queries.
+          </p>
+          <button onClick={onOpenAiChat} className="os-primary cursor-pointer">
+            <Sparkles size={14} /> Launch AI Assistant
+          </button>
+        </div>
+      </SectionCard>
+      <SectionCard title="AI-Assisted Workflows" icon={Zap}>
+        <div className="p-5 flex items-center gap-2 text-xs text-slate-400">
+          <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+          <span>Workflow automation backend pending module connection.</span>
+        </div>
+      </SectionCard>
+    </div>
+  );
 }
 
 function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
@@ -602,28 +654,40 @@ export default function BusinessOSWorkspace() {
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 800 : false);
   const [previewRole, setPreviewRole] = useState(null);
-  const [showCompanyMenu, setShowCompanyMenu] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [activePopover, setActivePopover] = useState(null); // 'company' | 'profile' | 'role' | null
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileCompanyOpen, setIsMobileCompanyOpen] = useState(false);
 
+  const topbarRef = useRef(null);
   const searchContainerRef = useRef(null);
   const searchInputRef = useRef(null);
 
+  const togglePopover = (name) => setActivePopover(prev => prev === name ? null : name);
+  const closePopovers = () => {
+    setActivePopover(null);
+    setShowCreateMenu(false);
+  };
+
   useEffect(() => {
     function handleClickOutside(event) {
+      if (topbarRef.current && !topbarRef.current.contains(event.target)) {
+        setActivePopover(null);
+      }
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
         if (setSearchQuery) setSearchQuery('');
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [setSearchQuery]);
-
-  useEffect(() => {
     function handleKeyDown(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (e.key === 'Escape') {
+        setActivePopover(null);
+        setShowCreateMenu(false);
+        setIsMobileSearchOpen(false);
+        setIsMobileMenuOpen(false);
+        setIsMobileCompanyOpen(false);
+        if (setSearchQuery) setSearchQuery('');
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (typeof window !== 'undefined' && window.innerWidth <= 768) {
           setIsMobileSearchOpen(true);
@@ -632,9 +696,13 @@ export default function BusinessOSWorkspace() {
         }
       }
     }
+    document.addEventListener('mousedown', handleClickOutside);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [setSearchQuery]);
 
   const effectiveRole = previewRole || (tenantRole || 'TEAM').toUpperCase();
   const role = roleMeta[effectiveRole]?.label || effectiveRole;
@@ -712,6 +780,14 @@ export default function BusinessOSWorkspace() {
   const go = (next) => {
     setPage(next);
     setIsMobileMenuOpen(false);
+    closePopovers();
+  };
+
+  const handleNav = (id) => {
+    if (id === 'ai') {
+      setIsAiChatOpen?.(true);
+    }
+    go(id);
   };
 
   const meta = pageMeta[page] || pageMeta.dashboard;
@@ -727,25 +803,27 @@ export default function BusinessOSWorkspace() {
 
       <div className="os-rail-nav custom-scrollbar">
         {filteredNav.map((section, sIdx) => (
-          <React.Fragment key={section.label}>
+          <div key={section.label} className="w-full flex flex-col items-center">
             {sIdx > 0 && <div className="os-rail-divider" />}
-            {section.items.map(([id, label, Icon]) => (
-              <button
-                key={id}
-                onClick={() => go(id)}
-                className={`os-rail-btn ${page === id ? 'active' : ''}`}
-                aria-label={label}
-              >
-                <Icon size={18} />
-                {id === 'notifications' && unreadNotificationsCount > 0 && (
-                  <span className="os-rail-badge">
-                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
-                  </span>
-                )}
-                <div className="os-rail-tooltip">{label}</div>
-              </button>
-            ))}
-          </React.Fragment>
+            <div className="w-full flex flex-col items-center gap-1">
+              {section.items.map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  onClick={() => handleNav(id)}
+                  className={`os-rail-btn ${page === id ? 'active' : ''}`}
+                  aria-label={label}
+                >
+                  <Icon size={18} />
+                  {id === 'notifications' && unreadNotificationsCount > 0 && (
+                    <span className="os-rail-badge">
+                      {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                    </span>
+                  )}
+                  <div className="os-rail-tooltip">{label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
@@ -760,19 +838,19 @@ export default function BusinessOSWorkspace() {
           <div className="os-rail-tooltip">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</div>
         </button>
         <button
-          onClick={() => go('admin')}
-          className={`os-rail-btn ${page === 'admin' ? 'active' : ''}`}
-          aria-label="Settings"
+          onClick={() => go('profile')}
+          className={`os-rail-btn ${page === 'profile' ? 'active' : ''}`}
+          aria-label="My Profile"
         >
-          <Settings size={18} />
-          <div className="os-rail-tooltip">Settings</div>
+          <UserRound size={18} />
+          <div className="os-rail-tooltip">My Profile</div>
         </button>
       </div>
     </nav>
 
     <main className="os-main">
       {/* SINGLE CLEAN TOPBAR */}
-      <header className="os-topbar">
+      <header className="os-topbar" ref={topbarRef}>
         {/* Left: Mobile menu toggle, Brand, Company Selector */}
         <div className="flex items-center gap-3 min-w-0">
           <button
@@ -788,12 +866,12 @@ export default function BusinessOSWorkspace() {
             <span className="os-topbar-brand-badge">OS</span>
           </div>
 
-          <div className="hidden sm:block h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />
+          <div className="hidden md:block h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />
 
-          {/* Operating Company Context */}
-          <div className="relative">
+          {/* Operating Company Context (Desktop Only) */}
+          <div className="relative hidden md:block">
             <button
-              onClick={() => setShowCompanyMenu(!showCompanyMenu)}
+              onClick={() => togglePopover('company')}
               className="os-company-btn"
               title="Operating Company Context"
             >
@@ -801,11 +879,11 @@ export default function BusinessOSWorkspace() {
               <span className="max-w-[130px] sm:max-w-[190px] truncate">{companyName}</span>
               <ChevronDown size={13} className="text-slate-400 shrink-0" />
             </button>
-            {showCompanyMenu && (
+            {activePopover === 'company' && (
               <div className="os-popover-menu left-0 top-11 w-72">
                 <div className="os-popover-title">Operating Company Context</div>
                 <button
-                  onClick={() => { setActiveOperatingCompanyId(null); setShowCompanyMenu(false); }}
+                  onClick={() => { setActiveOperatingCompanyId(null); closePopovers(); }}
                   className={`os-menu-item justify-between ${!activeOperatingCompany ? 'active' : ''}`}
                 >
                   <div>
@@ -817,7 +895,7 @@ export default function BusinessOSWorkspace() {
                 {operatingCompanies.map(c => (
                   <button
                     key={c.id}
-                    onClick={() => { setActiveOperatingCompanyId(c.id); setShowCompanyMenu(false); }}
+                    onClick={() => { setActiveOperatingCompanyId(c.id); closePopovers(); }}
                     className={`os-menu-item justify-between ${activeOperatingCompany?.id === c.id ? 'active' : ''}`}
                   >
                     <div>
@@ -832,7 +910,7 @@ export default function BusinessOSWorkspace() {
           </div>
         </div>
 
-        {/* Center: Global Search */}
+        {/* Center: Global Search (Desktop Only) */}
         <div className="os-search-box relative hidden md:flex" ref={searchContainerRef}>
           <Search size={15} className="shrink-0 text-slate-400" />
           <input
@@ -892,6 +970,7 @@ export default function BusinessOSWorkspace() {
 
         {/* Right: Global Actions */}
         <div className="flex items-center gap-2">
+          {/* Mobile Search Icon (Mobile Only) */}
           <button
             onClick={() => setIsMobileSearchOpen(true)}
             className="os-btn-icon md:hidden"
@@ -899,16 +978,11 @@ export default function BusinessOSWorkspace() {
           >
             <Search size={16} />
           </button>
-          <button
-            onClick={() => setIsAiChatOpen?.(true)}
-            className="os-btn-icon ai"
-            title="RAJIV AI"
-          >
-            <Sparkles size={16} />
-          </button>
+
+          {/* Notifications (Desktop Only) */}
           <button
             onClick={() => go('notifications')}
-            className="os-btn-icon relative"
+            className="os-btn-icon relative hidden md:inline-flex"
             title="Notifications"
           >
             <Bell size={16} />
@@ -918,26 +992,29 @@ export default function BusinessOSWorkspace() {
               </span>
             )}
           </button>
+
+          {/* Theme Toggle (Desktop Only) */}
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="os-btn-icon hidden sm:inline-flex"
+            className="os-btn-icon hidden md:inline-flex"
             title="Toggle theme"
           >
             <span className="text-sm leading-none">{isDarkMode ? '☀' : '◐'}</span>
           </button>
 
+          {/* Role Preview (Desktop Only) */}
           {(effectiveRole === 'OWNER' || effectiveRole === 'ADMIN') ? (
             <div className="relative hidden xl:block">
-              <button onClick={() => setPreviewRole(!previewRole)} className="os-role-badge">
+              <button onClick={() => togglePopover('role')} className="os-role-badge">
                 <Eye size={13} /> {previewRole ? `Preview: ${role}` : role}
               </button>
-              {previewRole && (
+              {activePopover === 'role' && (
                 <div className="os-popover-menu right-0 top-11 w-60">
                   <div className="os-popover-title">UI Role Preview</div>
                   {previewRoles.map(([r, l]) => (
                     <button
                       key={r}
-                      onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work'); }}
+                      onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work'); closePopovers(); }}
                       className={`os-menu-item justify-between ${previewRole === r ? 'active' : ''}`}
                     >
                       <div>
@@ -947,7 +1024,7 @@ export default function BusinessOSWorkspace() {
                       {previewRole === r && <Check size={13} className="text-blue-600 shrink-0" />}
                     </button>
                   ))}
-                  <button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-blue-600 p-2 text-center hover:underline">
+                  <button onClick={() => { setPreviewRole(null); closePopovers(); }} className="w-full mt-2 text-xs font-bold text-blue-600 p-2 text-center hover:underline">
                     Return to actual role
                   </button>
                 </div>
@@ -957,27 +1034,27 @@ export default function BusinessOSWorkspace() {
 
           {/* User Profile */}
           <div className="relative">
-            <button onClick={() => setShowProfile(!showProfile)} className="os-user-btn">
+            <button onClick={() => togglePopover('profile')} className="os-user-btn">
               <div className="os-avatar-sm">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div>
               <span className="hidden xl:inline font-semibold text-xs text-slate-700 dark:text-slate-200 max-w-[110px] truncate">
                 {currentUser?.email?.split('@')[0] || 'User'}
               </span>
               <ChevronDown size={13} className="text-slate-400 shrink-0" />
             </button>
-            {showProfile && (
+            {activePopover === 'profile' && (
               <div className="os-popover-menu right-0 top-11 w-64">
                 <div className="p-3 border-b border-slate-100 dark:border-slate-800">
                   <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{currentUser?.email || 'User'}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{role} · {companyName}</p>
                 </div>
                 <div className="py-1">
-                  <button onClick={() => { go('profile'); setShowProfile(false); }} className="os-menu-item">
+                  <button onClick={() => { go('profile'); closePopovers(); }} className="os-menu-item">
                     <UserRound size={15} /> <span>My Profile</span>
                   </button>
-                  <button onClick={() => { go('admin'); setShowProfile(false); }} className="os-menu-item">
+                  <button onClick={() => { go('admin'); closePopovers(); }} className="os-menu-item">
                     <Settings size={15} /> <span>Settings</span>
                   </button>
-                  <button onClick={() => { onSignOut?.(); setShowProfile(false); }} className="os-menu-item text-rose-600 hover:text-rose-700">
+                  <button onClick={() => { onSignOut?.(); closePopovers(); }} className="os-menu-item text-rose-600 hover:text-rose-700">
                     <LogOut size={15} /> <span>Sign out</span>
                   </button>
                 </div>
@@ -1237,12 +1314,11 @@ export default function BusinessOSWorkspace() {
         )}
         {page === 'documents' && <DocumentsPage />}
         {page === 'reports' && <ReportsPage />}
-        {page === 'ai' && <AIPage />}
+        {page === 'ai' && <AIPage onOpenAiChat={() => setIsAiChatOpen?.(true)} />}
         {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
       </div>
-      <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
 
       {/* MOBILE DRAWER */}
       {isMobileMenuOpen && (
@@ -1258,6 +1334,51 @@ export default function BusinessOSWorkspace() {
                 <X size={16} />
               </button>
             </div>
+
+            {/* Mobile Operating Company Selector */}
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1.5">
+                <BriefcaseBusiness size={13} />
+                <span>Operating Company</span>
+              </div>
+              <div className="relative">
+                <button
+                  onClick={() => setIsMobileCompanyOpen(!isMobileCompanyOpen)}
+                  className="w-full os-company-btn justify-between text-xs py-2 px-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                >
+                  <span className="truncate font-semibold text-slate-800 dark:text-slate-200">{companyName}</span>
+                  <ChevronDown size={13} className="text-slate-400 shrink-0" />
+                </button>
+                {isMobileCompanyOpen && (
+                  <div className="mt-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg p-1 space-y-0.5 max-h-48 overflow-y-auto">
+                    <button
+                      onClick={() => { setActiveOperatingCompanyId(null); setIsMobileCompanyOpen(false); setIsMobileMenuOpen(false); }}
+                      className={`w-full text-left px-2.5 py-2 rounded-md text-xs flex items-center justify-between cursor-pointer ${!activeOperatingCompany ? 'bg-blue-50 text-blue-600 font-bold dark:bg-blue-900/30' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                    >
+                      <div>
+                        <div className="font-bold">ALL COMPANIES</div>
+                        <div className="text-[11px] text-slate-400 font-normal">Consolidated view</div>
+                      </div>
+                      {!activeOperatingCompany && <Check size={14} className="text-blue-600 shrink-0" />}
+                    </button>
+                    {operatingCompanies.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => { setActiveOperatingCompanyId(c.id); setIsMobileCompanyOpen(false); setIsMobileMenuOpen(false); }}
+                        className={`w-full text-left px-2.5 py-2 rounded-md text-xs flex items-center justify-between cursor-pointer ${activeOperatingCompany?.id === c.id ? 'bg-blue-50 text-blue-600 font-bold dark:bg-blue-900/30' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                      >
+                        <div>
+                          <div className="font-bold truncate">{c.name}</div>
+                          <div className="text-[11px] text-slate-400 font-normal">Operating company</div>
+                        </div>
+                        {activeOperatingCompany?.id === c.id && <Check size={14} className="text-blue-600 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
               {filteredNav.map(section => (
                 <div key={section.label}>
@@ -1266,7 +1387,7 @@ export default function BusinessOSWorkspace() {
                     {section.items.map(([id, label, Icon]) => (
                       <button
                         key={id}
-                        onClick={() => go(id)}
+                        onClick={() => handleNav(id)}
                         className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                           page === id
                             ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold'
@@ -1296,9 +1417,18 @@ export default function BusinessOSWorkspace() {
                   <div className="text-xs text-slate-400">{role}</div>
                 </div>
               </div>
-              <button onClick={onSignOut} className="os-btn-icon text-rose-500 hover:text-rose-600" title="Sign out">
-                <LogOut size={16} />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className="os-btn-icon"
+                  title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                >
+                  <span className="text-xs leading-none">{isDarkMode ? '☀' : '◐'}</span>
+                </button>
+                <button onClick={onSignOut} className="os-btn-icon text-rose-500 hover:text-rose-600" title="Sign out">
+                  <LogOut size={16} />
+                </button>
+              </div>
             </div>
           </aside>
         </div>
