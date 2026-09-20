@@ -76,42 +76,42 @@ export default function AccountsWorkspace() {
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
       {/* Top Header */}
-      <div className="px-6 py-5 border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+      <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/20">
               ₹
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-100">Financial Accounts & General Ledger</h1>
-              <p className="text-xs text-slate-400">Server-authoritative double-entry accounting foundation</p>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Financial Accounts & General Ledger</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Server-authoritative double-entry accounting foundation</p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
-            <span className="text-slate-400 font-medium">Period:</span>
+          <div className="flex items-center gap-2 text-xs bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5">
+            <span className="text-slate-500 dark:text-slate-400 font-medium">Period:</span>
             <input
               type="date"
               value={fromDate || ''}
               onChange={(e) => setFromDate && setFromDate(e.target.value)}
-              className="bg-transparent text-slate-200 font-mono text-xs focus:outline-none"
+              className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-xs focus:outline-none"
             />
-            <span className="text-slate-500">to</span>
+            <span className="text-slate-400 dark:text-slate-500">to</span>
             <input
               type="date"
               value={toDate || ''}
               onChange={(e) => setToDate && setToDate(e.target.value)}
-              className="bg-transparent text-slate-200 font-mono text-xs focus:outline-none"
+              className="bg-transparent text-slate-800 dark:text-slate-200 font-mono text-xs focus:outline-none"
             />
           </div>
 
           <button
             onClick={refreshAllAccounts}
-            className="p-2 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 transition-colors"
+            className="p-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
             title="Refresh Financial Data"
           >
             <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -132,13 +132,13 @@ export default function AccountsWorkspace() {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="px-6 border-b border-slate-800 bg-slate-900/40 flex items-center gap-6 text-xs font-medium text-slate-400 overflow-x-auto">
+      <div className="px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 flex items-center gap-6 text-xs font-medium text-slate-500 dark:text-slate-400 overflow-x-auto">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`py-3.5 border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'dashboard'
-              ? 'border-blue-500 text-blue-400 font-semibold'
-              : 'border-transparent hover:text-slate-200'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-semibold'
+              : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>Dashboard</span>
@@ -148,12 +148,12 @@ export default function AccountsWorkspace() {
           onClick={() => setActiveTab('coa')}
           className={`py-3.5 border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'coa'
-              ? 'border-blue-500 text-blue-400 font-semibold'
-              : 'border-transparent hover:text-slate-200'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-semibold'
+              : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>Chart of Accounts</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {accounts.length}
           </span>
         </button>
@@ -162,12 +162,12 @@ export default function AccountsWorkspace() {
           onClick={() => setActiveTab('fiscal_periods')}
           className={`py-3.5 border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'fiscal_periods'
-              ? 'border-blue-500 text-blue-400 font-semibold'
-              : 'border-transparent hover:text-slate-200'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-semibold'
+              : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>Fiscal Periods</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {fiscalPeriods.length}
           </span>
         </button>
@@ -176,12 +176,12 @@ export default function AccountsWorkspace() {
           onClick={() => setActiveTab('journals')}
           className={`py-3.5 border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'journals'
-              ? 'border-blue-500 text-blue-400 font-semibold'
-              : 'border-transparent hover:text-slate-200'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-semibold'
+              : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>Journal Entries</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {journalEntries.length}
           </span>
         </button>
@@ -190,12 +190,12 @@ export default function AccountsWorkspace() {
           onClick={() => setActiveTab('bank_accounts')}
           className={`py-3.5 border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'bank_accounts'
-              ? 'border-blue-500 text-blue-400 font-semibold'
-              : 'border-transparent hover:text-slate-200'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-semibold'
+              : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>Bank & Cash Accounts</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {bankAccounts.length}
           </span>
         </button>
@@ -204,12 +204,12 @@ export default function AccountsWorkspace() {
           onClick={() => setActiveTab('bank_transactions')}
           className={`py-3.5 border-b-2 transition-colors flex items-center gap-2 ${
             activeTab === 'bank_transactions'
-              ? 'border-blue-500 text-blue-400 font-semibold'
-              : 'border-transparent hover:text-slate-200'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-semibold'
+              : 'border-transparent hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
           <span>Bank Transactions</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {bankTransactions.length}
           </span>
         </button>

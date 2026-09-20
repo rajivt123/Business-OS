@@ -601,6 +601,7 @@ export default function BusinessOSWorkspace() {
     return '';
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 800 : false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [previewRole, setPreviewRole] = useState(null);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -717,29 +718,27 @@ export default function BusinessOSWorkspace() {
 
   const go = (next) => {
     setPage(next);
-    if (typeof window !== 'undefined' && window.innerWidth <= 800) {
-      setSidebarCollapsed(true);
-    }
+    setIsMobileMenuOpen(false);
   };
 
   const meta = pageMeta[page] || pageMeta.dashboard;
 
   return <div className={`business-os ${isDarkMode ? 'dark' : ''}`}>
-    {!sidebarCollapsed && <div className="os-sidebar-backdrop" onClick={() => setSidebarCollapsed(true)} />}
-    <aside className={`os-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-      <div className="os-brand"><div className="os-logo"><FlameIcon /></div>{!sidebarCollapsed && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
+    {isMobileMenuOpen && <div className="os-sidebar-backdrop" onClick={() => setIsMobileMenuOpen(false)} />}
+    <aside className={`os-sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+      <div className="os-brand"><div className="os-logo"><FlameIcon /></div>{(!sidebarCollapsed || isMobileMenuOpen) && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
       <div className="os-sidebar-scroll">
-        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className={`os-nav-count ${unreadNotificationsCount > 0 ? 'bg-rose-500 text-white' : ''}`}>{unreadNotificationsCount > 0 ? unreadNotificationsCount : 0}</span>}</button>)}</div>)}
+        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{(!sidebarCollapsed || isMobileMenuOpen) && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed && !isMobileMenuOpen ? label : ''} onClick={() => go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{(!sidebarCollapsed || isMobileMenuOpen) && <span>{label}</span>}{(!sidebarCollapsed || isMobileMenuOpen) && id === 'notifications' && <span className={`os-nav-count ${unreadNotificationsCount > 0 ? 'bg-rose-500 text-white' : ''}`}>{unreadNotificationsCount > 0 ? unreadNotificationsCount : 0}</span>}</button>)}</div>)}
       </div>
-      <div className="os-sidebar-bottom"><button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />} {!sidebarCollapsed && <span>Collapse</span>}</button></div>
+      <div className="os-sidebar-bottom"><button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />} {(!sidebarCollapsed || isMobileMenuOpen) && <span>Collapse</span>}</button></div>
     </aside>
 
     <main className="os-main">
       <header className="os-topbar">
         <div className="flex items-center gap-2 min-w-0">
-          <button onClick={() => setSidebarCollapsed(prev => !prev)} className="os-mobile-menu"><Menu size={18} /></button>
+          <button type="button" onClick={() => setIsMobileMenuOpen(prev => !prev)} className="os-top-action md:hidden" title="Toggle Menu"><Menu size={18} /></button>
           <div className="relative">
-            <button onClick={() => setShowCompanyMenu(!showCompanyMenu)} className="os-company-switch"><BriefcaseBusiness size={15} /><span className="max-w-[190px] truncate">{companyName}</span><ChevronDown size={13} /></button>
+            <button onClick={() => setShowCompanyMenu(!showCompanyMenu)} className="os-company-switch"><BriefcaseBusiness size={15} /><span className="max-w-[130px] sm:max-w-[190px] truncate">{companyName}</span><ChevronDown size={13} /></button>
             {showCompanyMenu && <div className="os-popover left-0 top-11 w-72"> <div className="os-popover-label">Operating company context</div><button onClick={() => { setActiveOperatingCompanyId(null); setShowCompanyMenu(false) }} className="os-company-option"><div><b>ALL COMPANIES</b><small>Consolidated authorized view</small></div>{!activeOperatingCompany && <Check size={14} />}</button>{operatingCompanies.map(c => <button key={c.id} onClick={() => { setActiveOperatingCompanyId(c.id); setShowCompanyMenu(false) }} className="os-company-option"><div><b>{c.name}</b><small>Operating company</small></div>{activeOperatingCompany?.id === c.id && <Check size={14} />}</button>)}</div>}
           </div>
           <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" /><div className="hidden lg:block text-[13px] text-slate-500 font-medium truncate">{meta[0]}</div>

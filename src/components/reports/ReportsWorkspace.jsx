@@ -563,29 +563,29 @@ export default function ReportsWorkspace() {
   return (
     <div className="space-y-6">
       {/* Top Controls Header Bar */}
-      <div className="os-card p-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xl">
+      <div className="os-card p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400">
+            <div className="p-2 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400">
               <BarChart3 size={20} />
             </div>
-            <h1 className="text-lg font-black tracking-tight text-white">Reports & Analytics V2</h1>
+            <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Reports & Analytics V2</h1>
           </div>
-          <p className="text-xs text-slate-400 mt-1">Executive overview, financial, operational, inventory, project, and HR intelligence</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Executive overview, financial, operational, inventory, project, and HR intelligence</p>
         </div>
 
         {/* Global Filters: Company & Date Range */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {/* Operating Company Selector */}
-          <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700/80 rounded-xl px-3 py-1.5">
-            <Building2 size={14} className="text-sky-400" />
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5">
+            <Building2 size={14} className="text-sky-600 dark:text-sky-400" />
             <select
               value={activeOperatingCompanyId || ''}
               onChange={e => setActiveOperatingCompanyId?.(e.target.value)}
-              className="bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
+              className="bg-transparent text-slate-900 dark:text-white font-bold text-xs outline-none cursor-pointer"
             >
               {operatingCompanies.map(co => (
-                <option key={co.id} value={co.id} className="bg-slate-900 text-white">
+                <option key={co.id} value={co.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                   {co.name}
                 </option>
               ))}
@@ -593,8 +593,8 @@ export default function ReportsWorkspace() {
           </div>
 
           {/* From Date */}
-          <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700/80 rounded-xl px-3 py-1.5">
-            <span className="text-[10px] font-black uppercase text-slate-400">From</span>
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-xl px-3 py-1.5">
+            <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">From</span>
             <input
               type="date"
               value={fromDate}
