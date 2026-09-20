@@ -601,12 +601,14 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     gap: 8px;
   }
 
-  .os-global-search {
-    display: none !important;
+  .os-ai-fab {
+    bottom: 76px !important;
+    right: 14px !important;
+    z-index: 85 !important;
   }
 
   .os-content {
-    padding: 16px 12px 80px 12px !important;
+    padding: 16px 12px 90px 12px !important;
   }
 
   .os-mobile-bottom-bar {
@@ -616,7 +618,7 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     left: 0;
     right: 0;
     height: 60px;
-    z-index: 45;
+    z-index: 80;
     background: var(--os-surface);
     border-top: 1px solid var(--os-border);
     align-items: center;

@@ -69,53 +69,6 @@ export default function CrmWorkspace({ embedded = false }) {
       {/* CRM CONTEXT TOOLBAR ROW */}
       <div className="space-y-3 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-          
-          {/* OPERATING COMPANY SELECTOR */}
-          <div className="w-full sm:w-1/3 lg:w-64 relative min-w-0" ref={opCompanyDropdownRef}>
-            <button
-              onClick={() => { setIsOpCompanyOpen(!isOpCompanyOpen); setIsCompanyOpen(false); setIsUnitOpen(false); }}
-              className="os-secondary w-full justify-between gap-2 text-xs cursor-pointer"
-              title="Filter by Operating Company"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <Briefcase size={14} className="text-amber-500 shrink-0" />
-                <span className="truncate font-bold">
-                  {activeOperatingCompany ? activeOperatingCompany.name : 'ALL COMPANIES'}
-                </span>
-              </div>
-              <ChevronDown size={13} className="text-slate-400 shrink-0" />
-            </button>
-
-            {isOpCompanyOpen && (
-              <div className="os-popover left-0 top-11 w-72 z-50">
-                <div className="os-popover-label">Operating Company Context</div>
-                <button
-                  onClick={() => { setActiveOperatingCompanyId(null); setIsOpCompanyOpen(false); }}
-                  className={`os-company-option ${activeOperatingCompanyId === null ? 'selected' : ''}`}
-                >
-                  <div>
-                    <b>ALL COMPANIES</b>
-                    <small>Consolidated authorized view</small>
-                  </div>
-                  {activeOperatingCompanyId === null && <Check size={14} className="text-sky-500 shrink-0" />}
-                </button>
-                {(operatingCompanies || []).map(comp => (
-                  <button
-                    key={comp.id}
-                    onClick={() => { setActiveOperatingCompanyId(comp.id); setIsOpCompanyOpen(false); }}
-                    className={`os-company-option ${activeOperatingCompanyId === comp.id ? 'selected' : ''}`}
-                  >
-                    <div>
-                      <b>{comp.name}</b>
-                      {comp.tax_id && <small>GST: {comp.tax_id}</small>}
-                    </div>
-                    {activeOperatingCompanyId === comp.id && <Check size={14} className="text-sky-500 shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* CUSTOMER & UNIT SELECTORS */}
           <div className="grid grid-cols-2 gap-2 flex-1 min-w-0">
             {/* CUSTOMER / CLIENT COMPANY SELECTOR */}

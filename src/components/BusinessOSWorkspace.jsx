@@ -744,8 +744,69 @@ export default function BusinessOSWorkspace() {
           <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" /><div className="hidden lg:block text-[13px] text-slate-500 font-medium truncate">{meta[0]}</div>
         </div>
 
-        {/* Global Search connected to CrmContext */}
-        <div className="os-global-search relative" ref={searchContainerRef}>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setIsMobileSearchOpen(true)}
+            className="os-top-action lg:hidden"
+            title="Search Business OS"
+          >
+            <Search size={16} />
+          </button>
+          <button onClick={() => setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15} /><span className="hidden xl:inline">AI</span></button>
+          <button onClick={() => go('notifications')} className="os-top-action relative" title="Notifications">
+            <Bell size={16} />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900">
+                {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[13px]">{isDarkMode ? '☀' : '◐'}</span></button>
+          <div className="relative">
+            <button onClick={() => setShowRoleMenu(!showRoleMenu)} className="os-top-action flex items-center gap-1" title="Preview role">
+              <Eye size={15} />
+              <span className="hidden md:inline text-[12px] font-medium max-w-[100px] truncate">{previewRole || userRole}</span>
+              <ChevronDown size={12} />
+            </button>
+            {showRoleMenu && (
+              <div className="os-popover right-0 top-11 w-56 z-50">
+                <div className="os-popover-label">Role visibility preview</div>
+                {['OWNER', 'DIRECTOR', 'MANAGER', 'PROJECT_MANAGER', 'ACCOUNTS', 'SALES', 'HR', 'TEAM', 'WORKER'].map(r => (
+                  <button key={r} onClick={() => { setPreviewRole(r); setShowRoleMenu(false); }} className={`os-company-option ${effectiveRole === r ? 'selected' : ''}`}>
+                    <div><b>{r}</b></div>
+                    {effectiveRole === r && <Check size={14} className="text-sky-500" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-md">
+                {userAvatar}
+              </div>
+              <ChevronDown size={12} className="text-slate-400 hidden sm:block" />
+            </button>
+            {showUserMenu && (
+              <div className="os-popover right-0 top-11 w-56 z-50">
+                <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="font-bold text-xs truncate text-slate-900 dark:text-slate-100">{userName}</div>
+                  <div className="text-[11px] text-slate-400 truncate">{userEmail}</div>
+                </div>
+                <button onClick={() => { go('profile'); setShowUserMenu(false); }} className="os-menu-item"><User size={14} /> My Profile</button>
+                <button onClick={() => { go('company-settings'); setShowUserMenu(false); }} className="os-menu-item"><Building2 size={14} /> Company Settings</button>
+                <button onClick={() => { go('admin'); setShowUserMenu(false); }} className="os-menu-item"><Shield size={14} /> Administration</button>
+                <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                <button onClick={() => { setShowUserMenu(false); onSignOut?.(); }} className="os-menu-item text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"><LogOut size={14} /> Sign Out</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Sub-Topbar Search Bar (Positioned Just Below Top Bar) */}
+      <div className="os-sub-topbar px-4 py-2 border-b bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+        <div className="os-global-search relative flex-1 max-w-3xl mx-auto" ref={searchContainerRef}>
           <Search size={15} className="shrink-0 text-slate-400" />
           <input
             ref={searchInputRef}
@@ -753,13 +814,14 @@ export default function BusinessOSWorkspace() {
             value={searchQuery || ''}
             onChange={handleSearch}
             placeholder="Search customers, units, projects, contacts, enquiries..."
+            className="w-full bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 px-3 py-1.5 rounded-xl text-xs outline-none focus:ring-2 focus:ring-sky-500/50"
           />
           {searchQuery ? (
             <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500 text-xs px-1">
               <X size={13} />
             </button>
           ) : (
-            <kbd>⌘ K</kbd>
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono text-slate-400 bg-slate-200 dark:bg-slate-800 rounded">⌘ K</kbd>
           )}
 
           {searchResults && searchResults.length > 0 && (
@@ -797,29 +859,7 @@ export default function BusinessOSWorkspace() {
             </div>
           )}
         </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setIsMobileSearchOpen(true)}
-            className="os-top-action lg:hidden"
-            title="Search Business OS"
-          >
-            <Search size={16} />
-          </button>
-          <button onClick={() => setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15} /><span className="hidden xl:inline">AI</span></button>
-          <button onClick={() => go('notifications')} className="os-top-action relative" title="Notifications">
-            <Bell size={16} />
-            {unreadNotificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900">
-                {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
-              </span>
-            )}
-          </button>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[13px]">{isDarkMode ? '☀' : '◐'}</span></button>
-          {effectiveRole === 'OWNER' || effectiveRole === 'ADMIN' ? <div className="relative hidden md:block"><button onClick={() => setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13} /> {previewRole ? 'Preview: ' : ''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r, l]) => <button key={r} onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work') }} className={`os-company-option ${previewRole === r ? 'selected' : ''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole === r && <Check size={13} />}</button>)}<button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div> : null}
-          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">{role} · {companyName}</p></div><button onClick={() => { setPage('profile'); setShowProfile(false); }} className="os-company-option cursor-pointer"><UserRound size={15} /><b>My Profile</b></button><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
-        </div>
-      </header>
+      </div>
 
       {/* MOBILE SEARCH OVERLAY / DRAWER */}
       {isMobileSearchOpen && (
@@ -1080,6 +1120,15 @@ export default function BusinessOSWorkspace() {
       
       {/* Mobile Bottom Navigation Bar */}
       <div className="os-mobile-bottom-bar">
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(prev => !prev)}
+          className={`os-mobile-nav-item ${isMobileMenuOpen ? 'active' : ''}`}
+          title="Toggle Navigation Menu"
+        >
+          <Menu size={18} />
+          <span>Menu</span>
+        </button>
         <button
           type="button"
           onClick={() => go(effectiveRole === 'TEAM' || effectiveRole === 'WORKER' ? 'my-work' : 'dashboard')}
