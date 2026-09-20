@@ -163,20 +163,20 @@ function UnavailableAction({ children, className = 'os-secondary', title = 'Unav
   return <button type="button" disabled title={title} className={`${className} opacity-60 cursor-not-allowed`}>{children}</button>;
 }
 
-function Dashboard({ role, onNavigate, onOpenClassic, companyName, companies = [], data = {} }) {
+function Dashboard({ role, onNavigate, onOpenCrm, companyName, companies = [], data = {} }) {
   const multi = (companies || []).length > 1;
-  if (role === 'OWNER') return <OwnerDashboard onNavigate={onNavigate} onOpenClassic={onOpenClassic} companyName={companyName} multi={multi} companies={companies} data={data} />;
-  if (role === 'MANAGER') return <ManagerDashboard onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  if (role === 'SALES') return <FunctionalDashboard type="sales" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  if (role === 'ACCOUNTANT') return <FunctionalDashboard type="accounts" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  if (role === 'HR') return <FunctionalDashboard type="hr" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  if (role === 'PROCUREMENT') return <FunctionalDashboard type="procurement" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  if (role === 'WAREHOUSE') return <FunctionalDashboard type="inventory" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  if (role === 'ENGINEER') return <FunctionalDashboard type="engineer" onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
-  return <MyWorkPage onNavigate={onNavigate} onOpenClassic={onOpenClassic} data={data} />;
+  if (role === 'OWNER') return <OwnerDashboard onNavigate={onNavigate} onOpenCrm={onOpenCrm} companyName={companyName} multi={multi} companies={companies} data={data} />;
+  if (role === 'MANAGER') return <ManagerDashboard onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  if (role === 'SALES') return <FunctionalDashboard type="sales" onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  if (role === 'ACCOUNTANT') return <FunctionalDashboard type="accounts" onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  if (role === 'HR') return <FunctionalDashboard type="hr" onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  if (role === 'PROCUREMENT') return <FunctionalDashboard type="procurement" onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  if (role === 'WAREHOUSE') return <FunctionalDashboard type="inventory" onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  if (role === 'ENGINEER') return <FunctionalDashboard type="engineer" onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
+  return <MyWorkPage onNavigate={onNavigate} onOpenCrm={onOpenCrm} data={data} />;
 }
 
-function OwnerDashboard({ onNavigate, onOpenClassic, companyName, multi, companies = [], data = {} }) {
+function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies = [], data = {} }) {
   const works = data?.works || [];
   const reminders = data?.reminders || [];
   const missingData = data?.missingData || [];
@@ -207,10 +207,10 @@ function OwnerDashboard({ onNavigate, onOpenClassic, companyName, multi, compani
               onClick={() => {
                 if (item.work?.company_id) {
                   data?.navigateToContext?.(item.work.company_id, item.work.unit_id, item.work.id);
-                  onOpenClassic?.();
+                  onOpenCrm?.();
                 } else if (item.reminder?.work_id) {
                   data?.navigateToContext?.(item.reminder.company_id, item.reminder.unit_id, item.reminder.work_id);
-                  onOpenClassic?.();
+                  onOpenCrm?.();
                 } else {
                   onNavigate('projects');
                 }
@@ -237,7 +237,7 @@ function OwnerDashboard({ onNavigate, onOpenClassic, companyName, multi, compani
   </div>;
 }
 
-function ManagerDashboard({ onNavigate, onOpenClassic, data = {} }) {
+function ManagerDashboard({ onNavigate, onOpenCrm, data = {} }) {
   const works = data?.works || [];
   const tasks = data?.tasks || [];
   const assignments = data?.projectAssignments || [];
@@ -253,7 +253,7 @@ function ManagerDashboard({ onNavigate, onOpenClassic, data = {} }) {
       <button
         onClick={() => {
           data?.navigateToContext?.(work.company_id, work.unit_id, work.id);
-          onOpenClassic?.();
+          onOpenCrm?.();
         }}
         className="text-left font-bold hover:text-sky-500 transition"
       >
@@ -269,7 +269,7 @@ function ManagerDashboard({ onNavigate, onOpenClassic, data = {} }) {
   return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub="Current loaded context" tone="violet" /><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" sub="No approval backend" tone="amber" /><StatCard icon={AlertTriangle} label="Missing Data Alerts" value={missingData.length} sub="Existing project checks" tone="rose" /></div><div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Project Command Center" subtitle="Loaded projects where assignment context is available" icon={FolderKanban} action={<button onClick={() => onNavigate('projects')} className="os-link">All projects <ChevronRight size={13} /></button>}><MiniTable columns={['Project', 'Stage', 'Progress', 'Health', 'Lead']} rows={projectRows.length ? projectRows : [['No loaded projects', 'Unavailable', 'Unavailable', 'Unavailable', 'Unavailable']]} /></SectionCard><SectionCard title="Team Bottlenecks" icon={Clock3}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no bottleneck or escalation backend is connected.</p></div></SectionCard></div></div>;
 }
 
-function FunctionalDashboard({ type, onNavigate, onOpenClassic, data = {} }) {
+function FunctionalDashboard({ type, onNavigate, onOpenCrm, data = {} }) {
   const configs = {
     sales: { title: 'Sales Command Center', cards: [['Open Enquiries', '24'], ['Quotations', '13'], ['Sales Orders', '8'], ['Receivables', '₹86L']], links: [['New Quotation', 'sales'], ['New Proforma', 'sales'], ['New Sales Order', 'sales'], ['Tax Invoice', 'accounts']] },
     accounts: { title: 'Accounts Workbench', cards: [['To Invoice', '12'], ['Purchase Bills', '18'], ['Receivables', '₹86L'], ['Payables', '₹42L']], links: [['Tax Invoice', 'accounts'], ['Purchase Bill', 'procurement'], ['Receipt', 'accounts'], ['Payment', 'accounts']] },
@@ -289,14 +289,14 @@ function FunctionalDashboard({ type, onNavigate, onOpenClassic, data = {} }) {
   const issueCount = issues.filter(issue => issue.status === 'open').length;
   const logCount = logs.filter(log => !log.is_deleted).length;
   const cards = isEngineer ? [['Loaded Projects', workCount], ['Loaded Tasks', taskCount], ['Open Issues', issueCount], ['Loaded Logs', logCount]] : c.cards.map(([label]) => [label, 'Unavailable']);
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3">{cards.map(([a, b], i) => <StatCard key={a} icon={[Gauge, Receipt, FolderKanban, AlertTriangle][i]} label={a} value={b} sub={isEngineer ? 'Current loaded context' : 'No backend for this module'} tone={['blue', 'violet', 'amber', 'emerald'][i]} />)}</div><div className="grid lg:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="My Priority Queue" subtitle={isEngineer ? 'Existing project/task context' : 'Unavailable until this module has a real backend'} icon={Zap}>{isEngineer ? <MiniTable columns={['Item', 'Context', 'Due', 'Priority']} rows={tasks.slice(0, 4).map(task => [<b key={task.id}>{task.title}</b>, task.stage_id ? 'Stage task' : 'Project task', task.due_date ? new Date(task.due_date).toLocaleDateString() : '—', <Badge key={`b-${task.id}`} tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge>])} /> : <div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no operational data source is connected for {c.title}.</p><button onClick={onOpenClassic} className="os-link mt-3">Open current CRM workspace <ChevronRight size={13} /></button></div>}</SectionCard><SectionCard title="Quick Actions" icon={Plus}><div className="p-4 grid grid-cols-2 gap-2">{c.links.map(([a, n]) => isEngineer ? <button key={a} onClick={() => n === 'projects' ? onOpenClassic() : onNavigate(n)} className="os-action"><Plus size={14} />{a}</button> : <UnavailableAction key={a} className="os-action"><Plus size={14} />{a}</UnavailableAction>)}</div></SectionCard></div><SectionCard title="Recent Activity" icon={Activity}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no activity feed backend is connected to this dashboard.</p></div></SectionCard></div>;
+  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3">{cards.map(([a, b], i) => <StatCard key={a} icon={[Gauge, Receipt, FolderKanban, AlertTriangle][i]} label={a} value={b} sub={isEngineer ? 'Current loaded context' : 'No backend for this module'} tone={['blue', 'violet', 'amber', 'emerald'][i]} />)}</div><div className="grid lg:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="My Priority Queue" subtitle={isEngineer ? 'Existing project/task context' : 'Unavailable until this module has a real backend'} icon={Zap}>{isEngineer ? <MiniTable columns={['Item', 'Context', 'Due', 'Priority']} rows={tasks.slice(0, 4).map(task => [<b key={task.id}>{task.title}</b>, task.stage_id ? 'Stage task' : 'Project task', task.due_date ? new Date(task.due_date).toLocaleDateString() : '—', <Badge key={`b-${task.id}`} tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge>])} /> : <div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no operational data source is connected for {c.title}.</p><button onClick={onOpenCrm} className="os-link mt-3">Open CRM workspace <ChevronRight size={13} /></button></div>}</SectionCard><SectionCard title="Quick Actions" icon={Plus}><div className="p-4 grid grid-cols-2 gap-2">{c.links.map(([a, n]) => isEngineer ? <button key={a} onClick={() => n === 'projects' ? onOpenCrm() : onNavigate(n)} className="os-action"><Plus size={14} />{a}</button> : <UnavailableAction key={a} className="os-action"><Plus size={14} />{a}</UnavailableAction>)}</div></SectionCard></div><SectionCard title="Recent Activity" icon={Activity}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no activity feed backend is connected to this dashboard.</p></div></SectionCard></div>;
 }
 
-function MyWorkPage({ onNavigate, onOpenClassic, data = {} }) {
+function MyWorkPage({ onNavigate, onOpenCrm, data = {} }) {
   const tasks = data?.tasks || [];
   const works = data?.works || [];
   const reminders = data?.reminders || [];
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" tone="amber" /><StatCard icon={FileText} label="Documents" value="Unavailable" tone="emerald" /><StatCard icon={Bell} label="Open Reminders" value={reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).length} tone="rose" /></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Today's Work" subtitle="Existing tasks and reminders in the loaded context" icon={CalendarCheck2}><div className="p-4 space-y-2">{tasks.length ? tasks.slice(0, 5).map(task => <button key={task.id} onClick={() => { if (task.work_id) { const w = works.find(item => item.id === task.work_id); if (w) data?.navigateToContext?.(w.company_id, w.unit_id, w.id); } onOpenClassic(); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-left hover:border-sky-300 transition"><span className="text-[10px] font-black text-slate-400 w-12">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}</span><div className="h-2 w-2 rounded-full bg-sky-500" /><div className="flex-1"><p className="text-xs font-bold">{task.title}</p><p className="text-[10px] text-slate-400">{task.status.replace('_', ' ')}</p></div><Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge></button>) : <p className="text-xs italic text-slate-400">No loaded 7F tasks for the current project context.</p>}</div></SectionCard><SectionCard title="My Projects" icon={FolderKanban}><div className="p-4 space-y-3">{works.length ? works.slice(0, 5).map(work => <button key={work.id} onClick={() => { data?.navigateToContext?.(work.company_id, work.unit_id, work.id); onOpenClassic(); }} className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 transition"><div className="flex justify-between"><span className="text-xs font-bold">{work.title}</span><ChevronRight size={14} className="text-slate-400" /></div><div className="mt-2 text-[9px] text-slate-400">Click to view project in CRM</div></button>) : <p className="text-xs italic text-slate-400">No loaded projects in the current context.</p>}</div></SectionCard></div></div>;
+  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" tone="amber" /><StatCard icon={FileText} label="Documents" value="Unavailable" tone="emerald" /><StatCard icon={Bell} label="Open Reminders" value={reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).length} tone="rose" /></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Today's Work" subtitle="Existing tasks and reminders in the loaded context" icon={CalendarCheck2}><div className="p-4 space-y-2">{tasks.length ? tasks.slice(0, 5).map(task => <button key={task.id} onClick={() => { if (task.work_id) { const w = works.find(item => item.id === task.work_id); if (w) data?.navigateToContext?.(w.company_id, w.unit_id, w.id); } onOpenCrm(); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-left hover:border-sky-300 transition"><span className="text-[10px] font-black text-slate-400 w-12">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}</span><div className="h-2 w-2 rounded-full bg-sky-500" /><div className="flex-1"><p className="text-xs font-bold">{task.title}</p><p className="text-[10px] text-slate-400">{task.status.replace('_', ' ')}</p></div><Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge></button>) : <p className="text-xs italic text-slate-400">No loaded 7F tasks for the current project context.</p>}</div></SectionCard><SectionCard title="My Projects" icon={FolderKanban}><div className="p-4 space-y-3">{works.length ? works.slice(0, 5).map(work => <button key={work.id} onClick={() => { data?.navigateToContext?.(work.company_id, work.unit_id, work.id); onOpenCrm(); }} className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 transition"><div className="flex justify-between"><span className="text-xs font-bold">{work.title}</span><ChevronRight size={14} className="text-slate-400" /></div><div className="mt-2 text-[9px] text-slate-400">Click to view project in CRM</div></button>) : <p className="text-xs italic text-slate-400">No loaded projects in the current context.</p>}</div></SectionCard></div></div>;
 }
 
 function DataModulePage({ module, onNavigate }) {
@@ -313,7 +313,7 @@ function DataModulePage({ module, onNavigate }) {
   return <div className="space-y-4"><div className="flex gap-2 overflow-x-auto pb-1">{d.tabs.map(t => <button key={t} onClick={() => setTab(t)} className={`os-tab ${tab === t ? 'active' : ''}`}>{t}</button>)}</div><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={d.icon} label="Open Records" value="Unavailable" sub="No backend connected" tone="blue" /><StatCard icon={Clock3} label="Pending Action" value="Unavailable" sub="No backend connected" tone="amber" /><StatCard icon={CheckCircle2} label="Completed" value="Unavailable" sub="No backend connected" tone="emerald" /><StatCard icon={BarChart3} label="This Month" value="Unavailable" sub="No backend connected" tone="violet" /></div><SectionCard title={tab} subtitle="Module backend is not connected in the current application." icon={d.icon} action={<div className="flex gap-2"><UnavailableAction className="os-icon-btn" title="Unavailable: module filter backend is not connected."><Filter size={14} /></UnavailableAction><UnavailableAction className="os-primary"><Plus size={14} /> New</UnavailableAction></div>}><p className="p-4 text-xs italic text-slate-400">No live {tab.toLowerCase()} records are available from the current backend.</p></SectionCard></div>;
 }
 
-function ProjectsPage({ onOpenClassic, data = {} }) {
+function ProjectsPage({ onOpenCrm, data = {} }) {
   const works = data?.works || [];
   const stageDefinitions = data?.stageDefinitions || [];
   const clientCompanies = data?.companies || [];
@@ -329,7 +329,7 @@ function ProjectsPage({ onOpenClassic, data = {} }) {
       <button
         onClick={() => {
           data?.navigateToContext?.(work.company_id, work.unit_id, work.id);
-          onOpenClassic?.();
+          onOpenCrm?.();
         }}
         className="text-left font-bold hover:text-sky-500 transition"
       >
@@ -352,8 +352,8 @@ function ProjectsPage({ onOpenClassic, data = {} }) {
         <StatCard icon={AlertTriangle} label="Delayed" value="Unavailable" tone="rose" />
         <StatCard icon={CircleDollarSign} label="Open Value" value="Unavailable" tone="blue" />
       </div>
-      <SectionCard title="Project Pipeline" subtitle="Pipeline metrics require project status/progress fields not present in the current application model" icon={Workflow} action={<button onClick={onOpenClassic} className="os-secondary"><Grid2X2 size={14} /> Open current CRM workspace</button>}>
-        <div className="p-4"><p className="text-xs italic text-slate-400">Pipeline aggregation is unavailable. Use the current CRM workspace for live projects and stages.</p></div>
+      <SectionCard title="Project Pipeline" subtitle="Pipeline metrics require project status/progress fields not present in the current application model" icon={Workflow} action={<button onClick={onOpenCrm} className="os-secondary"><Grid2X2 size={14} /> Open CRM workspace</button>}>
+        <div className="p-4"><p className="text-xs italic text-slate-400">Pipeline aggregation is unavailable. Use the CRM workspace for live projects and stages.</p></div>
       </SectionCard>
       <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4">
         <SectionCard title="Project Register" icon={FolderKanban}>
@@ -361,11 +361,11 @@ function ProjectsPage({ onOpenClassic, data = {} }) {
         </SectionCard>
         <SectionCard title="Project Command Actions" icon={Zap}>
           <div className="p-4 grid grid-cols-2 gap-2">
-            <button onClick={() => { data?.openNewWorkModal?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Plus size={14} /> New Project</button>
-            <button onClick={() => { data?.openStageManager?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Workflow size={14} /> Manage Stages</button>
-            <button onClick={() => { data?.setIsProjectTeamModalOpen?.(true); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><UserCog size={14} /> Assign Team</button>
-            <button onClick={() => { data?.openNewTask?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><ListChecks size={14} /> Create Task</button>
-            <button onClick={() => { data?.openGlobalReminderModal?.(); onOpenClassic?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Bell size={14} /> Add Reminder</button>
+            <button onClick={() => { data?.openNewWorkModal?.(); onOpenCrm?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Plus size={14} /> New Project</button>
+            <button onClick={() => { data?.openStageManager?.(); onOpenCrm?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Workflow size={14} /> Manage Stages</button>
+            <button onClick={() => { data?.setIsProjectTeamModalOpen?.(true); onOpenCrm?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><UserCog size={14} /> Assign Team</button>
+            <button onClick={() => { data?.openNewTask?.(); onOpenCrm?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><ListChecks size={14} /> Create Task</button>
+            <button onClick={() => { data?.openGlobalReminderModal?.(); onOpenCrm?.(); }} className="os-action cursor-pointer hover:bg-sky-50 dark:hover:bg-slate-800 transition"><Bell size={14} /> Add Reminder</button>
             <UnavailableAction className="os-action"><Plus size={14} /> Project Cost</UnavailableAction>
           </div>
         </SectionCard>
@@ -525,10 +525,10 @@ function NotificationsPage({ notifications = [], isLoading = false, onMarkRead, 
 }
 
 function AIPage() {
-  return <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Ask RAJIV AI" subtitle="Use the existing RAJIV AI assistant from the top bar or classic CRM workspace." icon={Sparkles}><div className="p-5"><p className="text-xs italic text-slate-400">This dashboard page has no connected AI request handler.</p></div></SectionCard><SectionCard title="AI-Assisted Workflows" icon={Zap}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable until workflow backends are connected.</p></div></SectionCard></div>;
+  return <div className="grid xl:grid-cols-[1.4fr_1fr] gap-4"><SectionCard title="Ask RAJIV AI" subtitle="Use the existing RAJIV AI assistant from the top bar or CRM workspace." icon={Sparkles}><div className="p-5"><p className="text-xs italic text-slate-400">This dashboard page has no connected AI request handler.</p></div></SectionCard><SectionCard title="AI-Assisted Workflows" icon={Zap}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable until workflow backends are connected.</p></div></SectionCard></div>;
 }
 
-function AdminPage({ onNavigate, onOpenClassic, data = {} }) {
+function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
   const cards = [
     ['Company Settings', 'Company profiles, registrations, tax, branding & documents', Building2, true, 'company-settings'],
     ['Users & Access', 'Users, roles, company access', UserCog, true, 'admin-panel'],
@@ -549,7 +549,7 @@ function AdminPage({ onNavigate, onOpenClassic, data = {} }) {
                 onNavigate('company-settings');
               } else {
                 data?.openAdminPanel?.();
-                onOpenClassic?.();
+                onOpenCrm?.();
               }
             }} className="text-left p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 bg-sky-50/50 dark:bg-sky-950/20 hover:border-sky-500 transition cursor-pointer">
               <div className="h-9 w-9 rounded-xl bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-300"><I size={17} /></div>
@@ -568,7 +568,7 @@ function AdminPage({ onNavigate, onOpenClassic, data = {} }) {
       <SectionCard title="Authorization Model" subtitle="Existing user authorization management." icon={ShieldCheck}>
         <div className="p-4 flex items-center justify-between">
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Manage active team member profiles, roles, and approval requests.</p>
-          <button onClick={() => { data?.openAdminPanel?.(); onOpenClassic?.(); }} className="os-primary cursor-pointer"><UserCog size={14} /> Open User Control Panel</button>
+          <button onClick={() => { data?.openAdminPanel?.(); onOpenCrm?.(); }} className="os-primary cursor-pointer"><UserCog size={14} /> Open User Control Panel</button>
         </div>
       </SectionCard>
     </div>
@@ -921,9 +921,9 @@ export default function BusinessOSWorkspace() {
             </div>
           </div>
         </div>
-        {page === 'dashboard' && <Dashboard role={effectiveRole} onNavigate={go} onOpenClassic={() => go('crm')} companyName={companyName} companies={operatingCompanies || []} data={dashboardData} />}
+        {page === 'dashboard' && <Dashboard role={effectiveRole} onNavigate={go} onOpenCrm={() => go('crm')} companyName={companyName} companies={operatingCompanies || []} data={dashboardData} />}
         {page === 'my-work' && (
-          <MyWorkPage onNavigate={go} onOpenClassic={() => go('crm')} data={dashboardData} />
+          <MyWorkPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />
         )}
         {page === 'approvals' && <ApprovalCenter />}
         {page === 'notifications' && (
@@ -1042,12 +1042,12 @@ export default function BusinessOSWorkspace() {
           </div>
         )}
         {page === 'projects' && (
-          <ProjectsPage onOpenClassic={() => go('crm')} data={dashboardData} />
+          <ProjectsPage onOpenCrm={() => go('crm')} data={dashboardData} />
         )}
         {page === 'documents' && <DocumentsPage />}
         {page === 'reports' && <ReportsPage />}
         {page === 'ai' && <AIPage />}
-        {page === 'admin' && <AdminPage onNavigate={go} onOpenClassic={() => go('crm')} data={dashboardData} />}
+        {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
       </div>
       <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
