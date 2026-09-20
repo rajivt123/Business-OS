@@ -640,6 +640,9 @@ export default function BusinessOSWorkspace() {
   const effectiveRole = previewRole || (tenantRole || 'TEAM').toUpperCase();
   const role = roleMeta[effectiveRole]?.label || effectiveRole;
   const companyName = activeOperatingCompany?.name || 'All Companies';
+  const userEmail = currentUser?.email || 'user@company.com';
+  const userName = getUserDisplayName?.(currentUser) || userEmail.split('@')[0] || 'User';
+  const userAvatar = (userName || 'U').charAt(0).toUpperCase();
 
   const dashboardData = {
     companies: companies || [],
