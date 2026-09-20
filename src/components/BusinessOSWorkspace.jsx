@@ -111,14 +111,14 @@ const pageMeta = {
 
 function Badge({ children, tone = 'slate' }) {
   const tones = {
-    slate: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    slate: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
     blue: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20',
     green: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20',
     amber: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20',
     red: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20',
     violet: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/20',
   };
-  return <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-extrabold ${tones[tone] || tones.slate}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[12px] font-semibold ${tones[tone] || tones.slate}`}>{children}</span>;
 }
 
 function StatCard({ icon: Icon, label, value, sub, trend, tone = 'blue' }) {
@@ -133,11 +133,11 @@ function StatCard({ icon: Icon, label, value, sub, trend, tone = 'blue' }) {
     <div className="os-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${toneClasses[tone]}`}><Icon size={18} /></div>
-        {trend && <span className={`text-[10px] font-extrabold flex items-center gap-0.5 ${trend.startsWith('-') ? 'text-rose-500' : 'text-emerald-500'}`}>{trend.startsWith('-') ? <ArrowDownRight size={12} /> : <ArrowUpRight size={12} />} {trend}</span>}
+        {trend && <span className={`text-[12px] font-semibold flex items-center gap-0.5 ${trend.startsWith('-') ? 'text-rose-500' : 'text-emerald-500'}`}>{trend.startsWith('-') ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />} {trend}</span>}
       </div>
-      <div className="mt-4 text-2xl font-black tracking-tight">{value}</div>
-      <div className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">{label}</div>
-      {sub && <div className="mt-2 text-[10px] text-slate-400">{sub}</div>}
+      <div className="mt-3 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">{value}</div>
+      <div className="mt-1 text-[13px] font-medium text-slate-600 dark:text-slate-400">{label}</div>
+      {sub && <div className="mt-1.5 text-[12px] text-slate-500 dark:text-slate-400">{sub}</div>}
     </div>
   );
 }
@@ -145,10 +145,10 @@ function StatCard({ icon: Icon, label, value, sub, trend, tone = 'blue' }) {
 function SectionCard({ title, subtitle, icon: Icon, action, children, className = '' }) {
   return (
     <section className={`os-card overflow-hidden ${className}`}>
-      <div className="px-4 py-3.5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {Icon && <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-300"><Icon size={15} /></div>}
-          <div className="min-w-0"><h3 className="text-xs font-black uppercase tracking-wider truncate">{title}</h3>{subtitle && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{subtitle}</p>}</div>
+      <div className="px-5 py-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {Icon && <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300"><Icon size={16} /></div>}
+          <div className="min-w-0"><h3 className="text-[14px] font-semibold tracking-tight text-slate-900 dark:text-slate-100 truncate">{title}</h3>{subtitle && <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">{subtitle}</p>}</div>
         </div>
         {action}
       </div>
@@ -158,7 +158,7 @@ function SectionCard({ title, subtitle, icon: Icon, action, children, className 
 }
 
 function MiniTable({ columns, rows }) {
-  return <div className="overflow-x-auto"><table className="w-full text-left"><thead><tr>{columns.map((c) => <th key={c} className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-slate-800">{c}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition">{row.map((cell, j) => <td key={j} className="px-4 py-3 text-xs font-semibold border-b last:border-0 border-slate-100 dark:border-slate-800/70">{cell}</td>)}</tr>)}</tbody></table></div>;
+  return <div className="overflow-x-auto custom-scrollbar"><table className="w-full text-left text-[13px]"><thead><tr className="bg-slate-50/70 dark:bg-slate-800/40">{columns.map((c) => <th key={c} className="px-4 py-2.5 text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">{c}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">{rows.map((row, i) => <tr key={i} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition text-slate-800 dark:text-slate-200">{row.map((cell, j) => <td key={j} className="px-4 py-3 align-middle">{cell}</td>)}</tr>)}</tbody></table></div>;
 }
 
 function UnavailableAction({ children, className = 'os-secondary', title = 'Unavailable: no backend support exists for this action.' }) {
@@ -185,7 +185,7 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
   const companyRows = (companies || []).map(c => {
     const companyWorks = works.filter(work => work.tenant_company_id === c.id);
     return [
-      <div className="flex items-center gap-2"><div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black">{c.name?.charAt(0) || 'C'}</div><span className="font-bold">{c.name}</span></div>,
+      <div className="flex items-center gap-2"><div className="h-7 w-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[12px] font-bold">{c.name?.charAt(0) || 'C'}</div><span className="font-semibold text-[13px]">{c.name}</span></div>,
       <Badge tone="slate">Unavailable</Badge>,
       'Unavailable',
       'Unavailable',
@@ -199,7 +199,7 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
   return <div className="space-y-5">
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={CircleDollarSign} label="Group Revenue" value="Unavailable" sub="No revenue backend in current application" tone="blue" /><StatCard icon={WalletCards} label="Receivables" value="Unavailable" sub="No receivables backend in current application" tone="amber" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} sub={multi ? 'Across loaded authorized context' : `${companyName} context`} tone="violet" /><StatCard icon={Users} label="Employees" value="Unavailable" sub="No employee backend in current application" tone="emerald" /></div>
     <div className="grid xl:grid-cols-[1.6fr_1fr] gap-4">
-      <SectionCard title={multi ? 'Company Performance' : 'Company Health'} subtitle={multi ? 'Consolidated view across operating companies' : 'Single-company operating overview'} icon={Building2} action={<button onClick={() => onNavigate('reports')} className="os-link">View report <ChevronRight size={13} /></button>}>
+      <SectionCard title={multi ? 'Company Performance' : 'Company Health'} subtitle={multi ? 'Consolidated view across operating companies' : 'Single-company operating overview'} icon={Building2} action={<button onClick={() => onNavigate('reports')} className="os-link">View report <ChevronRight size={14} /></button>}>
         <MiniTable columns={['Company', 'Health', 'Progress', 'Revenue', 'Projects']} rows={companyRows.length ? companyRows : [[companyName, 'Unavailable', 'Unavailable', 'Unavailable', '0 loaded']]} />
       </SectionCard>
       <SectionCard title="Executive Attention" subtitle="Only exceptions and decisions that need management" icon={TriangleAlert}>
@@ -222,19 +222,19 @@ function OwnerDashboard({ onNavigate, onOpenCrm, companyName, multi, companies =
             >
               <div className={`h-2 w-2 rounded-full ${item.tone === 'red' ? 'bg-rose-500' : item.tone === 'amber' ? 'bg-amber-500' : 'bg-sky-500'}`} />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold truncate">{item.text}</p>
-                <p className="text-[10px] text-slate-400">{item.type}</p>
+                <p className="text-[13px] font-semibold truncate">{item.text}</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400">{item.type}</p>
               </div>
               <ChevronRight size={14} className="text-slate-400" />
             </button>
-          )) : <p className="p-3 text-xs italic text-slate-400">No loaded exceptions in the current context.</p>}
+          )) : <p className="p-3 text-[13px] italic text-slate-400">No loaded exceptions in the current context.</p>}
         </div>
       </SectionCard>
     </div>
     <div className="grid lg:grid-cols-3 gap-4">
-      <SectionCard title="Financial Snapshot" icon={BarChart3}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no financial backend is connected to this dashboard.</p></div></SectionCard>
-      <SectionCard title="Project Health" icon={HeartPulse}><div className="p-4 grid grid-cols-3 gap-2">{[['Loaded', '' + works.length, 'blue'], ['At Risk', 'Unavailable', 'amber'], ['Delayed', 'Unavailable', 'red']].map(([a, b, t]) => <div key={a} className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 text-center"><div className={`text-lg font-black ${t === 'blue' ? 'text-sky-500' : t === 'amber' ? 'text-amber-500' : 'text-rose-500'}`}>{b}</div><div className="text-[9px] font-black uppercase text-slate-400 mt-1">{a}</div></div>)}</div></SectionCard>
-      <SectionCard title="Pending Approvals" icon={ClipboardCheck}><div className="p-4"><p className="text-xs italic text-slate-400">Unavailable: no approval backend is connected to this dashboard.</p></div></SectionCard>
+      <SectionCard title="Financial Snapshot" icon={BarChart3}><div className="p-4"><p className="text-[13px] italic text-slate-400">Unavailable: no financial backend is connected to this dashboard.</p></div></SectionCard>
+      <SectionCard title="Project Health" icon={HeartPulse}><div className="p-4 grid grid-cols-3 gap-2">{[['Loaded', '' + works.length, 'blue'], ['At Risk', 'Unavailable', 'amber'], ['Delayed', 'Unavailable', 'red']].map(([a, b, t]) => <div key={a} className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3 text-center"><div className={`text-lg font-bold ${t === 'blue' ? 'text-sky-500' : t === 'amber' ? 'text-amber-500' : 'text-rose-500'}`}>{b}</div><div className="text-[12px] font-semibold uppercase text-slate-500 dark:text-slate-400 mt-1">{a}</div></div>)}</div></SectionCard>
+      <SectionCard title="Pending Approvals" icon={ClipboardCheck}><div className="p-4"><p className="text-[13px] italic text-slate-400">Unavailable: no approval backend is connected to this dashboard.</p></div></SectionCard>
     </div>
   </div>;
 }
@@ -298,7 +298,7 @@ function MyWorkPage({ onNavigate, onOpenCrm, data = {} }) {
   const tasks = data?.tasks || [];
   const works = data?.works || [];
   const reminders = data?.reminders || [];
-  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" tone="amber" /><StatCard icon={FileText} label="Documents" value="Unavailable" tone="emerald" /><StatCard icon={Bell} label="Open Reminders" value={reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).length} tone="rose" /></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Today's Work" subtitle="Existing tasks and reminders in the loaded context" icon={CalendarCheck2}><div className="p-4 space-y-2">{tasks.length ? tasks.slice(0, 5).map(task => <button key={task.id} onClick={() => { if (task.work_id) { const w = works.find(item => item.id === task.work_id); if (w) data?.navigateToContext?.(w.company_id, w.unit_id, w.id); } onOpenCrm(); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-left hover:border-sky-300 transition"><span className="text-[10px] font-black text-slate-400 w-12">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}</span><div className="h-2 w-2 rounded-full bg-sky-500" /><div className="flex-1"><p className="text-xs font-bold">{task.title}</p><p className="text-[10px] text-slate-400">{task.status.replace('_', ' ')}</p></div><Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge></button>) : <p className="text-xs italic text-slate-400">No loaded 7F tasks for the current project context.</p>}</div></SectionCard><SectionCard title="My Projects" icon={FolderKanban}><div className="p-4 space-y-3">{works.length ? works.slice(0, 5).map(work => <button key={work.id} onClick={() => { data?.navigateToContext?.(work.company_id, work.unit_id, work.id); onOpenCrm(); }} className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 transition"><div className="flex justify-between"><span className="text-xs font-bold">{work.title}</span><ChevronRight size={14} className="text-slate-400" /></div><div className="mt-2 text-[9px] text-slate-400">Click to view project in CRM</div></button>) : <p className="text-xs italic text-slate-400">No loaded projects in the current context.</p>}</div></SectionCard></div></div>;
+  return <div className="space-y-5"><div className="grid grid-cols-2 xl:grid-cols-5 gap-3"><StatCard icon={ListChecks} label="Loaded Tasks" value={tasks.length} sub="Selected project context" tone="blue" /><StatCard icon={FolderKanban} label="Loaded Projects" value={works.length} tone="violet" /><StatCard icon={ClipboardCheck} label="Approvals" value="Unavailable" tone="amber" /><StatCard icon={FileText} label="Documents" value="Unavailable" tone="emerald" /><StatCard icon={Bell} label="Open Reminders" value={reminders.filter(reminder => !reminder.is_completed && !reminder.is_deleted).length} tone="rose" /></div><div className="grid xl:grid-cols-[1.5fr_1fr] gap-4"><SectionCard title="Today's Work" subtitle="Existing tasks and reminders in the loaded context" icon={CalendarCheck2}><div className="p-4 space-y-2">{tasks.length ? tasks.slice(0, 5).map(task => <button key={task.id} onClick={() => { if (task.work_id) { const w = works.find(item => item.id === task.work_id); if (w) data?.navigateToContext?.(w.company_id, w.unit_id, w.id); } onOpenCrm(); }} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-left hover:border-sky-300 transition"><span className="text-[12px] font-semibold text-slate-500 w-16">{task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}</span><div className="h-2 w-2 rounded-full bg-sky-500 shrink-0" /><div className="flex-1 min-w-0"><p className="text-[13px] font-semibold truncate">{task.title}</p><p className="text-[12px] text-slate-500 dark:text-slate-400 capitalize">{task.status.replace('_', ' ')}</p></div><Badge tone={task.priority === 'critical' ? 'red' : task.priority === 'high' ? 'amber' : 'blue'}>{task.priority}</Badge></button>) : <p className="text-[13px] italic text-slate-400">No loaded 7F tasks for the current project context.</p>}</div></SectionCard><SectionCard title="My Projects" icon={FolderKanban}><div className="p-4 space-y-3">{works.length ? works.slice(0, 5).map(work => <button key={work.id} onClick={() => { data?.navigateToContext?.(work.company_id, work.unit_id, work.id); onOpenCrm(); }} className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900 hover:bg-sky-50 dark:hover:bg-slate-800 transition"><div className="flex justify-between items-center"><span className="text-[13px] font-semibold">{work.title}</span><ChevronRight size={14} className="text-slate-400" /></div><div className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Click to view project in CRM</div></button>) : <p className="text-[13px] italic text-slate-400">No loaded projects in the current context.</p>}</div></SectionCard></div></div>;
 }
 
 function DataModulePage({ module, onNavigate }) {
@@ -477,7 +477,7 @@ function NotificationsPage({ notifications = [], isLoading = false, onMarkRead, 
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                       {n.message}
                     </p>
-                    <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
+                    <div className="flex items-center gap-3 mt-2 text-[12px] text-slate-500 dark:text-slate-400">
                       {actorName && <span>By: {actorName}</span>}
                       <span>{formatTime(n.created_at)}</span>
                     </div>
@@ -506,7 +506,7 @@ function NotificationsPage({ notifications = [], isLoading = false, onMarkRead, 
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
             Real-time notifications are automatically sent when you are assigned to project teams, pipeline stages, or 7F tasks.
           </p>
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-[11px] space-y-1.5">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-[12px] space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 dark:text-slate-300">Task Assignments</span>
               <span className="text-emerald-600 font-extrabold">Active</span>
@@ -556,13 +556,13 @@ function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
             }} className="text-left p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 bg-sky-50/50 dark:bg-sky-950/20 hover:border-sky-500 transition cursor-pointer">
               <div className="h-9 w-9 rounded-xl bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-300"><I size={17} /></div>
               <h3 className="text-xs font-black mt-3 text-sky-900 dark:text-sky-200">{a}</h3>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-4">{b}</p>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1 leading-4">{b}</p>
             </button>
           ) : (
             <UnavailableAction key={a} className="text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
               <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400"><I size={17} /></div>
               <h3 className="text-xs font-black mt-3">{a}</h3>
-              <p className="text-[10px] text-slate-400 mt-1 leading-4">{b}</p>
+              <p className="text-[12px] text-slate-400 mt-1 leading-4">{b}</p>
             </UnavailableAction>
           ))}
         </div>
@@ -742,7 +742,7 @@ export default function BusinessOSWorkspace() {
             <button onClick={() => setShowCompanyMenu(!showCompanyMenu)} className="os-company-switch"><BriefcaseBusiness size={15} /><span className="max-w-[190px] truncate">{companyName}</span><ChevronDown size={13} /></button>
             {showCompanyMenu && <div className="os-popover left-0 top-11 w-72"> <div className="os-popover-label">Operating company context</div><button onClick={() => { setActiveOperatingCompanyId(null); setShowCompanyMenu(false) }} className="os-company-option"><div><b>ALL COMPANIES</b><small>Consolidated authorized view</small></div>{!activeOperatingCompany && <Check size={14} />}</button>{operatingCompanies.map(c => <button key={c.id} onClick={() => { setActiveOperatingCompanyId(c.id); setShowCompanyMenu(false) }} className="os-company-option"><div><b>{c.name}</b><small>Operating company</small></div>{activeOperatingCompany?.id === c.id && <Check size={14} />}</button>)}</div>}
           </div>
-          <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" /><div className="hidden lg:block text-[10px] text-slate-400 truncate">{meta[0]}</div>
+          <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" /><div className="hidden lg:block text-[13px] text-slate-500 font-medium truncate">{meta[0]}</div>
         </div>
 
         {/* Global Search connected to CrmContext */}
@@ -765,7 +765,7 @@ export default function BusinessOSWorkspace() {
 
           {searchResults && searchResults.length > 0 && (
             <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-2xl shadow-2xl border overflow-hidden z-50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b flex justify-between items-center ${isDarkMode ? 'bg-slate-950/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+              <div className={`px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wider border-b flex justify-between items-center ${isDarkMode ? 'bg-slate-950/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
                 <span>Search Results ({searchResults.length})</span>
                 <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500"><X size={12} /></button>
               </div>
@@ -783,12 +783,12 @@ export default function BusinessOSWorkspace() {
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText size={14} className="text-sky-500 shrink-0" />
                       <div className="truncate">
-                        <span className={`text-xs font-semibold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{result.label || result.title || result.name}</span>
-                        <span className="text-[10px] text-slate-400 truncate block">{result.subtext || result.po_number || ''}</span>
+                        <span className={`text-[13px] font-semibold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{result.label || result.title || result.name}</span>
+                        <span className="text-[12px] text-slate-500 truncate block">{result.subtext || result.po_number || ''}</span>
                       </div>
                     </div>
                     {result.result_type && (
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+                      <span className="text-[12px] font-semibold uppercase px-2 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
                         {result.result_type}
                       </span>
                     )}
@@ -811,14 +811,14 @@ export default function BusinessOSWorkspace() {
           <button onClick={() => go('notifications')} className="os-top-action relative" title="Notifications">
             <Bell size={16} />
             {unreadNotificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-slate-900">
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900">
                 {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
               </span>
             )}
           </button>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[11px]">{isDarkMode ? '☀' : '◐'}</span></button>
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[13px]">{isDarkMode ? '☀' : '◐'}</span></button>
           {effectiveRole === 'OWNER' || effectiveRole === 'ADMIN' ? <div className="relative hidden md:block"><button onClick={() => setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13} /> {previewRole ? 'Preview: ' : ''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r, l]) => <button key={r} onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work') }} className={`os-company-option ${previewRole === r ? 'selected' : ''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole === r && <Check size={13} />}</button>)}<button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div> : null}
-          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><button onClick={() => { setPage('profile'); setShowProfile(false); }} className="os-company-option cursor-pointer"><UserRound size={15} /><b>My Profile</b></button><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
+          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">{role} · {companyName}</p></div><button onClick={() => { setPage('profile'); setShowProfile(false); }} className="os-company-option cursor-pointer"><UserRound size={15} /><b>My Profile</b></button><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
         </div>
       </header>
 
@@ -857,7 +857,7 @@ export default function BusinessOSWorkspace() {
                   value={searchQuery || ''}
                   onChange={handleSearch}
                   placeholder="Search customers, units, projects, contacts, enquiries..."
-                  className="w-full bg-transparent text-xs font-semibold outline-none"
+                  className="w-full bg-transparent text-[14px] font-medium outline-none"
                 />
                 {searchQuery && (
                   <button 
@@ -873,7 +873,7 @@ export default function BusinessOSWorkspace() {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
               {searchResults && searchResults.length > 0 ? (
                 <>
-                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Search Results ({searchResults.length})
                   </div>
                   {searchResults.map((result, idx) => (
@@ -892,12 +892,12 @@ export default function BusinessOSWorkspace() {
                           <FileText size={16} />
                         </div>
                         <div className="truncate">
-                          <span className="text-xs font-bold block truncate">{result.label || result.title || result.name}</span>
-                          <span className="text-[10px] text-slate-400 truncate block mt-0.5">{result.subtext || result.po_number || ''}</span>
+                          <span className="text-[13px] font-semibold block truncate">{result.label || result.title || result.name}</span>
+                          <span className="text-[12px] text-slate-500 dark:text-slate-400 truncate block mt-0.5">{result.subtext || result.po_number || ''}</span>
                         </div>
                       </div>
                       {result.result_type && (
-                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+                        <span className="text-[12px] font-semibold uppercase px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
                           {result.result_type}
                         </span>
                       )}
@@ -905,11 +905,11 @@ export default function BusinessOSWorkspace() {
                   ))}
                 </>
               ) : searchQuery ? (
-                <div className="p-8 text-center text-xs text-slate-400">
+                <div className="p-8 text-center text-[13px] text-slate-500 dark:text-slate-400">
                   No matching results found for "{searchQuery}"
                 </div>
               ) : (
-                <div className="p-8 text-center text-xs text-slate-400">
+                <div className="p-8 text-center text-[13px] text-slate-500 dark:text-slate-400">
                   Type above to search customers, projects, contacts, enquiries...
                 </div>
               )}

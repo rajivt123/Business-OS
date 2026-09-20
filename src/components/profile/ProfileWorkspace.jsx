@@ -221,7 +221,7 @@ export default function ProfileWorkspace({ onNavigate }) {
           <div>
             <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
               <span>My Profile</span>
-              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+              <span className="text-[12px] font-semibold uppercase px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
                 Account Settings
               </span>
             </h1>
