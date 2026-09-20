@@ -526,7 +526,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       }
 
       // Step 6 & 8: Perform authenticated data fetching only after session & auth context are ready
-      const crmWorkspaceRes = await fetchCrmWorkspace(resolvedOpCoId, undefined, undefined, generation);
+      const crmWorkspaceRes = await fetchCrmWorkspace(resolvedOpCoId, undefined, undefined, generation, resolvedTenantId);
       const isRpcSuccess = crmWorkspaceRes?.success;
 
       const secondaryFetches = [
@@ -1029,7 +1029,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   }
 
   // --- CRM RPC Operations (Atomic Workspace & Upsert Customer Profile) ---
-  async function fetchCrmWorkspace(targetOpCoId, targetCompId, targetUnitId, authGeneration) {
+  async function fetchCrmWorkspace(targetOpCoId, targetCompId, targetUnitId, authGeneration, resolvedTenantId) {
     if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return { success: false };
     const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
     const compId = targetCompId !== undefined ? targetCompId : activeCompanyId;
@@ -1039,7 +1039,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     setCrmWorkspaceError(null);
     try {
       const params = {
-        p_tenant_id: tenantId || null,
+        p_tenant_id: resolvedTenantId !== undefined ? resolvedTenantId : (tenantId || null),
         p_tenant_company_id: opCoId || null,
         p_company_id: compId || null,
         p_unit_id: unitId || null
@@ -3193,8 +3193,30 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
 
   // --- Logs Handlers ---
   async function handleAddLog(e) {
-    e.preventDefault(); 
+    if (e && e.preventDefault) e.preventDefault(); 
     if ((!logInput.trim() && !attachment) || !activeWorkId) return; 
+
+    const activeWork = works.find(w => w.id === activeWorkId);
+    const resolvedTenantCompanyId =
+      activeWork?.tenant_company_id ||
+      activeOperatingCompanyId ||
+      operatingCompanies?.[0]?.id ||
+      null;
+
+    if (!tenantId || !resolvedTenantCompanyId) {
+      const msg = "Operating company context could not be resolved. Please refresh or select the project again.";
+      console.error('[CrmContext] Cannot post log without tenant and company context:', {
+        tenantId,
+        resolvedTenantCompanyId,
+        activeWorkId,
+        activeOperatingCompanyId,
+        operatingCompaniesCount: operatingCompanies?.length
+      });
+      showToast(msg);
+      alert(msg);
+      return;
+    }
+
     setIsUploading(true); 
     let fileUrl = null;
     
@@ -3203,28 +3225,59 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       const fileName = `${Math.random()}.${fileExt}`;
       const { error } = await supabase.storage.from('attachments').upload(`${activeWorkId}/${fileName}`, attachment);
       if (error) { 
-        alert("Error uploading file: " + error.message); 
+        console.error('[CrmContext] Error uploading log attachment:', error);
+        const uploadMsg = `Error uploading file: ${error.message || 'Unknown error'}`;
+        showToast(uploadMsg);
+        alert(uploadMsg); 
         setIsUploading(false); 
         return; 
       }
       const { data } = supabase.storage.from('attachments').getPublicUrl(`${activeWorkId}/${fileName}`); 
-      fileUrl = data.publicUrl;
+      fileUrl = data?.publicUrl || null;
     }
     
-    let payload = { work_id: activeWorkId, content: logInput || "Attached a file.", attachment_url: fileUrl };
-    if (centerView === 'pipeline') {
-      payload.stage_name = works.find(w => w.id === activeWorkId).stages[activeStageIndex];
-    } else { 
+    const resolvedStageName = centerView === 'pipeline'
+      ? (activeStageDefinitions[activeStageIndex]?.name || activeWork?.stages?.[activeStageIndex] || 'General')
+      : 'Issue';
+
+    let payload = {
+      tenant_id: tenantId,
+      tenant_company_id: resolvedTenantCompanyId,
+      work_id: activeWorkId,
+      content: logInput || "Attached a file.",
+      attachment_url: fileUrl,
+      stage_name: resolvedStageName
+    };
+
+    if (centerView !== 'pipeline') { 
       if (!activeIssueId) { 
         setIsUploading(false); 
-        return alert("Select an issue first.");
+        const issueMsg = "Select an issue first.";
+        showToast(issueMsg);
+        alert(issueMsg);
+        return;
       }
-      payload.stage_name = 'Issue'; 
       payload.issue_id = activeIssueId;
     }
     
-    const { data } = await supabase.from('logs').insert([payload]).select(); 
-    if (data) { 
+    const { data, error } = await supabase.from('logs').insert([payload]).select(); 
+    if (error) {
+      console.error('[CrmContext] Supabase log insert error:', error);
+      const isPermission =
+        error.code === '42501' ||
+        error.message?.toLowerCase().includes('permission') ||
+        error.message?.toLowerCase().includes('policy') ||
+        error.message?.toLowerCase().includes('security');
+      const errorMsg = isPermission
+        ? "Unable to post log: you do not have permission to add logs for this project."
+        : `Unable to post log: ${error.message || 'Unknown error'}`;
+      showToast(errorMsg);
+      alert(errorMsg);
+      setIsUploading(false);
+      return;
+    }
+
+    if (data && data[0]) { 
       setLogs([data[0], ...(logs || [])]); 
       setLogInput(''); 
       setAttachment(null);
