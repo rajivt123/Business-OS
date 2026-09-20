@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSales } from '../../context/SalesContext';
+import InvoiceEditorWorkspace from './InvoiceEditorWorkspace';
 import {
   FileText,
   Plus,
@@ -60,6 +61,9 @@ export default function SalesWorkspace() {
 
   const [activeTab, setActiveTab] = useState('quotations'); // 'quotations' | 'proforma' | 'orders' | 'invoices' | 'payments'
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Full-page Transaction Workspaces state (Phase 4)
+  const [isFullInvoiceEditorOpen, setIsFullInvoiceEditorOpen] = useState(false);
 
   // Modals state
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
@@ -382,6 +386,30 @@ export default function SalesWorkspace() {
     }
   };
 
+  if (isFullInvoiceEditorOpen) {
+    return (
+      <InvoiceEditorWorkspace
+        onBack={() => setIsFullInvoiceEditorOpen(false)}
+        onSaveInvoice={async (payload) => {
+          if (issueTaxInvoice && payload.customerId) {
+            await issueTaxInvoice({
+              company_id: payload.customerId,
+              invoice_date: payload.invoiceDate,
+              due_date: payload.dueDate,
+              notes: payload.notes
+            }, payload.items.map(it => ({
+              item_description: it.description,
+              quantity: it.qty,
+              unit_price: it.rate,
+              gst_rate_pct: it.taxRate
+            })));
+          }
+          setIsFullInvoiceEditorOpen(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Top Banner / Actions Bar */}
@@ -413,7 +441,7 @@ export default function SalesWorkspace() {
               <Plus size={15} /> New Proforma
             </button>
             <button
-              onClick={() => setIsTaxInvoiceModalOpen(true)}
+              onClick={() => setIsFullInvoiceEditorOpen(true)}
               className="os-secondary flex items-center gap-1.5 cursor-pointer text-xs font-bold px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
             >
               <Plus size={15} /> Issue Tax Invoice
