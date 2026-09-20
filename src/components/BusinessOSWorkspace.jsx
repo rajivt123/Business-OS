@@ -28,6 +28,7 @@ import InventoryWorkspace from './inventory/InventoryWorkspace';
 import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
 import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
+import ProfileWorkspace from './profile/ProfileWorkspace';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -105,6 +106,7 @@ const pageMeta = {
   ai: ['RAJIV AI', 'Permission-aware business intelligence and assisted workflows.'],
   admin: ['Administration', 'Organization, users, permissions, workflows and system controls.'],
   'company-settings': ['Company Settings', 'Owner workspace for managing company profiles, registrations, addresses, contacts, bank details, tax settings, branding, documents and audit history.'],
+  profile: ['My Profile', 'Manage personal information, work preferences, organization membership and account security.'],
 };
 
 function Badge({ children, tone = 'slate' }) {
@@ -792,7 +794,7 @@ export default function BusinessOSWorkspace() {
           </button>
           <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[11px]">{isDarkMode ? '☀' : '◐'}</span></button>
           {effectiveRole === 'OWNER' || effectiveRole === 'ADMIN' ? <div className="relative hidden md:block"><button onClick={() => setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13} /> {previewRole ? 'Preview: ' : ''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r, l]) => <button key={r} onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work') }} className={`os-company-option ${previewRole === r ? 'selected' : ''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole === r && <Check size={13} />}</button>)}<button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div> : null}
-          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><UnavailableAction className="os-company-option"><UserRound size={15} /><b>My Profile</b></UnavailableAction><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
+          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><button onClick={() => { setPage('profile'); setShowProfile(false); }} className="os-company-option cursor-pointer"><UserRound size={15} /><b>My Profile</b></button><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
         </div>
       </header>
 
@@ -1049,6 +1051,7 @@ export default function BusinessOSWorkspace() {
         {page === 'ai' && <AIPage />}
         {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
+        {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
       </div>
       <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
     </main>

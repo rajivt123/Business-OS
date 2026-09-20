@@ -277,6 +277,78 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [notifications, setNotifications] = useState([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
 
+  // My Profile V1 State & RPC Layer
+  const [myProfile, setMyProfile] = useState(null);
+  const [myProfileMembership, setMyProfileMembership] = useState(null);
+  const [isMyProfileLoading, setIsMyProfileLoading] = useState(false);
+  const [myProfileError, setMyProfileError] = useState(null);
+
+  const fetchMyProfile = async () => {
+    setIsMyProfileLoading(true);
+    setMyProfileError(null);
+    try {
+      const { data, error } = await supabase.rpc('get_my_profile_atomic');
+      if (error) {
+        setMyProfileError(error.message || 'Failed to fetch profile');
+        setMyProfile(null);
+        setMyProfileMembership(null);
+        return { success: false, error: error.message };
+      }
+      if (data) {
+        setMyProfile(data.profile || null);
+        setMyProfileMembership(data.membership || null);
+        setMyProfileError(null);
+        return { success: true, data };
+      } else {
+        setMyProfile(null);
+        setMyProfileMembership(null);
+        setMyProfileError('No profile data returned');
+        return { success: false, error: 'No profile data returned' };
+      }
+    } catch (err) {
+      const msg = err?.message || 'Error executing get_my_profile_atomic';
+      setMyProfileError(msg);
+      setMyProfile(null);
+      setMyProfileMembership(null);
+      return { success: false, error: msg };
+    } finally {
+      setIsMyProfileLoading(false);
+    }
+  };
+
+  const updateMyProfile = async (payload) => {
+    setIsMyProfileLoading(true);
+    setMyProfileError(null);
+    try {
+      const { data, error } = await supabase.rpc('update_my_profile_atomic', {
+        p_payload: payload
+      });
+      if (error) {
+        setMyProfileError(error.message || 'Failed to update profile');
+        setIsMyProfileLoading(false);
+        return { success: false, error: error.message };
+      }
+      // Refresh profile after successful update
+      await fetchMyProfile();
+      return { success: true, data };
+    } catch (err) {
+      const msg = err?.message || 'Error executing update_my_profile_atomic';
+      setMyProfileError(msg);
+      setIsMyProfileLoading(false);
+      return { success: false, error: msg };
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchMyProfile();
+    } else {
+      setMyProfile(null);
+      setMyProfileMembership(null);
+      setMyProfileError(null);
+    }
+  }, [currentUser?.id]);
+
   // Navigation State
   const [pendingNav, setPendingNav] = useState(null);
 
@@ -4037,6 +4109,9 @@ USER REQUEST: ${trimmedMsg}`;
     selectedCustomerId, setSelectedCustomerId, openCustomerWorkspace, closeCustomerWorkspace,
     isCustomerModalOpen, setIsCustomerModalOpen, editingCustomer, customerForm, setCustomerForm,
     handleUpsertCustomerProfile, openNewCustomerModal, openEditCustomerModal, closeCustomerModal,
+
+    // My Profile V1 Exports
+    myProfile, setMyProfile, myProfileMembership, setMyProfileMembership, isMyProfileLoading, myProfileError, fetchMyProfile, updateMyProfile,
 
     getUserDisplayName: (userOrId, p, tm, cu) => getUserDisplayName(userOrId, (p && p.length) ? p : profiles, (tm && tm.length) ? tm : tenantMembers, cu || currentUser),
     navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
