@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ChevronRight, Plus, FileText, Edit2, Trash2, Settings, AlertCircle, CheckCircle2, Circle, History, Check, Paperclip, Send, Loader2, Bell, X, ArrowRightLeft, Sparkles, Eye, Users, UserPlus, Shield, Phone, Mail, CalendarClock, Tag, Filter, CheckSquare, Square, Building2 } from 'lucide-react'
+import { ChevronRight, Plus, FileText, Edit2, Trash2, Settings, AlertCircle, CheckCircle2, Circle, History, Check, Paperclip, Send, Loader2, Bell, X, ArrowRightLeft, Sparkles, Eye, Users, UserPlus, Shield, Phone, Mail, CalendarClock, Tag, Filter, CheckSquare, Square, Building2, BarChart3, Globe, MapPin, ArrowRight } from 'lucide-react'
 import { useCrm } from '../../context/CrmContext'
 
 export default function CenterPanel() {
@@ -14,7 +14,10 @@ export default function CenterPanel() {
     projectAssignments, setIsProjectTeamModalOpen, getActiveProjectAssignments, tenantMembers, getUserDisplayName,
     contacts, isContactsLoading, openNewContactModal, openEditContactModal, handleDeleteContact,
     enquiries, isEnquiriesLoading, openNewEnquiryModal, openEditEnquiryModal, handleDeleteEnquiry, saveEnquiry,
-    followUps, isFollowUpsLoading, openNewFollowUpModal, openEditFollowUpModal, handleDeleteFollowUp, toggleFollowUpStatus
+    followUps, isFollowUpsLoading, openNewFollowUpModal, openEditFollowUpModal, handleDeleteFollowUp, toggleFollowUpStatus,
+    crmSummary, isCrmWorkspaceLoading, crmWorkspaceError, fetchCrmWorkspace,
+    selectedCustomerId, setSelectedCustomerId, openCustomerWorkspace, closeCustomerWorkspace,
+    openNewCustomerModal, openEditCustomerModal, tasks
   } = useCrm()
 
   const pendingFollowUpsCount = (followUps || []).filter(f => f.status === 'pending').length
@@ -161,6 +164,12 @@ export default function CenterPanel() {
           {/* TAB SWITCHER & ASSIGNED TEAM BAR */}
           <div className="px-4 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--os-border)] bg-[var(--os-surface)] shrink-0">
             <div className="flex gap-1 items-center overflow-x-auto custom-scrollbar py-0.5">
+              <button onClick={() => setCenterView('overview')} className={`os-tab flex items-center gap-1 ${centerView === 'overview' ? 'active' : ''}`}>
+                <BarChart3 size={13} /> Overview
+              </button>
+              <button onClick={() => setCenterView('customers')} className={`os-tab flex items-center gap-1 ${centerView === 'customers' || centerView === 'customer_profile' ? 'active' : ''}`}>
+                <Building2 size={13} /> Customers {(companies || []).length > 0 && <span className="bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[9px] px-1.5 py-0.2 rounded-full font-bold">{(companies || []).length}</span>}
+              </button>
               <button onClick={() => setCenterView('pipeline')} className={`os-tab ${centerView === 'pipeline' ? 'active' : ''}`}>
                 Pipeline Status
               </button>
@@ -295,8 +304,88 @@ export default function CenterPanel() {
                 )}
               </div>
 
-          {/* CRM FULL VIEW PANELS (CONTACTS, ENQUIRIES, FOLLOW-UPS) */}
-          {centerView === 'contacts' ? (
+          {/* CRM FULL VIEW PANELS (OVERVIEW, CUSTOMERS, CUSTOMER PROFILE, CONTACTS, ENQUIRIES, FOLLOW-UPS) */}
+          {centerView === 'overview' ? (
+            <CrmOverviewDashboard
+              isDarkMode={isDarkMode}
+              tCard={tCard}
+              tText={tText}
+              tMuted={tMuted}
+              customScrollbar={customScrollbar}
+              crmSummary={crmSummary}
+              isCrmWorkspaceLoading={isCrmWorkspaceLoading}
+              crmWorkspaceError={crmWorkspaceError}
+              fetchCrmWorkspace={fetchCrmWorkspace}
+              companies={companies}
+              contacts={contacts}
+              enquiries={enquiries}
+              followUps={followUps}
+              works={works}
+              tasks={tasks}
+              issues={issues}
+              openNewCustomerModal={openNewCustomerModal}
+              openNewContactModal={openNewContactModal}
+              openNewEnquiryModal={openNewEnquiryModal}
+              openNewFollowUpModal={openNewFollowUpModal}
+              openNewWorkModal={openNewWorkModal}
+              openCustomerWorkspace={openCustomerWorkspace}
+              setCenterView={setCenterView}
+            />
+          ) : centerView === 'customers' ? (
+            <CustomersView
+              isDarkMode={isDarkMode}
+              tCard={tCard}
+              tText={tText}
+              tMuted={tMuted}
+              customScrollbar={customScrollbar}
+              companies={companies}
+              contacts={contacts}
+              enquiries={enquiries}
+              works={works}
+              activeCompanyId={activeCompanyId}
+              setActiveCompanyId={setActiveCompanyId}
+              openNewCustomerModal={openNewCustomerModal}
+              openEditCustomerModal={openEditCustomerModal}
+              openCustomerWorkspace={openCustomerWorkspace}
+              openNewContactModal={openNewContactModal}
+              openNewEnquiryModal={openNewEnquiryModal}
+            />
+          ) : centerView === 'customer_profile' ? (
+            <CustomerProfileWorkspace
+              isDarkMode={isDarkMode}
+              tCard={tCard}
+              tText={tText}
+              tMuted={tMuted}
+              customScrollbar={customScrollbar}
+              selectedCustomerId={selectedCustomerId || activeCompanyId}
+              companies={companies}
+              contacts={contacts}
+              enquiries={enquiries}
+              followUps={followUps}
+              works={works}
+              tasks={tasks}
+              issues={issues}
+              logs={logs}
+              closeCustomerWorkspace={closeCustomerWorkspace}
+              openEditCustomerModal={openEditCustomerModal}
+              openNewContactModal={openNewContactModal}
+              openNewEnquiryModal={openNewEnquiryModal}
+              openNewFollowUpModal={openNewFollowUpModal}
+              openNewWorkModal={openNewWorkModal}
+              openEditContactModal={openEditContactModal}
+              handleDeleteContact={handleDeleteContact}
+              openEditEnquiryModal={openEditEnquiryModal}
+              handleDeleteEnquiry={handleDeleteEnquiry}
+              saveEnquiry={saveEnquiry}
+              openEditFollowUpModal={openEditFollowUpModal}
+              handleDeleteFollowUp={handleDeleteFollowUp}
+              toggleFollowUpStatus={toggleFollowUpStatus}
+              tenantMembers={tenantMembers}
+              profiles={profiles}
+              getUserDisplayName={getUserDisplayName}
+              openDocPreview={openDocPreview}
+            />
+          ) : centerView === 'contacts' ? (
             <ContactsView
               isDarkMode={isDarkMode}
               tCard={tCard}
@@ -1024,6 +1113,885 @@ function FollowUpsView({
               </div>
             );
           })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CrmOverviewDashboard({
+  isDarkMode, tCard, tText, tMuted, customScrollbar,
+  crmSummary, isCrmWorkspaceLoading, crmWorkspaceError, fetchCrmWorkspace,
+  companies, contacts, enquiries, followUps, works, tasks, issues,
+  openNewCustomerModal, openNewContactModal, openNewEnquiryModal, openNewFollowUpModal, openNewWorkModal,
+  openCustomerWorkspace, setCenterView
+}) {
+  const customerCount = crmSummary?.customer_count ?? (companies || []).length;
+  const openEnquiriesCount = crmSummary?.open_enquiries ?? (enquiries || []).filter(e => e.status !== 'won' && e.status !== 'lost').length;
+  const pendingFollowupsCount = crmSummary?.pending_followups ?? (followUps || []).filter(f => f.status === 'pending').length;
+  const overdueFollowupsCount = crmSummary?.overdue_followups ?? (followUps || []).filter(f => f.status === 'pending' && new Date(f.due_date) < new Date()).length;
+  const openTasksCount = crmSummary?.open_tasks ?? (tasks || []).filter(t => t.status !== 'completed').length;
+  const openIssuesCount = crmSummary?.open_issues ?? (issues || []).filter(i => i.status === 'open').length;
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden min-w-0 p-4 space-y-4">
+      {/* ERROR BANNER IF RPC FAILS - EXPLICIT ERROR REQUIREMENT */}
+      {crmWorkspaceError && (
+        <div className="p-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>CRM RPC Error: {crmWorkspaceError}</span>
+          </div>
+          <button
+            onClick={() => fetchCrmWorkspace()}
+            className="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-500 transition"
+          >
+            Retry RPC
+          </button>
+        </div>
+      )}
+
+      {/* HEADER & METRIC SUMMARY CARDS */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+        <div>
+          <h2 className={`text-base font-extrabold flex items-center gap-2 ${tText}`}>
+            <BarChart3 size={18} className="text-sky-500" />
+            CRM Workspace Dashboard
+          </h2>
+          <p className={`text-xs ${tMuted}`}>Executive overview of clients, active leads, pending follow-ups & project operations</p>
+        </div>
+        {isCrmWorkspaceLoading && (
+          <div className="flex items-center gap-1.5 text-xs text-sky-500 font-bold">
+            <Loader2 size={14} className="animate-spin" /> Syncing RPC workspace...
+          </div>
+        )}
+      </div>
+
+      {/* METRIC GRID */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div
+          onClick={() => setCenterView('customers')}
+          className={`p-3.5 rounded-2xl border transition cursor-pointer ${isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-sky-500' : 'bg-white border-slate-200 hover:border-sky-400 shadow-xs'}`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-sky-600 dark:text-sky-400">Customers</span>
+            <Building2 size={15} className="text-sky-500" />
+          </div>
+          <div className={`text-2xl font-black ${tText}`}>{customerCount}</div>
+          <span className={`text-[10px] ${tMuted}`}>Active Accounts</span>
+        </div>
+
+        <div
+          onClick={() => setCenterView('enquiries')}
+          className={`p-3.5 rounded-2xl border transition cursor-pointer ${isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-400 shadow-xs'}`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Open Enquiries</span>
+            <FileText size={15} className="text-indigo-500" />
+          </div>
+          <div className={`text-2xl font-black ${tText}`}>{openEnquiriesCount}</div>
+          <span className={`text-[10px] ${tMuted}`}>Active Sales Leads</span>
+        </div>
+
+        <div
+          onClick={() => setCenterView('follow_ups')}
+          className={`p-3.5 rounded-2xl border transition cursor-pointer ${isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-amber-500' : 'bg-white border-slate-200 hover:border-amber-400 shadow-xs'}`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">Follow-ups</span>
+            <CalendarClock size={15} className="text-amber-500" />
+          </div>
+          <div className={`text-2xl font-black ${tText}`}>{pendingFollowupsCount}</div>
+          <span className={`text-[10px] ${tMuted}`}>Scheduled Activities</span>
+        </div>
+
+        <div
+          onClick={() => setCenterView('follow_ups')}
+          className={`p-3.5 rounded-2xl border transition cursor-pointer ${isDarkMode ? 'bg-slate-900/80 border-rose-900/50 hover:border-rose-500' : 'bg-rose-50/50 border-rose-200 hover:border-rose-400 shadow-xs'}`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">Overdue</span>
+            <AlertCircle size={15} className="text-rose-500" />
+          </div>
+          <div className="text-2xl font-black text-rose-600 dark:text-rose-400">{overdueFollowupsCount}</div>
+          <span className={`text-[10px] ${tMuted}`}>Requires Attention</span>
+        </div>
+
+        <div
+          onClick={() => setCenterView('pipeline')}
+          className={`p-3.5 rounded-2xl border transition cursor-pointer ${isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-emerald-500' : 'bg-white border-slate-200 hover:border-emerald-400 shadow-xs'}`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Active Tasks</span>
+            <CheckSquare size={15} className="text-emerald-500" />
+          </div>
+          <div className={`text-2xl font-black ${tText}`}>{openTasksCount}</div>
+          <span className={`text-[10px] ${tMuted}`}>PO Milestones</span>
+        </div>
+
+        <div
+          onClick={() => setCenterView('issues')}
+          className={`p-3.5 rounded-2xl border transition cursor-pointer ${isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-rose-500' : 'bg-white border-slate-200 hover:border-rose-400 shadow-xs'}`}
+        >
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">Open Snags</span>
+            <AlertCircle size={15} className="text-rose-500" />
+          </div>
+          <div className={`text-2xl font-black ${tText}`}>{openIssuesCount}</div>
+          <span className={`text-[10px] ${tMuted}`}>Pending Issues</span>
+        </div>
+      </div>
+
+      {/* QUICK ACTIONS BAR */}
+      <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+        <span className={`text-[10px] font-black uppercase tracking-wider block mb-2 ${tMuted}`}>Quick Create & Shortcuts</span>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <button
+            onClick={openNewCustomerModal}
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus size={13} /> + New Customer
+          </button>
+          <button
+            onClick={() => openNewContactModal()}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <UserPlus size={13} /> + Add Contact
+          </button>
+          <button
+            onClick={() => openNewEnquiryModal()}
+            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <FileText size={13} /> + New Enquiry
+          </button>
+          <button
+            onClick={() => openNewFollowUpModal()}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <CalendarClock size={13} /> + Schedule Follow-up
+          </button>
+          <button
+            onClick={openNewWorkModal}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus size={13} /> + New PO/WO Project
+          </button>
+        </div>
+      </div>
+
+      {/* RECENT ACCOUNTS & ENQUIRIES TABLES */}
+      <div className={`flex-1 overflow-y-auto space-y-4 pr-1 ${customScrollbar}`}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Recent Customers */}
+          <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${tText}`}>
+                <Building2 size={14} className="text-sky-500" /> Recent Customer Accounts
+              </h3>
+              <button onClick={() => setCenterView('customers')} className="text-[11px] font-bold text-sky-600 hover:underline">
+                View All ({(companies || []).length}) →
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(companies || []).slice(0, 5).map(c => {
+                const prof = c.profile || c.corporate_profile || {};
+                const gstin = prof.gstin || c.gstin;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => openCustomerWorkspace(c.id)}
+                    className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${isDarkMode ? 'bg-slate-950/60 border-slate-800 hover:border-sky-500' : 'bg-slate-50 border-slate-200 hover:border-sky-300'}`}
+                  >
+                    <div>
+                      <span className={`font-bold text-xs block ${tText}`}>{c.name}</span>
+                      <span className={`text-[10px] ${tMuted}`}>
+                        {prof.legal_name || c.legal_name || 'Individual / Entity'} {gstin ? `• GSTIN: ${gstin}` : ''}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 flex items-center gap-0.5">
+                      360° Profile <ArrowRight size={10} />
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Recent Enquiries */}
+          <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${tText}`}>
+                <FileText size={14} className="text-indigo-500" /> Recent Sales Enquiries
+              </h3>
+              <button onClick={() => setCenterView('enquiries')} className="text-[11px] font-bold text-indigo-600 hover:underline">
+                View All ({(enquiries || []).length}) →
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(enquiries || []).slice(0, 5).map(e => {
+                const comp = (companies || []).find(c => c.id === e.company_id);
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => setCenterView('enquiries')}
+                    className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${isDarkMode ? 'bg-slate-950/60 border-slate-800 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-300'}`}
+                  >
+                    <div>
+                      <span className={`font-bold text-xs block ${tText}`}>{e.title}</span>
+                      <span className={`text-[10px] ${tMuted}`}>{comp ? comp.name : 'Unknown Client'} • Status: <b className="capitalize">{e.status}</b></span>
+                    </div>
+                    <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-indigo-500/15 text-indigo-500 border border-indigo-500/30">
+                      {e.priority || 'medium'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomersView({
+  isDarkMode, tCard, tText, tMuted, customScrollbar,
+  companies, contacts, enquiries, works, activeCompanyId, setActiveCompanyId,
+  openNewCustomerModal, openEditCustomerModal, openCustomerWorkspace,
+  openNewContactModal, openNewEnquiryModal
+}) {
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filteredCustomers = (companies || []).filter(c => {
+    const prof = c.profile || c.corporate_profile || {};
+    const status = prof.status || c.status || 'active';
+    if (statusFilter !== 'all' && status !== statusFilter) return false;
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (prof.legal_name || c.legal_name || '').toLowerCase().includes(q) ||
+      (prof.trading_name || c.trading_name || '').toLowerCase().includes(q) ||
+      (prof.gstin || c.gstin || '').toLowerCase().includes(q) ||
+      (prof.pan || c.pan || '').toLowerCase().includes(q) ||
+      (prof.official_email || c.official_email || c.email || '').toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden min-w-0 p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+        <div>
+          <h2 className={`text-base font-extrabold flex items-center gap-2 ${tText}`}>
+            <Building2 size={18} className="text-sky-500" />
+            Customer / Client Accounts Directory
+          </h2>
+          <p className={`text-xs ${tMuted}`}>Manage client master profiles, legal identity, GSTIN/PAN records & 360° workspace</p>
+        </div>
+
+        <button
+          onClick={openNewCustomerModal}
+          className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+        >
+          <Plus size={14} /> + New Customer
+        </button>
+      </div>
+
+      {/* FILTER BAR */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search customer by name, legal name, GSTIN, PAN, email..."
+          className={`flex-1 min-w-[200px] px-3 py-1.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+        />
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className={`px-3 py-1.5 rounded-xl border text-xs outline-none ${isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+        >
+          <option value="all">All Account Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+
+      {/* CUSTOMER LIST */}
+      <div className={`flex-1 overflow-y-auto space-y-3 pr-1 ${customScrollbar}`}>
+        {filteredCustomers.length === 0 ? (
+          <div className={`p-8 text-center border border-dashed rounded-2xl text-xs ${isDarkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+            No customer accounts found matching your search. Click "+ New Customer" to register a client.
+          </div>
+        ) : (
+          filteredCustomers.map(customer => {
+            const prof = customer.profile || customer.corporate_profile || {};
+            const legalName = prof.legal_name || customer.legal_name || customer.name;
+            const tradingName = prof.trading_name || customer.trading_name;
+            const gstin = prof.gstin || customer.gstin;
+            const pan = prof.pan || customer.pan;
+            const cin = prof.cin || customer.cin;
+            const companyType = prof.company_type || customer.company_type || 'private_limited';
+            const email = prof.official_email || customer.official_email || customer.email;
+            const phone = prof.official_phone || customer.official_phone || customer.phone;
+            const website = prof.website || customer.website;
+            const status = prof.status || customer.status || 'active';
+
+            const custContacts = (contacts || []).filter(c => c.company_id === customer.id);
+            const custEnquiries = (enquiries || []).filter(e => e.company_id === customer.id);
+            const custWorks = (works || []).filter(w => w.company_id === customer.id);
+
+            return (
+              <div
+                key={customer.id}
+                className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row justify-between gap-3 ${isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200/80 hover:border-sky-300 shadow-xs'}`}
+              >
+                <div className="space-y-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => openCustomerWorkspace(customer.id)}
+                      className={`font-black text-sm hover:text-sky-500 text-left transition ${tText}`}
+                    >
+                      {customer.name}
+                    </button>
+                    {tradingName && tradingName !== customer.name && (
+                      <span className={`text-xs ${tMuted}`}>({tradingName})</span>
+                    )}
+                    <span className={`px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase border ${status === 'active' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' : 'bg-slate-500/15 text-slate-400 border-slate-500/30'}`}>
+                      {status}
+                    </span>
+                    <span className="px-2 py-0.2 rounded-full text-[9px] font-bold uppercase bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                      {companyType.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <p className={`text-xs ${tMuted}`}>
+                    <b>Legal Name:</b> {legalName}
+                  </p>
+
+                  {/* IDENTIFIERS BADGES */}
+                  <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono">
+                    {gstin && (
+                      <span className="px-2 py-0.5 rounded border bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold">
+                        GSTIN: {gstin}
+                      </span>
+                    )}
+                    {pan && (
+                      <span className="px-2 py-0.5 rounded border bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 font-bold">
+                        PAN: {pan}
+                      </span>
+                    )}
+                    {cin && (
+                      <span className="px-2 py-0.5 rounded border bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold">
+                        CIN: {cin}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* CONTACT & LINKS */}
+                  <div className="flex items-center gap-3 text-xs flex-wrap">
+                    {email && (
+                      <a href={`mailto:${email}`} className={`flex items-center gap-1 ${tMuted} hover:text-sky-500`}>
+                        <Mail size={12} /> {email}
+                      </a>
+                    )}
+                    {phone && (
+                      <span className={`flex items-center gap-1 ${tMuted}`}>
+                        <Phone size={12} /> {phone}
+                      </span>
+                    )}
+                    {website && (
+                      <a href={website} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sky-600 hover:underline">
+                        <Globe size={12} /> {website.replace(/^https?:\/\//, '')}
+                      </a>
+                    )}
+                  </div>
+
+                  {/* COUNTS CHIPS */}
+                  <div className="flex items-center gap-2 text-[10px] font-bold pt-1">
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {custContacts.length} Contacts
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {custEnquiries.length} Enquiries
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {custWorks.length} Projects/POs
+                    </span>
+                  </div>
+                </div>
+
+                {/* ACTIONS */}
+                <div className="flex flex-col sm:items-end justify-between gap-2 shrink-0">
+                  <button
+                    onClick={() => openCustomerWorkspace(customer.id)}
+                    className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition shadow-xs flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>360° Workspace</span>
+                    <ArrowRight size={13} />
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openNewContactModal(customer.id)}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-sky-500/30 text-sky-600 bg-sky-50 dark:bg-sky-500/10 dark:text-sky-400 hover:bg-sky-100 transition cursor-pointer"
+                    >
+                      + Contact
+                    </button>
+                    <button
+                      onClick={() => openNewEnquiryModal(customer.id)}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-indigo-500/30 text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 hover:bg-indigo-100 transition cursor-pointer"
+                    >
+                      + Enquiry
+                    </button>
+                    <button
+                      onClick={() => openEditCustomerModal(customer)}
+                      className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                      title="Edit Customer Profile"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomerProfileWorkspace({
+  isDarkMode, tCard, tText, tMuted, customScrollbar,
+  selectedCustomerId, companies, contacts, enquiries, followUps, works, tasks, issues, logs,
+  closeCustomerWorkspace, openEditCustomerModal, openNewContactModal, openNewEnquiryModal, openNewFollowUpModal, openNewWorkModal,
+  openEditContactModal, handleDeleteContact, openEditEnquiryModal, handleDeleteEnquiry, saveEnquiry, openEditFollowUpModal, handleDeleteFollowUp, toggleFollowUpStatus,
+  tenantMembers, profiles, getUserDisplayName, openDocPreview
+}) {
+  const [subTab, setSubTab] = useState('profile');
+  const customer = (companies || []).find(c => c.id === selectedCustomerId) || companies[0];
+
+  if (!customer) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-xs text-slate-400">
+        Customer account not found.
+        <button onClick={closeCustomerWorkspace} className="mt-3 px-4 py-2 bg-sky-600 text-white rounded-xl font-bold">
+          Back to Customers
+        </button>
+      </div>
+    );
+  }
+
+  const prof = customer.profile || customer.corporate_profile || {};
+  const legalName = prof.legal_name || customer.legal_name || customer.name;
+  const tradingName = prof.trading_name || customer.trading_name;
+  const gstin = prof.gstin || customer.gstin;
+  const pan = prof.pan || customer.pan;
+  const cin = prof.cin || customer.cin;
+  const companyType = prof.company_type || customer.company_type || 'private_limited';
+  const email = prof.official_email || customer.official_email || customer.email;
+  const phone = prof.official_phone || customer.official_phone || customer.phone;
+  const website = prof.website || customer.website;
+  const billingAddr = prof.billing_address || customer.billing_address || {};
+  const shippingAddr = prof.shipping_address || customer.shipping_address || {};
+  const notes = prof.notes || customer.notes || '';
+  const status = prof.status || customer.status || 'active';
+
+  const customerContacts = (contacts || []).filter(c => c.company_id === customer.id);
+  const customerEnquiries = (enquiries || []).filter(e => e.company_id === customer.id);
+  const customerFollowups = (followUps || []).filter(f => f.company_id === customer.id);
+  const customerWorks = (works || []).filter(w => w.company_id === customer.id);
+  const workIds = customerWorks.map(w => w.id);
+  const customerTasks = (tasks || []).filter(t => workIds.includes(t.work_id));
+  const customerIssues = (issues || []).filter(i => workIds.includes(i.work_id));
+  const customerLogs = (logs || []).filter(l => workIds.includes(l.work_id));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden min-w-0 p-4 space-y-3">
+      {/* WORKSPACE HEADER */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={closeCustomerWorkspace}
+            className="p-1.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+          >
+            ← Back
+          </button>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className={`text-base font-black ${tText}`}>{customer.name}</h2>
+              {tradingName && tradingName !== customer.name && <span className={`text-xs ${tMuted}`}>({tradingName})</span>}
+              <span className={`px-2 py-0.2 rounded-full text-[9px] font-extrabold uppercase border ${status === 'active' ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' : 'bg-slate-500/15 text-slate-400 border-slate-500/30'}`}>
+                {status}
+              </span>
+            </div>
+            <p className={`text-xs ${tMuted}`}>
+              <b>Legal:</b> {legalName} {gstin ? `• GSTIN: ${gstin}` : ''} {pan ? `• PAN: ${pan}` : ''}
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => openEditCustomerModal(customer)}
+          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+        >
+          <Edit2 size={13} /> Edit Profile
+        </button>
+      </div>
+
+      {/* METRIC STRIP */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+        <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <span className={`text-[10px] font-bold uppercase block ${tMuted}`}>Contacts</span>
+          <span className={`text-lg font-black ${tText}`}>{customerContacts.length}</span>
+        </div>
+        <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <span className={`text-[10px] font-bold uppercase block ${tMuted}`}>Enquiries</span>
+          <span className={`text-lg font-black ${tText}`}>{customerEnquiries.length}</span>
+        </div>
+        <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <span className={`text-[10px] font-bold uppercase block ${tMuted}`}>Follow-ups</span>
+          <span className={`text-lg font-black ${tText}`}>{customerFollowups.length}</span>
+        </div>
+        <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <span className={`text-[10px] font-bold uppercase block ${tMuted}`}>PO Projects</span>
+          <span className={`text-lg font-black ${tText}`}>{customerWorks.length}</span>
+        </div>
+        <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <span className={`text-[10px] font-bold uppercase block ${tMuted}`}>Milestone Tasks</span>
+          <span className={`text-lg font-black ${tText}`}>{customerTasks.length}</span>
+        </div>
+        <div className={`p-2.5 rounded-xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <span className={`text-[10px] font-bold uppercase block ${tMuted}`}>Open Snags</span>
+          <span className={`text-lg font-black text-rose-500`}>{customerIssues.filter(i => i.status === 'open').length}</span>
+        </div>
+      </div>
+
+      {/* 360 SUB-TABS */}
+      <div className="flex border-b border-slate-200/70 dark:border-slate-800 text-xs font-bold shrink-0 overflow-x-auto">
+        <button
+          onClick={() => setSubTab('profile')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'profile' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Profile & Address
+        </button>
+        <button
+          onClick={() => setSubTab('contacts')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'contacts' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Contacts ({customerContacts.length})
+        </button>
+        <button
+          onClick={() => setSubTab('enquiries')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'enquiries' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Enquiries ({customerEnquiries.length})
+        </button>
+        <button
+          onClick={() => setSubTab('followups')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'followups' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Follow-ups ({customerFollowups.length})
+        </button>
+        <button
+          onClick={() => setSubTab('works')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'works' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          PO Projects ({customerWorks.length})
+        </button>
+        <button
+          onClick={() => setSubTab('tasks')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'tasks' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Tasks ({customerTasks.length})
+        </button>
+        <button
+          onClick={() => setSubTab('issues')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'issues' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Issues ({customerIssues.length})
+        </button>
+        <button
+          onClick={() => setSubTab('logs')}
+          className={`py-2 px-3 border-b-2 transition ${subTab === 'logs' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+        >
+          Activity Logs ({customerLogs.length})
+        </button>
+      </div>
+
+      {/* SUB-TAB PANELS */}
+      <div className={`flex-1 overflow-y-auto space-y-4 pr-1 ${customScrollbar}`}>
+        {subTab === 'profile' && (
+          <div className="space-y-4 text-xs">
+            {/* Corporate Info Card */}
+            <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+              <h3 className={`font-black uppercase tracking-wider text-xs mb-3 text-sky-600 dark:text-sky-400`}>
+                Corporate Identity & Tax Info
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Display Name</span>
+                  <span className={`font-semibold ${tText}`}>{customer.name}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Legal Name</span>
+                  <span className={`font-semibold ${tText}`}>{legalName}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Trading / Brand Name</span>
+                  <span className={`font-semibold ${tText}`}>{tradingName || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Company Structure</span>
+                  <span className={`font-semibold capitalize ${tText}`}>{companyType.replace('_', ' ')}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Industry Sector</span>
+                  <span className={`font-semibold ${tText}`}>{prof.industry || customer.industry || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>GSTIN</span>
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{gstin || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>PAN</span>
+                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{pan || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>CIN</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{cin || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Official Email</span>
+                  <span className={`font-semibold ${tText}`}>{email || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Official Phone</span>
+                  <span className={`font-semibold ${tText}`}>{phone || '—'}</span>
+                </div>
+                <div>
+                  <span className={`block font-bold ${tMuted}`}>Website</span>
+                  {website ? (
+                    <a href={website} target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">
+                      {website}
+                    </a>
+                  ) : '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Addresses */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                <h4 className="font-black uppercase tracking-wider text-xs mb-2 text-sky-600 dark:text-sky-400 flex items-center gap-1.5">
+                  <MapPin size={14} /> Billing Address
+                </h4>
+                <p className={`leading-relaxed ${tText}`}>
+                  {billingAddr.street ? `${billingAddr.street}, ` : ''}
+                  {billingAddr.city ? `${billingAddr.city}, ` : ''}
+                  {billingAddr.state ? `${billingAddr.state} ` : ''}
+                  {billingAddr.pincode ? `- ${billingAddr.pincode}, ` : ''}
+                  {billingAddr.country || 'India'}
+                </p>
+              </div>
+
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                <h4 className="font-black uppercase tracking-wider text-xs mb-2 text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <MapPin size={14} /> Shipping / Delivery Address
+                </h4>
+                <p className={`leading-relaxed ${tText}`}>
+                  {shippingAddr.street ? `${shippingAddr.street}, ` : ''}
+                  {shippingAddr.city ? `${shippingAddr.city}, ` : ''}
+                  {shippingAddr.state ? `${shippingAddr.state} ` : ''}
+                  {shippingAddr.pincode ? `- ${shippingAddr.pincode}, ` : ''}
+                  {shippingAddr.country || 'India'}
+                </p>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {notes && (
+              <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                <h4 className={`font-black uppercase tracking-wider text-xs mb-1 ${tMuted}`}>
+                  Internal Account Notes & Remarks
+                </h4>
+                <p className={`whitespace-pre-wrap leading-relaxed ${tText}`}>{notes}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {subTab === 'contacts' && (
+          <div className="space-y-3 text-xs">
+            <div className="flex justify-between items-center">
+              <span className={`font-bold ${tMuted}`}>Contacts for {customer.name}</span>
+              <button
+                onClick={() => openNewContactModal(customer.id)}
+                className="px-3 py-1.5 bg-sky-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={13} /> Add Contact
+              </button>
+            </div>
+            {customerContacts.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No contacts registered for this customer.
+              </div>
+            ) : (
+              customerContacts.map(cnt => (
+                <div key={cnt.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <div>
+                    <span className={`font-bold block ${tText}`}>{cnt.name} {cnt.designation ? `(${cnt.designation})` : ''}</span>
+                    <span className={`text-[11px] ${tMuted}`}>{cnt.email || ''} {cnt.phone ? `• ${cnt.phone}` : ''}</span>
+                  </div>
+                  <button onClick={() => openEditContactModal(cnt)} className="text-sky-600 hover:underline font-bold text-xs">Edit</button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {subTab === 'enquiries' && (
+          <div className="space-y-3 text-xs">
+            <div className="flex justify-between items-center">
+              <span className={`font-bold ${tMuted}`}>Sales Enquiries for {customer.name}</span>
+              <button
+                onClick={() => openNewEnquiryModal(customer.id)}
+                className="px-3 py-1.5 bg-indigo-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={13} /> New Enquiry
+              </button>
+            </div>
+            {customerEnquiries.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No enquiries logged for this customer.
+              </div>
+            ) : (
+              customerEnquiries.map(enq => (
+                <div key={enq.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <div>
+                    <span className={`font-bold block ${tText}`}>{enq.title}</span>
+                    <span className={`text-[11px] ${tMuted}`}>Status: <b className="capitalize">{enq.status}</b> • Priority: {enq.priority}</span>
+                  </div>
+                  <button onClick={() => openEditEnquiryModal(enq)} className="text-indigo-600 hover:underline font-bold text-xs">Edit</button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {subTab === 'followups' && (
+          <div className="space-y-3 text-xs">
+            <div className="flex justify-between items-center">
+              <span className={`font-bold ${tMuted}`}>Follow-up Activities for {customer.name}</span>
+              <button
+                onClick={() => openNewFollowUpModal(customer.id)}
+                className="px-3 py-1.5 bg-amber-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={13} /> Schedule Follow-up
+              </button>
+            </div>
+            {customerFollowups.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No follow-ups scheduled for this customer.
+              </div>
+            ) : (
+              customerFollowups.map(flw => (
+                <div key={flw.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <div>
+                    <span className={`font-bold block uppercase text-[10px] text-amber-600 dark:text-amber-400`}>{flw.activity_type}</span>
+                    <p className={`text-xs ${tText}`}>{flw.notes || 'Follow-up task'}</p>
+                    <span className={`text-[10px] ${tMuted}`}>Due: {new Date(flw.due_date).toLocaleString()}</span>
+                  </div>
+                  <button onClick={() => toggleFollowUpStatus(flw.id, flw.status)} className="px-2 py-1 text-[10px] font-bold rounded bg-amber-500/20 text-amber-500">
+                    {flw.status === 'pending' ? 'Mark Done' : 'Reopen'}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {subTab === 'works' && (
+          <div className="space-y-3 text-xs">
+            <div className="flex justify-between items-center">
+              <span className={`font-bold ${tMuted}`}>PO/WO Projects for {customer.name}</span>
+              <button
+                onClick={openNewWorkModal}
+                className="px-3 py-1.5 bg-emerald-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={13} /> New PO/WO
+              </button>
+            </div>
+            {customerWorks.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No PO/WO projects created for this customer yet.
+              </div>
+            ) : (
+              customerWorks.map(w => (
+                <div key={w.id} className={`p-3 rounded-xl border flex items-center justify-between ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <div>
+                    <span className={`font-bold block ${tText}`}>{w.title}</span>
+                    <span className={`text-[10px] ${tMuted}`}>PO: {w.po_number || 'N/A'} • WO: {w.wo_number || 'N/A'}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {subTab === 'tasks' && (
+          <div className="space-y-3 text-xs">
+            {customerTasks.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No tasks assigned for this customer's projects.
+              </div>
+            ) : (
+              customerTasks.map(t => (
+                <div key={t.id} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <span className={`font-bold block ${tText}`}>{t.title}</span>
+                  <span className={`text-[10px] ${tMuted}`}>Status: {t.status} • Priority: {t.priority}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {subTab === 'issues' && (
+          <div className="space-y-3 text-xs">
+            {customerIssues.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No snags / issues logged for this customer.
+              </div>
+            ) : (
+              customerIssues.map(iss => (
+                <div key={iss.id} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <span className={`font-bold block ${tText}`}>{iss.title}</span>
+                  <span className={`text-[10px] uppercase font-bold ${iss.status === 'open' ? 'text-rose-500' : 'text-emerald-500'}`}>Status: {iss.status}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {subTab === 'logs' && (
+          <div className="space-y-3 text-xs">
+            {customerLogs.length === 0 ? (
+              <div className={`p-6 text-center border border-dashed rounded-xl ${tMuted}`}>
+                No activity logs recorded for this customer.
+              </div>
+            ) : (
+              customerLogs.map(l => (
+                <div key={l.id} className={`p-3 rounded-xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'}`}>
+                  <p className={`text-xs ${tText}`}>{l.content}</p>
+                  <span className={`text-[10px] ${tMuted}`}>{new Date(l.created_at).toLocaleString()}</span>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>

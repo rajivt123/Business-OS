@@ -215,6 +215,34 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
 
+  // --- CRM Workspace & Customer Lifecycle State ---
+  const [crmSummary, setCrmSummary] = useState(null);
+  const [isCrmWorkspaceLoading, setIsCrmWorkspaceLoading] = useState(false);
+  const [crmWorkspaceError, setCrmWorkspaceError] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [customerForm, setCustomerForm] = useState({
+    id: null,
+    name: '',
+    legal_name: '',
+    display_name: '',
+    trading_name: '',
+    company_type: 'private_limited',
+    business_type: '',
+    industry: '',
+    gstin: '',
+    pan: '',
+    cin: '',
+    website: '',
+    official_email: '',
+    official_phone: '',
+    billing_address: { street: '', city: '', state: '', pincode: '', country: 'India' },
+    shipping_address: { street: '', city: '', state: '', pincode: '', country: 'India' },
+    notes: '',
+    status: 'active'
+  });
+
   // Project Assignments State (public.project_assignments)
   const [projectAssignments, setProjectAssignments] = useState([]);
   const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
@@ -427,6 +455,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
 
       // Step 6 & 8: Perform authenticated data fetching only after session & auth context are ready
       await Promise.all([
+        fetchCrmWorkspace(resolvedOpCoId, undefined, undefined, generation),
         fetchCompanies(resolvedOpCoId, generation),
         fetchReminders(resolvedOpCoId, generation),
         fetchNotifications(resolvedOpCoId, generation),
@@ -514,6 +543,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setStageDefinitions([]);
       setStageAssignments([]);
       setStageAssignmentTargetId(null);
+      fetchCrmWorkspace(activeOperatingCompanyId);
       fetchCompanies(activeOperatingCompanyId);
       fetchReminders(activeOperatingCompanyId);
       fetchNotifications(activeOperatingCompanyId);
@@ -615,6 +645,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     if (docPreviewModal?.isOpen) { closeDocPreview(); return true; }
     if (confirmModal?.isOpen) { closeConfirm(false); return true; }
     if (promptModal?.isOpen) { closePrompt(null); return true; }
+    if (isCustomerModalOpen) { closeCustomerModal(); return true; }
     if (isContactModalOpen) { setIsContactModalOpen(false); return true; }
     if (isEnquiryModalOpen) { setIsEnquiryModalOpen(false); return true; }
     if (isFollowUpModalOpen) { setIsFollowUpModalOpen(false); return true; }
@@ -911,6 +942,181 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
         return data.length > 0 ? data[0].id : null;
       });
     } 
+  }
+
+  // --- CRM RPC Operations (Atomic Workspace & Upsert Customer Profile) ---
+  async function fetchCrmWorkspace(targetOpCoId, targetCompId, targetUnitId, authGeneration) {
+    if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return { success: false };
+    const opCoId = targetOpCoId !== undefined ? targetOpCoId : activeOperatingCompanyId;
+    const compId = targetCompId !== undefined ? targetCompId : activeCompanyId;
+    const unitId = targetUnitId !== undefined ? targetUnitId : activeUnitId;
+
+    setIsCrmWorkspaceLoading(true);
+    setCrmWorkspaceError(null);
+    try {
+      const params = {
+        p_tenant_id: tenantId || null,
+        p_tenant_company_id: opCoId || null,
+        p_company_id: compId || null,
+        p_unit_id: unitId || null
+      };
+
+      const { data, error } = await supabase.rpc('crm_get_workspace_atomic', params);
+
+      if (authGeneration !== undefined && !isCurrentAuthInitialization(authGeneration)) return { success: false };
+
+      if (error) {
+        console.error('[CrmContext] crm_get_workspace_atomic error:', error);
+        setCrmWorkspaceError(error.message || 'Failed to fetch CRM workspace payload');
+        showToast(`CRM Data Fetch Error: ${error.message}`);
+        // CRITICAL: DO NOT silently fall back to direct table queries!
+        return { success: false, error };
+      }
+
+      if (data) {
+        setCrmSummary(data.summary || null);
+        if (Array.isArray(data.customers)) setCompanies(data.customers);
+        if (Array.isArray(data.contacts)) setContacts(data.contacts);
+        if (Array.isArray(data.enquiries)) setEnquiries(data.enquiries);
+        if (Array.isArray(data.followups)) setFollowUps(data.followups);
+        if (Array.isArray(data.works)) setWorks(data.works);
+        if (Array.isArray(data.tasks)) setTasks(data.tasks);
+        if (Array.isArray(data.issues)) setIssues(data.issues);
+        if (Array.isArray(data.activities)) setLogs(data.activities);
+      }
+      return { success: true, data };
+    } catch (err) {
+      console.error('[CrmContext] Exception in fetchCrmWorkspace:', err);
+      setCrmWorkspaceError(err.message || 'Unexpected CRM fetch error');
+      showToast(`CRM Fetch Failed: ${err.message || err}`);
+      return { success: false, error: err };
+    } finally {
+      setIsCrmWorkspaceLoading(false);
+    }
+  }
+
+  async function handleUpsertCustomerProfile(customPayload = null) {
+    const form = customPayload || customerForm;
+    const nameToUse = (form.name || form.display_name || form.legal_name || '').trim();
+    if (!nameToUse) {
+      const msg = 'Customer name or legal name is required.';
+      showToast(msg);
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
+    const payload = {
+      tenant_id: tenantId,
+      tenant_company_id: activeOperatingCompanyId || null,
+      company_id: form.id || form.company_id || null,
+      name: nameToUse,
+      profile: {
+        legal_name: form.legal_name ? form.legal_name.trim() : null,
+        display_name: form.display_name ? form.display_name.trim() : nameToUse,
+        trading_name: form.trading_name ? form.trading_name.trim() : null,
+        company_type: form.company_type || 'private_limited',
+        business_type: form.business_type ? form.business_type.trim() : null,
+        industry: form.industry ? form.industry.trim() : null,
+        gstin: form.gstin ? form.gstin.trim().toUpperCase() : null,
+        pan: form.pan ? form.pan.trim().toUpperCase() : null,
+        cin: form.cin ? form.cin.trim().toUpperCase() : null,
+        website: form.website ? form.website.trim() : null,
+        official_email: form.official_email ? form.official_email.trim() : null,
+        official_phone: form.official_phone ? form.official_phone.trim() : null,
+        billing_address: typeof form.billing_address === 'object' ? form.billing_address : null,
+        shipping_address: typeof form.shipping_address === 'object' ? form.shipping_address : null,
+        notes: form.notes ? form.notes.trim() : null,
+        status: form.status || 'active'
+      }
+    };
+
+    try {
+      const { data, error } = await supabase.rpc('crm_customer_upsert_atomic', { p_payload: payload });
+
+      if (error) {
+        console.error('[CrmContext] crm_customer_upsert_atomic error:', error);
+        showToast(`Error saving customer profile: ${error.message}`);
+        alert(`Error saving customer profile: ${error.message}`);
+        return { success: false, error };
+      }
+
+      showToast(form.id ? 'Customer profile updated successfully!' : 'Customer created successfully!');
+      setIsCustomerModalOpen(false);
+      await fetchCrmWorkspace();
+      return { success: true, data };
+    } catch (err) {
+      console.error('[CrmContext] Exception in handleUpsertCustomerProfile:', err);
+      showToast(`Save customer profile failed: ${err.message || err}`);
+      alert(`Save customer profile failed: ${err.message || err}`);
+      return { success: false, error: err };
+    }
+  }
+
+  function openNewCustomerModal() {
+    setEditingCustomer(null);
+    setCustomerForm({
+      id: null,
+      name: '',
+      legal_name: '',
+      display_name: '',
+      trading_name: '',
+      company_type: 'private_limited',
+      business_type: '',
+      industry: '',
+      gstin: '',
+      pan: '',
+      cin: '',
+      website: '',
+      official_email: '',
+      official_phone: '',
+      billing_address: { street: '', city: '', state: '', pincode: '', country: 'India' },
+      shipping_address: { street: '', city: '', state: '', pincode: '', country: 'India' },
+      notes: '',
+      status: 'active'
+    });
+    setIsCustomerModalOpen(true);
+  }
+
+  function openEditCustomerModal(customer) {
+    setEditingCustomer(customer);
+    const prof = customer.profile || customer.corporate_profile || {};
+    setCustomerForm({
+      id: customer.id,
+      name: customer.name || '',
+      legal_name: prof.legal_name || customer.legal_name || customer.name || '',
+      display_name: prof.display_name || customer.display_name || customer.name || '',
+      trading_name: prof.trading_name || customer.trading_name || '',
+      company_type: prof.company_type || customer.company_type || 'private_limited',
+      business_type: prof.business_type || customer.business_type || '',
+      industry: prof.industry || customer.industry || '',
+      gstin: prof.gstin || customer.gstin || '',
+      pan: prof.pan || customer.pan || '',
+      cin: prof.cin || customer.cin || '',
+      website: prof.website || customer.website || '',
+      official_email: prof.official_email || customer.official_email || customer.email || '',
+      official_phone: prof.official_phone || customer.official_phone || customer.phone || '',
+      billing_address: prof.billing_address || customer.billing_address || { street: '', city: '', state: '', pincode: '', country: 'India' },
+      shipping_address: prof.shipping_address || customer.shipping_address || { street: '', city: '', state: '', pincode: '', country: 'India' },
+      notes: prof.notes || customer.notes || '',
+      status: prof.status || customer.status || 'active'
+    });
+    setIsCustomerModalOpen(true);
+  }
+
+  function closeCustomerModal() {
+    setIsCustomerModalOpen(false);
+    setEditingCustomer(null);
+  }
+
+  function openCustomerWorkspace(customerId) {
+    setSelectedCustomerId(customerId);
+    setActiveCompanyId(customerId);
+    setCenterView('customer_profile');
+  }
+
+  function closeCustomerWorkspace() {
+    setSelectedCustomerId(null);
+    setCenterView('customers');
   }
 
   // --- CRM P0 Database Operations (Contacts, Enquiries, Follow-ups) ---
@@ -3806,6 +4012,12 @@ USER REQUEST: ${trimmedMsg}`;
     contacts, isContactsLoading, isContactModalOpen, setIsContactModalOpen, editingContact, contactForm, setContactForm, fetchContacts, saveContact, handleDeleteContact, openNewContactModal, openEditContactModal,
     enquiries, isEnquiriesLoading, isEnquiryModalOpen, setIsEnquiryModalOpen, editingEnquiry, enquiryForm, setEnquiryForm, fetchEnquiries, saveEnquiry, handleDeleteEnquiry, openNewEnquiryModal, openEditEnquiryModal,
     followUps, isFollowUpsLoading, isFollowUpModalOpen, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, fetchFollowUps, saveFollowUp, toggleFollowUpStatus, handleDeleteFollowUp, openNewFollowUpModal, openEditFollowUpModal,
+
+    // CRM Workspace & Customer Lifecycle Exports
+    crmSummary, isCrmWorkspaceLoading, crmWorkspaceError, fetchCrmWorkspace,
+    selectedCustomerId, setSelectedCustomerId, openCustomerWorkspace, closeCustomerWorkspace,
+    isCustomerModalOpen, setIsCustomerModalOpen, editingCustomer, customerForm, setCustomerForm,
+    handleUpsertCustomerProfile, openNewCustomerModal, openEditCustomerModal, closeCustomerModal,
 
     getUserDisplayName: (userOrId, p, tm, cu) => getUserDisplayName(userOrId, (p && p.length) ? p : profiles, (tm && tm.length) ? tm : tenantMembers, cu || currentUser),
     navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,

@@ -23,7 +23,8 @@ export default function Modals() {
     units, contacts, enquiries, followUps,
     isContactModalOpen, setIsContactModalOpen, editingContact, contactForm, setContactForm, saveContact,
     isEnquiryModalOpen, setIsEnquiryModalOpen, editingEnquiry, enquiryForm, setEnquiryForm, saveEnquiry,
-    isFollowUpModalOpen, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, saveFollowUp
+    isFollowUpModalOpen, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, saveFollowUp,
+    isCustomerModalOpen, closeCustomerModal, editingCustomer, customerForm, setCustomerForm, handleUpsertCustomerProfile
   } = useCrm()
 
   const [promptInput, setPromptInput] = useState('')
@@ -42,6 +43,22 @@ export default function Modals() {
 
   return (
     <>
+      {/* CUSTOMER PROFILE MODAL */}
+      {isCustomerModalOpen && (
+        <CustomerProfileModal
+          tModal={tModal}
+          tText={tText}
+          tMuted={tMuted}
+          tInput={tInput}
+          isDarkMode={isDarkMode}
+          closeCustomerModal={closeCustomerModal}
+          editingCustomer={editingCustomer}
+          customerForm={customerForm}
+          setCustomerForm={setCustomerForm}
+          handleUpsertCustomerProfile={handleUpsertCustomerProfile}
+        />
+      )}
+
       {/* CONTACT MODAL */}
       {isContactModalOpen && (
         <ContactModal
@@ -2305,6 +2322,440 @@ function FollowUpModal({
             >
               {submitting && <Loader2 size={13} className="animate-spin" />}
               <span>{editingFollowUp ? 'Save Changes' : 'Schedule Follow-up'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CustomerProfileModal({
+  tModal, tText, tMuted, tInput, isDarkMode,
+  closeCustomerModal, editingCustomer, customerForm, setCustomerForm, handleUpsertCustomerProfile
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState('general');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await handleUpsertCustomerProfile();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyBillingToShipping = () => {
+    setCustomerForm(prev => ({
+      ...prev,
+      shipping_address: { ...(prev.billing_address || { street: '', city: '', state: '', pincode: '', country: 'India' }) }
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3 sm:p-4">
+      <div className={`${tModal} border rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden`}>
+        <div className="p-4 sm:p-5 border-b border-slate-200/70 dark:border-slate-800 flex items-center justify-between shrink-0">
+          <div>
+            <h3 className={`text-base sm:text-lg font-black flex items-center gap-2 ${tText}`}>
+              <Building2 size={19} className="text-sky-500" />
+              {editingCustomer ? 'Edit Customer Profile' : 'New Customer / Client'}
+            </h3>
+            <p className={`text-xs ${tMuted}`}>Corporate identity, GSTIN/PAN details, contact addresses & status</p>
+          </div>
+          <button onClick={closeCustomerModal} className={`${tMuted} hover:text-rose-500 p-1`}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* SUB-TAB NAV */}
+        <div className="flex border-b border-slate-200/70 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 px-4 text-xs font-bold shrink-0 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`py-2.5 px-3 border-b-2 transition ${activeTab === 'general' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Company & Trade
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('tax')}
+            className={`py-2.5 px-3 border-b-2 transition ${activeTab === 'tax' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            GSTIN, PAN & CIN
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('address')}
+            className={`py-2.5 px-3 border-b-2 transition ${activeTab === 'address' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Billing & Shipping Addresses
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('notes')}
+            className={`py-2.5 px-3 border-b-2 transition ${activeTab === 'notes' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Notes & Remarks
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scrollbar text-xs">
+            {activeTab === 'general' && (
+              <div className="space-y-4">
+                <div>
+                  <label className={`block font-bold mb-1 ${tMuted}`}>
+                    Display / Customer Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customerForm.name || customerForm.display_name || ''}
+                    onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value, display_name: e.target.value })}
+                    placeholder="e.g., Acme Industrial Corp"
+                    className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Legal Name (Official Registration)</label>
+                    <input
+                      type="text"
+                      value={customerForm.legal_name || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, legal_name: e.target.value })}
+                      placeholder="e.g., Acme Industrial Services Private Limited"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Trading / Brand Name</label>
+                    <input
+                      type="text"
+                      value={customerForm.trading_name || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, trading_name: e.target.value })}
+                      placeholder="e.g., Acme Services"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Company Structure</label>
+                    <select
+                      value={customerForm.company_type || 'private_limited'}
+                      onChange={(e) => setCustomerForm({ ...customerForm, company_type: e.target.value })}
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    >
+                      <option value="private_limited">Private Limited (Pvt Ltd)</option>
+                      <option value="public_limited">Public Limited</option>
+                      <option value="proprietorship">Sole Proprietorship</option>
+                      <option value="partnership">Partnership Firm</option>
+                      <option value="llp">Limited Liability Partnership (LLP)</option>
+                      <option value="government">Government / PSU</option>
+                      <option value="other">Other Entity</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Industry Sector</label>
+                    <input
+                      type="text"
+                      value={customerForm.industry || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, industry: e.target.value })}
+                      placeholder="e.g. Manufacturing, IT, Energy"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Account Status</label>
+                    <select
+                      value={customerForm.status || 'active'}
+                      onChange={(e) => setCustomerForm({ ...customerForm, status: e.target.value })}
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    >
+                      <option value="active">Active Client</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Official Email</label>
+                    <input
+                      type="email"
+                      value={customerForm.official_email || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, official_email: e.target.value })}
+                      placeholder="info@acme.com"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Official Phone / Contact</label>
+                    <input
+                      type="text"
+                      value={customerForm.official_phone || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, official_phone: e.target.value })}
+                      placeholder="+91 98765 43210"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Company Website</label>
+                    <input
+                      type="url"
+                      value={customerForm.website || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, website: e.target.value })}
+                      placeholder="https://acme.com"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'tax' && (
+              <div className="space-y-4">
+                <div className={`p-3 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                  <h4 className="font-extrabold text-sky-600 dark:text-sky-400 mb-1">Corporate Tax Identifiers</h4>
+                  <p className={tMuted}>Enter official tax and company registration details to ensure compliant invoicing and WO generation.</p>
+                </div>
+
+                <div>
+                  <label className={`block font-bold mb-1 ${tMuted}`}>GSTIN (GST Identification Number - 15 Digits)</label>
+                  <input
+                    type="text"
+                    maxLength={15}
+                    value={customerForm.gstin || ''}
+                    onChange={(e) => setCustomerForm({ ...customerForm, gstin: e.target.value.toUpperCase() })}
+                    placeholder="27AAACB1234C1ZV"
+                    className={`w-full p-2.5 rounded-xl border font-mono tracking-wider outline-none uppercase ${tInput}`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>PAN (Permanent Account Number - 10 Chars)</label>
+                    <input
+                      type="text"
+                      maxLength={10}
+                      value={customerForm.pan || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, pan: e.target.value.toUpperCase() })}
+                      placeholder="AAACB1234C"
+                      className={`w-full p-2.5 rounded-xl border font-mono tracking-wider outline-none uppercase ${tInput}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>CIN (Corporate Identification Number - 21 Chars)</label>
+                    <input
+                      type="text"
+                      maxLength={21}
+                      value={customerForm.cin || ''}
+                      onChange={(e) => setCustomerForm({ ...customerForm, cin: e.target.value.toUpperCase() })}
+                      placeholder="U72200MH2020PTC123456"
+                      className={`w-full p-2.5 rounded-xl border font-mono tracking-wider outline-none uppercase ${tInput}`}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'address' && (
+              <div className="space-y-5">
+                {/* Billing Address */}
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-xs uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                    Billing Address
+                  </h4>
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Street / Address Line</label>
+                    <input
+                      type="text"
+                      value={customerForm.billing_address?.street || ''}
+                      onChange={(e) => setCustomerForm({
+                        ...customerForm,
+                        billing_address: { ...(customerForm.billing_address || {}), street: e.target.value }
+                      })}
+                      placeholder="Plot No. 42, Industrial Area Phase II"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>City</label>
+                      <input
+                        type="text"
+                        value={customerForm.billing_address?.city || ''}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          billing_address: { ...(customerForm.billing_address || {}), city: e.target.value }
+                        })}
+                        placeholder="Mumbai"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>State</label>
+                      <input
+                        type="text"
+                        value={customerForm.billing_address?.state || ''}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          billing_address: { ...(customerForm.billing_address || {}), state: e.target.value }
+                        })}
+                        placeholder="Maharashtra"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>Pincode</label>
+                      <input
+                        type="text"
+                        value={customerForm.billing_address?.pincode || ''}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          billing_address: { ...(customerForm.billing_address || {}), pincode: e.target.value }
+                        })}
+                        placeholder="400001"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>Country</label>
+                      <input
+                        type="text"
+                        value={customerForm.billing_address?.country || 'India'}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          billing_address: { ...(customerForm.billing_address || {}), country: e.target.value }
+                        })}
+                        placeholder="India"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Shipping Address */}
+                <div className="space-y-3 pt-3 border-t border-slate-200/70 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      Shipping / Delivery Address
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={copyBillingToShipping}
+                      className="text-[11px] font-bold text-sky-600 hover:underline"
+                    >
+                      Copy from Billing Address
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className={`block font-bold mb-1 ${tMuted}`}>Street / Address Line</label>
+                    <input
+                      type="text"
+                      value={customerForm.shipping_address?.street || ''}
+                      onChange={(e) => setCustomerForm({
+                        ...customerForm,
+                        shipping_address: { ...(customerForm.shipping_address || {}), street: e.target.value }
+                      })}
+                      placeholder="Warehouse Gate No 3, Logistics Park"
+                      className={`w-full p-2.5 rounded-xl border outline-none ${tInput}`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>City</label>
+                      <input
+                        type="text"
+                        value={customerForm.shipping_address?.city || ''}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          shipping_address: { ...(customerForm.shipping_address || {}), city: e.target.value }
+                        })}
+                        placeholder="Thane"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>State</label>
+                      <input
+                        type="text"
+                        value={customerForm.shipping_address?.state || ''}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          shipping_address: { ...(customerForm.shipping_address || {}), state: e.target.value }
+                        })}
+                        placeholder="Maharashtra"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>Pincode</label>
+                      <input
+                        type="text"
+                        value={customerForm.shipping_address?.pincode || ''}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          shipping_address: { ...(customerForm.shipping_address || {}), pincode: e.target.value }
+                        })}
+                        placeholder="400601"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block font-bold mb-1 ${tMuted}`}>Country</label>
+                      <input
+                        type="text"
+                        value={customerForm.shipping_address?.country || 'India'}
+                        onChange={(e) => setCustomerForm({
+                          ...customerForm,
+                          shipping_address: { ...(customerForm.shipping_address || {}), country: e.target.value }
+                        })}
+                        placeholder="India"
+                        className={`w-full p-2 rounded-xl border outline-none ${tInput}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'notes' && (
+              <div className="space-y-3">
+                <label className={`block font-bold mb-1 ${tMuted}`}>Internal Customer Notes & Account Remarks</label>
+                <textarea
+                  rows={6}
+                  value={customerForm.notes || ''}
+                  onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })}
+                  placeholder="Special billing instructions, payment terms, key account history..."
+                  className={`w-full p-3 rounded-xl border outline-none ${tInput}`}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-slate-200/70 dark:border-slate-800 flex justify-end gap-2 shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+            <button
+              type="button"
+              onClick={closeCustomerModal}
+              className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-xs shadow-md"
+            >
+              {submitting && <Loader2 size={14} className="animate-spin" />}
+              <span>{editingCustomer ? 'Update Customer Profile' : 'Create Customer Profile'}</span>
             </button>
           </div>
         </form>
