@@ -606,8 +606,10 @@ export default function BusinessOSWorkspace() {
   const [showProfile, setShowProfile] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const searchContainerRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -618,6 +620,21 @@ export default function BusinessOSWorkspace() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [setSearchQuery]);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+          setIsMobileSearchOpen(true);
+        } else if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const effectiveRole = previewRole || (tenantRole || 'TEAM').toUpperCase();
   const role = roleMeta[effectiveRole]?.label || effectiveRole;
@@ -694,56 +711,154 @@ export default function BusinessOSWorkspace() {
 
   const go = (next) => {
     setPage(next);
-    if (typeof window !== 'undefined' && window.innerWidth <= 800) {
-      setSidebarCollapsed(true);
-    }
+    setIsMobileMenuOpen(false);
   };
 
   const meta = pageMeta[page] || pageMeta.dashboard;
 
   return <div className={`business-os ${isDarkMode ? 'dark' : ''}`}>
-    {!sidebarCollapsed && <div className="os-sidebar-backdrop" onClick={() => setSidebarCollapsed(true)} />}
-    <aside className={`os-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-      <div className="os-brand"><div className="os-logo"><FlameIcon /></div>{!sidebarCollapsed && <div><div className="flex items-center gap-1"><span className="os-brand-name">RAJIV</span><span className="os-brand-pill">OS</span></div><div className="os-brand-sub">Business Operating System</div></div>}</div>
-      <div className="os-sidebar-scroll">
-        {filteredNav.map(section => <div className="os-nav-section" key={section.label}>{!sidebarCollapsed && <div className="os-nav-label">{section.label}</div>}{section.items.map(([id, label, Icon]) => <button key={id} title={sidebarCollapsed ? label : ''} onClick={() => go(id)} className={`os-nav-item ${page === id ? 'active' : ''}`}><Icon size={17} />{!sidebarCollapsed && <span>{label}</span>}{!sidebarCollapsed && id === 'notifications' && <span className={`os-nav-count ${unreadNotificationsCount > 0 ? 'bg-rose-500 text-white' : ''}`}>{unreadNotificationsCount > 0 ? unreadNotificationsCount : 0}</span>}</button>)}</div>)}
+    {/* DESKTOP COMPACT NAVIGATION RAIL (60px) */}
+    <nav className="os-rail hidden md:flex" aria-label="Main Navigation">
+      <div className="os-rail-brand">
+        <div className="os-rail-logo" title="Rajiv Business OS">
+          R
+        </div>
       </div>
-      <div className="os-sidebar-bottom"><button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="os-nav-item">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />} {!sidebarCollapsed && <span>Collapse</span>}</button></div>
-    </aside>
+
+      <div className="os-rail-nav custom-scrollbar">
+        {filteredNav.map((section, sIdx) => (
+          <React.Fragment key={section.label}>
+            {sIdx > 0 && <div className="os-rail-divider" />}
+            {section.items.map(([id, label, Icon]) => (
+              <button
+                key={id}
+                onClick={() => go(id)}
+                className={`os-rail-btn ${page === id ? 'active' : ''}`}
+                aria-label={label}
+              >
+                <Icon size={18} />
+                {id === 'notifications' && unreadNotificationsCount > 0 && (
+                  <span className="os-rail-badge">
+                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                  </span>
+                )}
+                <div className="os-rail-tooltip">{label}</div>
+              </button>
+            ))}
+          </React.Fragment>
+        ))}
+      </div>
+
+      <div className="os-rail-footer">
+        <button
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className="os-rail-btn"
+          aria-label="Toggle theme"
+          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          <span className="text-sm leading-none">{isDarkMode ? '☀' : '◐'}</span>
+          <div className="os-rail-tooltip">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</div>
+        </button>
+        <button
+          onClick={() => go('admin')}
+          className={`os-rail-btn ${page === 'admin' ? 'active' : ''}`}
+          aria-label="Settings"
+        >
+          <Settings size={18} />
+          <div className="os-rail-tooltip">Settings</div>
+        </button>
+      </div>
+    </nav>
 
     <main className="os-main">
+      {/* SINGLE CLEAN TOPBAR */}
       <header className="os-topbar">
-        <div className="flex items-center gap-2 min-w-0">
-          <button onClick={() => setSidebarCollapsed(prev => !prev)} className="os-mobile-menu"><Menu size={18} /></button>
-          <div className="relative">
-            <button onClick={() => setShowCompanyMenu(!showCompanyMenu)} className="os-company-switch"><BriefcaseBusiness size={15} /><span className="max-w-[190px] truncate">{companyName}</span><ChevronDown size={13} /></button>
-            {showCompanyMenu && <div className="os-popover left-0 top-11 w-72"> <div className="os-popover-label">Operating company context</div><button onClick={() => { setActiveOperatingCompanyId(null); setShowCompanyMenu(false) }} className="os-company-option"><div><b>ALL COMPANIES</b><small>Consolidated authorized view</small></div>{!activeOperatingCompany && <Check size={14} />}</button>{operatingCompanies.map(c => <button key={c.id} onClick={() => { setActiveOperatingCompanyId(c.id); setShowCompanyMenu(false) }} className="os-company-option"><div><b>{c.name}</b><small>Operating company</small></div>{activeOperatingCompany?.id === c.id && <Check size={14} />}</button>)}</div>}
+        {/* Left: Mobile menu toggle, Brand, Company Selector */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="md:hidden os-btn-icon"
+            aria-label="Open Navigation Menu"
+          >
+            <Menu size={18} />
+          </button>
+
+          <div className="os-topbar-brand shrink-0">
+            <span>RAJIV</span>
+            <span className="os-topbar-brand-badge">OS</span>
           </div>
-          <div className="hidden lg:block h-6 w-px bg-slate-200 dark:bg-slate-800" /><div className="hidden lg:block text-[10px] text-slate-400 truncate">{meta[0]}</div>
+
+          <div className="hidden sm:block h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0" />
+
+          {/* Operating Company Context */}
+          <div className="relative">
+            <button
+              onClick={() => setShowCompanyMenu(!showCompanyMenu)}
+              className="os-company-btn"
+              title="Operating Company Context"
+            >
+              <BriefcaseBusiness size={14} className="text-slate-400 shrink-0" />
+              <span className="max-w-[130px] sm:max-w-[190px] truncate">{companyName}</span>
+              <ChevronDown size={13} className="text-slate-400 shrink-0" />
+            </button>
+            {showCompanyMenu && (
+              <div className="os-popover-menu left-0 top-11 w-72">
+                <div className="os-popover-title">Operating Company Context</div>
+                <button
+                  onClick={() => { setActiveOperatingCompanyId(null); setShowCompanyMenu(false); }}
+                  className={`os-menu-item justify-between ${!activeOperatingCompany ? 'active' : ''}`}
+                >
+                  <div>
+                    <div className="font-bold">ALL COMPANIES</div>
+                    <div className="text-xs text-slate-400 font-normal">Consolidated authorized view</div>
+                  </div>
+                  {!activeOperatingCompany && <Check size={14} className="text-blue-600 shrink-0" />}
+                </button>
+                {operatingCompanies.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setActiveOperatingCompanyId(c.id); setShowCompanyMenu(false); }}
+                    className={`os-menu-item justify-between ${activeOperatingCompany?.id === c.id ? 'active' : ''}`}
+                  >
+                    <div>
+                      <div className="font-bold">{c.name}</div>
+                      <div className="text-xs text-slate-400 font-normal">Operating company</div>
+                    </div>
+                    {activeOperatingCompany?.id === c.id && <Check size={14} className="text-blue-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Global Search connected to CrmContext */}
-        <div className="os-global-search relative" ref={searchContainerRef}>
+        {/* Center: Global Search */}
+        <div className="os-search-box relative hidden md:flex" ref={searchContainerRef}>
           <Search size={15} className="shrink-0 text-slate-400" />
           <input
+            ref={searchInputRef}
             type="text"
             value={searchQuery || ''}
             onChange={handleSearch}
-            placeholder="Search customers, units, projects, contacts, enquiries..."
+            placeholder="Search customers, units, projects, contacts... (⌘K)"
           />
           {searchQuery ? (
-            <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500 text-xs px-1">
-              <X size={13} />
+            <button
+              onClick={() => handleSearch({ target: { value: '' } })}
+              className="text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+              title="Clear search"
+            >
+              <X size={14} />
             </button>
           ) : (
-            <kbd>⌘ K</kbd>
+            <kbd>⌘K</kbd>
           )}
 
           {searchResults && searchResults.length > 0 && (
-            <div className={`absolute top-full left-0 right-0 mt-1.5 rounded-2xl shadow-2xl border overflow-hidden z-50 transition-all ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border-b flex justify-between items-center ${isDarkMode ? 'bg-slate-950/50 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                <span>Search Results ({searchResults.length})</span>
-                <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-rose-500"><X size={12} /></button>
+            <div className="os-popover-menu top-full left-0 right-0 mt-1.5 shadow-xl overflow-hidden">
+              <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-slate-500">
+                <span>Results ({searchResults.length})</span>
+                <button onClick={() => handleSearch({ target: { value: '' } })} className="text-slate-400 hover:text-slate-600"><X size={13} /></button>
               </div>
               <div className="max-h-72 overflow-y-auto">
                 {searchResults.map((result, idx) => (
@@ -754,17 +869,17 @@ export default function BusinessOSWorkspace() {
                       handleSearch({ target: { value: '' } });
                       go('crm');
                     }}
-                    className={`w-full text-left px-3 py-2 border-b last:border-0 transition flex items-center justify-between gap-2 ${isDarkMode ? 'border-slate-800 hover:bg-slate-800/60' : 'border-slate-100 hover:bg-sky-50/70'}`}
+                    className="w-full text-left px-3 py-2 border-b last:border-0 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition flex items-center justify-between gap-2 cursor-pointer"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <FileText size={14} className="text-sky-500 shrink-0" />
+                      <FileText size={15} className="text-blue-600 shrink-0" />
                       <div className="truncate">
-                        <span className={`text-xs font-semibold block truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{result.label || result.title || result.name}</span>
-                        <span className="text-[10px] text-slate-400 truncate block">{result.subtext || result.po_number || ''}</span>
+                        <span className="text-xs font-semibold block truncate text-slate-800 dark:text-slate-200">{result.label || result.title || result.name}</span>
+                        <span className="text-xs text-slate-400 truncate block">{result.subtext || result.po_number || ''}</span>
                       </div>
                     </div>
                     {result.result_type && (
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+                      <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
                         {result.result_type}
                       </span>
                     )}
@@ -775,26 +890,100 @@ export default function BusinessOSWorkspace() {
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Right: Global Actions */}
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setIsMobileSearchOpen(true)}
-            className="os-top-action lg:hidden"
+            className="os-btn-icon md:hidden"
             title="Search Business OS"
           >
             <Search size={16} />
           </button>
-          <button onClick={() => setIsAiChatOpen?.(true)} className="os-top-action ai"><Sparkles size={15} /><span className="hidden xl:inline">AI</span></button>
-          <button onClick={() => go('notifications')} className="os-top-action relative" title="Notifications">
+          <button
+            onClick={() => setIsAiChatOpen?.(true)}
+            className="os-btn-icon ai"
+            title="RAJIV AI"
+          >
+            <Sparkles size={16} />
+          </button>
+          <button
+            onClick={() => go('notifications')}
+            className="os-btn-icon relative"
+            title="Notifications"
+          >
             <Bell size={16} />
             {unreadNotificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-slate-900">
+              <span className="os-topbar-dot">
                 {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
               </span>
             )}
           </button>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="os-top-action" title="Toggle theme"><span className="text-[11px]">{isDarkMode ? '☀' : '◐'}</span></button>
-          {effectiveRole === 'OWNER' || effectiveRole === 'ADMIN' ? <div className="relative hidden md:block"><button onClick={() => setPreviewRole(!previewRole)} className="os-role-preview"><Eye size={13} /> {previewRole ? 'Preview: ' : ''}{role}</button>{previewRole && <div className="os-popover right-0 top-10 w-60"><div className="os-popover-label">UI role preview — mock only</div>{previewRoles.map(([r, l]) => <button key={r} onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work') }} className={`os-company-option ${previewRole === r ? 'selected' : ''}`}><div><b>{l}</b><small>{r}</small></div>{previewRole === r && <Check size={13} />}</button>)}<button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-sky-600">Return to actual role</button></div>}</div> : null}
-          <div className="relative"><button onClick={() => setShowProfile(!showProfile)} className="os-user"><div className="os-avatar">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div><div className="hidden xl:block text-left"><b>{currentUser?.email?.split('@')[0] || 'User'}</b><small>{role}</small></div><ChevronDown size={13} /></button>{showProfile && <div className="os-popover right-0 top-11 w-64"><div className="p-3 border-b border-slate-100 dark:border-slate-800"><p className="text-xs font-black">{currentUser?.email || 'User'}</p><p className="text-[10px] text-slate-400 mt-1">{role} · {companyName}</p></div><button onClick={() => { setPage('profile'); setShowProfile(false); }} className="os-company-option cursor-pointer"><UserRound size={15} /><b>My Profile</b></button><button onClick={() => go('admin')} className="os-company-option"><Settings size={15} /><b>Settings</b></button><button onClick={onSignOut} className="os-company-option text-rose-600"><LogOut size={15} /><b>Sign out</b></button></div>}</div>
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="os-btn-icon hidden sm:inline-flex"
+            title="Toggle theme"
+          >
+            <span className="text-sm leading-none">{isDarkMode ? '☀' : '◐'}</span>
+          </button>
+
+          {(effectiveRole === 'OWNER' || effectiveRole === 'ADMIN') ? (
+            <div className="relative hidden xl:block">
+              <button onClick={() => setPreviewRole(!previewRole)} className="os-role-badge">
+                <Eye size={13} /> {previewRole ? `Preview: ${role}` : role}
+              </button>
+              {previewRole && (
+                <div className="os-popover-menu right-0 top-11 w-60">
+                  <div className="os-popover-title">UI Role Preview</div>
+                  {previewRoles.map(([r, l]) => (
+                    <button
+                      key={r}
+                      onClick={() => { setPreviewRole(r); setPage(r === 'OWNER' || r === 'MANAGER' ? 'dashboard' : 'my-work'); }}
+                      className={`os-menu-item justify-between ${previewRole === r ? 'active' : ''}`}
+                    >
+                      <div>
+                        <div className="font-bold">{l}</div>
+                        <div className="text-xs text-slate-400 font-normal">{r}</div>
+                      </div>
+                      {previewRole === r && <Check size={13} className="text-blue-600 shrink-0" />}
+                    </button>
+                  ))}
+                  <button onClick={() => setPreviewRole(null)} className="w-full mt-2 text-xs font-bold text-blue-600 p-2 text-center hover:underline">
+                    Return to actual role
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* User Profile */}
+          <div className="relative">
+            <button onClick={() => setShowProfile(!showProfile)} className="os-user-btn">
+              <div className="os-avatar-sm">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div>
+              <span className="hidden xl:inline font-semibold text-xs text-slate-700 dark:text-slate-200 max-w-[110px] truncate">
+                {currentUser?.email?.split('@')[0] || 'User'}
+              </span>
+              <ChevronDown size={13} className="text-slate-400 shrink-0" />
+            </button>
+            {showProfile && (
+              <div className="os-popover-menu right-0 top-11 w-64">
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">{currentUser?.email || 'User'}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{role} · {companyName}</p>
+                </div>
+                <div className="py-1">
+                  <button onClick={() => { go('profile'); setShowProfile(false); }} className="os-menu-item">
+                    <UserRound size={15} /> <span>My Profile</span>
+                  </button>
+                  <button onClick={() => { go('admin'); setShowProfile(false); }} className="os-menu-item">
+                    <Settings size={15} /> <span>Settings</span>
+                  </button>
+                  <button onClick={() => { onSignOut?.(); setShowProfile(false); }} className="os-menu-item text-rose-600 hover:text-rose-700">
+                    <LogOut size={15} /> <span>Sign out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -849,7 +1038,7 @@ export default function BusinessOSWorkspace() {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
               {searchResults && searchResults.length > 0 ? (
                 <>
-                  <div className="px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-slate-400">
                     Search Results ({searchResults.length})
                   </div>
                   {searchResults.map((result, idx) => (
@@ -869,11 +1058,11 @@ export default function BusinessOSWorkspace() {
                         </div>
                         <div className="truncate">
                           <span className="text-xs font-bold block truncate">{result.label || result.title || result.name}</span>
-                          <span className="text-[10px] text-slate-400 truncate block mt-0.5">{result.subtext || result.po_number || ''}</span>
+                          <span className="text-xs text-slate-400 truncate block mt-0.5">{result.subtext || result.po_number || ''}</span>
                         </div>
                       </div>
                       {result.result_type && (
-                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+                        <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
                           {result.result_type}
                         </span>
                       )}
@@ -1054,6 +1243,93 @@ export default function BusinessOSWorkspace() {
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
       </div>
       <button className="os-ai-fab cursor-pointer" onClick={() => setIsAiChatOpen?.(true)}><Sparkles size={17} /><span>RAJIV AI</span></button>
+
+      {/* MOBILE DRAWER */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden">
+          <div className="os-mobile-drawer-backdrop" onClick={() => setIsMobileMenuOpen(false)} />
+          <aside className="os-mobile-drawer">
+            <div className="h-14 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="os-rail-logo text-sm font-bold w-7 h-7">R</div>
+                <div className="font-bold text-sm text-slate-900 dark:text-slate-100">RAJIV OS</div>
+              </div>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="os-btn-icon" aria-label="Close navigation menu">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-4">
+              {filteredNav.map(section => (
+                <div key={section.label}>
+                  <div className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-400">{section.label}</div>
+                  <div className="space-y-0.5 mt-1">
+                    {section.items.map(([id, label, Icon]) => (
+                      <button
+                        key={id}
+                        onClick={() => go(id)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                          page === id
+                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon size={16} />
+                          <span>{label}</span>
+                        </div>
+                        {id === 'notifications' && unreadNotificationsCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-xs font-bold">
+                            {unreadNotificationsCount}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="os-avatar-sm">{(currentUser?.email || 'R').charAt(0).toUpperCase()}</div>
+                <div className="truncate">
+                  <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{currentUser?.email?.split('@')[0]}</div>
+                  <div className="text-xs text-slate-400">{role}</div>
+                </div>
+              </div>
+              <button onClick={onSignOut} className="os-btn-icon text-rose-500 hover:text-rose-600" title="Sign out">
+                <LogOut size={16} />
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="os-mobile-bottom-nav md:hidden" aria-label="Mobile Navigation">
+        <button onClick={() => go('dashboard')} className={`os-mobile-tab ${page === 'dashboard' ? 'active' : ''}`}>
+          <LayoutDashboard size={18} />
+          <span>Home</span>
+        </button>
+        <button onClick={() => go('my-work')} className={`os-mobile-tab ${page === 'my-work' ? 'active' : ''}`}>
+          <ListChecks size={18} />
+          <span>Work</span>
+        </button>
+        <button onClick={() => go('crm')} className={`os-mobile-tab ${page === 'crm' ? 'active' : ''}`}>
+          <Contact size={18} />
+          <span>CRM</span>
+        </button>
+        <button onClick={() => go('notifications')} className={`os-mobile-tab relative ${page === 'notifications' ? 'active' : ''}`}>
+          <Bell size={18} />
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute top-1.5 right-1/4 h-2 w-2 rounded-full bg-rose-500" />
+          )}
+          <span>Alerts</span>
+        </button>
+        <button onClick={() => setIsMobileMenuOpen(true)} className="os-mobile-tab">
+          <Menu size={18} />
+          <span>Menu</span>
+        </button>
+      </nav>
     </main>
   </div>;
 }
