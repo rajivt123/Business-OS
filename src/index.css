@@ -145,20 +145,20 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
 }
 
 .os-brand-pill {
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   background: #2563eb;
   color: #ffffff;
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: 4px;
 }
 
 .os-brand-sub {
   margin-top: 1px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--os-muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .os-sidebar-scroll {
@@ -173,26 +173,26 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
 
 .os-nav-label {
   padding: 0 10px 6px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--os-muted);
 }
 
 .os-nav-item {
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   border: 0;
   border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 9px 12px;
   color: var(--os-sidebar-text);
   background: transparent;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -206,7 +206,7 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
 .os-nav-item.active {
   color: #2563eb;
   background: color-mix(in srgb, #2563eb 10%, transparent);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .dark .os-nav-item.active {
@@ -216,15 +216,15 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
 
 .os-nav-count {
   margin-left: auto;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   background: #ef4444;
   color: #ffffff;
 }
