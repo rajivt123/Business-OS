@@ -608,6 +608,7 @@ export default function BusinessOSWorkspace() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   const searchContainerRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -615,8 +616,22 @@ export default function BusinessOSWorkspace() {
         if (setSearchQuery) setSearchQuery('');
       }
     }
+    function handleKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (typeof window !== 'undefined' && window.innerWidth <= 800) {
+          setIsMobileSearchOpen(prev => !prev);
+        } else {
+          searchInputRef.current?.focus();
+        }
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [setSearchQuery]);
 
   const effectiveRole = previewRole || (tenantRole || 'TEAM').toUpperCase();
@@ -734,6 +749,7 @@ export default function BusinessOSWorkspace() {
         <div className="os-global-search relative" ref={searchContainerRef}>
           <Search size={15} className="shrink-0 text-slate-400" />
           <input
+            ref={searchInputRef}
             type="text"
             value={searchQuery || ''}
             onChange={handleSearch}
