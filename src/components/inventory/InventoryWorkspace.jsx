@@ -71,16 +71,7 @@ export default function InventoryWorkspace({ isDarkMode }) {
   return (
     <div className={`flex-1 flex flex-col h-full overflow-hidden ${tBg}`}>
       {/* Top Header Bar */}
-      <div className={`px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 ${isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white'}`}>
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
-            <Boxes className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Inventory Management</h1>
-            <p className={`text-xs ${tMuted}`}>Authoritative stock balance tracking, item master, and material movements</p>
-          </div>
-        </div>
+      <div className={`px-4 py-2.5 border-b flex items-center justify-between gap-3 shrink-0 ${isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white'}`}>
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">

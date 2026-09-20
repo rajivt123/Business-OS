@@ -604,6 +604,8 @@ export default function BusinessOSWorkspace() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [previewRole, setPreviewRole] = useState(null);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -961,8 +963,7 @@ export default function BusinessOSWorkspace() {
         <div className="os-page-head">
           <div>
             <div className="os-breadcrumb">RAJIV BUSINESS OS <ChevronRight size={11} /> {meta[0]}</div>
-            <h1>{meta[0]}</h1>
-            <p>{meta[1]}</p>
+            <h1 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-slate-100">{meta[0]}</h1>
           </div>
           <div className="flex gap-2 relative">
             <UnavailableAction className="os-secondary"><CalendarDays size={14} /> Today</UnavailableAction>
