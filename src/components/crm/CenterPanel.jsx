@@ -1126,12 +1126,12 @@ function CrmOverviewDashboard({
   openNewCustomerModal, openNewContactModal, openNewEnquiryModal, openNewFollowUpModal, openNewWorkModal,
   openCustomerWorkspace, setCenterView
 }) {
-  const customerCount = crmSummary?.customer_count ?? (companies || []).length;
-  const openEnquiriesCount = crmSummary?.open_enquiries ?? (enquiries || []).filter(e => e.status !== 'won' && e.status !== 'lost').length;
-  const pendingFollowupsCount = crmSummary?.pending_followups ?? (followUps || []).filter(f => f.status === 'pending').length;
-  const overdueFollowupsCount = crmSummary?.overdue_followups ?? (followUps || []).filter(f => f.status === 'pending' && new Date(f.due_date) < new Date()).length;
-  const openTasksCount = crmSummary?.open_tasks ?? (tasks || []).filter(t => t.status !== 'completed').length;
-  const openIssuesCount = crmSummary?.open_issues ?? (issues || []).filter(i => i.status === 'open').length;
+  const customerCount = crmSummary?.customer_count ?? 0;
+  const openEnquiriesCount = crmSummary?.open_enquiries ?? 0;
+  const pendingFollowupsCount = crmSummary?.pending_followups ?? 0;
+  const overdueFollowupsCount = crmSummary?.overdue_followups ?? 0;
+  const openTasksCount = crmSummary?.open_tasks ?? 0;
+  const openIssuesCount = crmSummary?.open_issues ?? 0;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-w-0 p-4 space-y-4">

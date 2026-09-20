@@ -454,18 +454,27 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       }
 
       // Step 6 & 8: Perform authenticated data fetching only after session & auth context are ready
-      await Promise.all([
-        fetchCrmWorkspace(resolvedOpCoId, undefined, undefined, generation),
-        fetchCompanies(resolvedOpCoId, generation),
+      const crmWorkspaceRes = await fetchCrmWorkspace(resolvedOpCoId, undefined, undefined, generation);
+      const isRpcSuccess = crmWorkspaceRes?.success;
+
+      const secondaryFetches = [
         fetchReminders(resolvedOpCoId, generation),
         fetchNotifications(resolvedOpCoId, generation),
         fetchMissingData(resolvedOpCoId, generation),
         fetchProfiles(generation),
-        fetchTenantMembers(resolvedTenantId, generation),
-        fetchContacts(resolvedOpCoId, generation),
-        fetchEnquiries(resolvedOpCoId, generation),
-        fetchFollowUps(resolvedOpCoId, generation)
-      ]);
+        fetchTenantMembers(resolvedTenantId, generation)
+      ];
+
+      if (!isRpcSuccess) {
+        secondaryFetches.push(
+          fetchCompanies(resolvedOpCoId, generation),
+          fetchContacts(resolvedOpCoId, generation),
+          fetchEnquiries(resolvedOpCoId, generation),
+          fetchFollowUps(resolvedOpCoId, generation)
+        );
+      }
+
+      await Promise.all(secondaryFetches);
     } catch (err) {
       console.error('[AuthContext Initialization Error]:', err);
       throw err;
@@ -543,14 +552,17 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setStageDefinitions([]);
       setStageAssignments([]);
       setStageAssignmentTargetId(null);
-      fetchCrmWorkspace(activeOperatingCompanyId);
-      fetchCompanies(activeOperatingCompanyId);
+      fetchCrmWorkspace(activeOperatingCompanyId).then(res => {
+        if (!res?.success) {
+          fetchCompanies(activeOperatingCompanyId);
+          fetchContacts(activeOperatingCompanyId);
+          fetchEnquiries(activeOperatingCompanyId);
+          fetchFollowUps(activeOperatingCompanyId);
+        }
+      });
       fetchReminders(activeOperatingCompanyId);
       fetchNotifications(activeOperatingCompanyId);
       fetchMissingData(activeOperatingCompanyId);
-      fetchContacts(activeOperatingCompanyId);
-      fetchEnquiries(activeOperatingCompanyId);
-      fetchFollowUps(activeOperatingCompanyId);
     }
   }, [activeOperatingCompanyId]);
 
@@ -976,13 +988,20 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       if (data) {
         setCrmSummary(data.summary || null);
         if (Array.isArray(data.customers)) setCompanies(data.customers);
+        else if (Array.isArray(data.companies)) setCompanies(data.companies);
+
         if (Array.isArray(data.contacts)) setContacts(data.contacts);
         if (Array.isArray(data.enquiries)) setEnquiries(data.enquiries);
-        if (Array.isArray(data.followups)) setFollowUps(data.followups);
+
+        if (Array.isArray(data.follow_ups)) setFollowUps(data.follow_ups);
+        else if (Array.isArray(data.followups)) setFollowUps(data.followups);
+
         if (Array.isArray(data.works)) setWorks(data.works);
         if (Array.isArray(data.tasks)) setTasks(data.tasks);
         if (Array.isArray(data.issues)) setIssues(data.issues);
-        if (Array.isArray(data.activities)) setLogs(data.activities);
+
+        if (Array.isArray(data.logs)) setLogs(data.logs);
+        else if (Array.isArray(data.activities)) setLogs(data.activities);
       }
       return { success: true, data };
     } catch (err) {
