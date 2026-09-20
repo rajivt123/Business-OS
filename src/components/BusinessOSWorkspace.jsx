@@ -577,7 +577,7 @@ function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
   );
 }
 
-export default function BusinessOSWorkspace() {
+export default function BusinessOSWorkspace({ initialPage = 'dashboard' } = {}) {
   const crm = useCrm();
   const {
     isDarkMode, setIsDarkMode, onSignOut, operatingCompanies = [], activeOperatingCompany,
@@ -591,7 +591,12 @@ export default function BusinessOSWorkspace() {
     openGlobalReminderModal, setIsAdminPanelOpen, fetchProfiles, navigateToContext
   } = crm;
 
-  const [page, setPage] = useState('dashboard');
+  const [page, setPage] = useState(initialPage);
+
+  useEffect(() => {
+    if (initialPage) setPage(initialPage);
+  }, [initialPage]);
+
   const [hrSubTab, setHrSubTab] = useState('master');
   const [publicApplyToken, setPublicApplyToken] = useState(() => {
     if (typeof window !== 'undefined') {

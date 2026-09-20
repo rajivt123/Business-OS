@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { isSupabaseConfigured, supabase } from './lib/supabase'
 import BusinessOSWorkspace from './components/BusinessOSWorkspace'
+import AppShell from './app/AppShell'
+import CommandCenter from './features/dashboard/CommandCenter'
+import Customer360 from './features/crm/Customer360'
+import Project360 from './features/projects/Project360'
+import SalesOrderWorkspace from './features/sales/SalesOrderWorkspace'
+import AccountsLedger from './features/accounts/AccountsLedger'
+import LegacyModuleWrapper from './features/legacy/LegacyModuleWrapper'
 import { CrmProvider } from './context/CrmContext'
 import { EmployeeProvider } from './context/EmployeeContext'
 import { HrPolicyProvider } from './context/HrPolicyContext'
@@ -399,7 +407,38 @@ export default function App() {
                         <SalesProvider>
                           <ProcurementProvider>
                             <InventoryProvider>
-                              <BusinessOSWorkspace />
+                              <Routes>
+                                <Route element={<AppShell />}>
+                                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                                  <Route path="/dashboard" element={<CommandCenter />} />
+                                  <Route path="/crm/customers/:id" element={<Customer360 />} />
+                                  <Route path="/crm/customers" element={<Customer360 />} />
+                                  <Route path="/crm/customer/:id" element={<Customer360 />} />
+                                  <Route path="/projects/:id" element={<Project360 />} />
+                                  <Route path="/projects" element={<Project360 />} />
+                                  <Route path="/sales/orders/new" element={<SalesOrderWorkspace />} />
+                                  <Route path="/sales/orders/:id" element={<SalesOrderWorkspace />} />
+                                  <Route path="/sales/orders" element={<SalesOrderWorkspace />} />
+                                  <Route path="/accounts/ledger" element={<AccountsLedger />} />
+
+                                  {/* Existing modules accessible in the new shell */}
+                                  <Route path="/crm/*" element={<LegacyModuleWrapper initialPage="crm" bannerInfo={{ message: 'New Object-Centric Customer 360 view available', buttonText: 'View Customer 360', targetPath: '/crm/customers' }} />} />
+                                  <Route path="/sales/*" element={<LegacyModuleWrapper initialPage="sales" bannerInfo={{ message: 'New Full-Page Sales Order Transaction Workspace available', buttonText: 'Open Order Workspace', targetPath: '/sales/orders/new' }} />} />
+                                  <Route path="/procurement/*" element={<LegacyModuleWrapper initialPage="procurement" />} />
+                                  <Route path="/inventory/*" element={<LegacyModuleWrapper initialPage="inventory" />} />
+                                  <Route path="/accounts/*" element={<LegacyModuleWrapper initialPage="accounts" bannerInfo={{ message: 'New Dense General Ledger & Accounts view available', buttonText: 'Open Ledger Workspace', targetPath: '/accounts/ledger' }} />} />
+                                  <Route path="/hr/*" element={<LegacyModuleWrapper initialPage="hr" />} />
+                                  <Route path="/reports/*" element={<LegacyModuleWrapper initialPage="reports" />} />
+                                  <Route path="/admin/*" element={<LegacyModuleWrapper initialPage="admin" />} />
+                                  <Route path="/company-settings/*" element={<LegacyModuleWrapper initialPage="company-settings" />} />
+                                  <Route path="/profile/*" element={<LegacyModuleWrapper initialPage="profile" />} />
+                                  <Route path="/my-work/*" element={<LegacyModuleWrapper initialPage="my-work" />} />
+                                  <Route path="/approvals/*" element={<LegacyModuleWrapper initialPage="approvals" />} />
+                                  <Route path="/notifications/*" element={<LegacyModuleWrapper initialPage="notifications" />} />
+                                  <Route path="/classic/*" element={<BusinessOSWorkspace />} />
+                                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                                </Route>
+                              </Routes>
                             </InventoryProvider>
                           </ProcurementProvider>
                         </SalesProvider>

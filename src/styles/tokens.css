@@ -1,0 +1,132 @@
+/* ============================================================
+   RAJIV BUSINESS OS — Design Tokens
+   ============================================================
+   Single source of truth for all visual properties.
+   Import this ONCE in index.css. All new BOS components
+   reference these variables exclusively.
+   ============================================================ */
+
+:root {
+  /* ── Surfaces ── */
+  --bos-bg: #f5f6f8;
+  --bos-surface: #ffffff;
+  --bos-surface-raised: #ffffff;
+  --bos-surface-overlay: #ffffff;
+  --bos-surface-inset: #f0f1f4;
+  --bos-surface-hover: #f5f6f8;
+  --bos-surface-active: #ecedf1;
+
+  /* ── Borders ── */
+  --bos-border: #e2e4e9;
+  --bos-border-strong: #cdd0d8;
+  --bos-border-subtle: #eff0f3;
+
+  /* ── Text ── */
+  --bos-text-primary: #111318;
+  --bos-text-secondary: #5c6370;
+  --bos-text-tertiary: #8c919c;
+  --bos-text-disabled: #b0b5bf;
+  --bos-text-on-accent: #ffffff;
+  --bos-text-link: #2563eb;
+
+  /* ── Accent ── */
+  --bos-accent: #2563eb;
+  --bos-accent-hover: #1d4ed8;
+  --bos-accent-muted: #dbeafe;
+  --bos-accent-subtle: #eff6ff;
+
+  /* ── Status ── */
+  --bos-success: #059669;
+  --bos-success-muted: #d1fae5;
+  --bos-success-subtle: #ecfdf5;
+  --bos-warning: #d97706;
+  --bos-warning-muted: #fef3c7;
+  --bos-warning-subtle: #fffbeb;
+  --bos-error: #dc2626;
+  --bos-error-muted: #fee2e2;
+  --bos-error-subtle: #fef2f2;
+  --bos-info: #2563eb;
+  --bos-info-muted: #dbeafe;
+
+  /* ── Spacing ── */
+  --bos-space-1: 4px;
+  --bos-space-2: 8px;
+  --bos-space-3: 12px;
+  --bos-space-4: 16px;
+  --bos-space-5: 20px;
+  --bos-space-6: 24px;
+  --bos-space-8: 32px;
+  --bos-space-10: 40px;
+  --bos-space-12: 48px;
+
+  /* ── Radius ── */
+  --bos-radius-sm: 4px;
+  --bos-radius-md: 6px;
+  --bos-radius-lg: 8px;
+  --bos-radius-xl: 12px;
+
+  /* ── Shadows ── */
+  --bos-shadow-xs: 0 1px 2px rgba(0,0,0,0.03);
+  --bos-shadow-sm: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  --bos-shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  --bos-shadow-lg: 0 8px 24px rgba(0,0,0,0.1);
+  --bos-shadow-xl: 0 16px 48px rgba(0,0,0,0.14);
+
+  /* ── Focus ── */
+  --bos-focus-ring: 0 0 0 2px var(--bos-accent-muted), 0 0 0 4px rgba(37,99,235,0.2);
+
+  /* ── Typography ── */
+  --bos-font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bos-font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* ── Layout ── */
+  --bos-rail-width: 56px;
+  --bos-topbar-height: 48px;
+
+  /* ── Transitions ── */
+  --bos-transition-fast: 120ms ease;
+  --bos-transition-base: 200ms ease;
+  --bos-transition-slow: 300ms ease;
+}
+
+/* ── Dark Mode ── */
+.dark {
+  --bos-bg: #0f1117;
+  --bos-surface: #181b22;
+  --bos-surface-raised: #1f222b;
+  --bos-surface-overlay: #252830;
+  --bos-surface-inset: #12141a;
+  --bos-surface-hover: rgba(255,255,255,0.04);
+  --bos-surface-active: rgba(255,255,255,0.07);
+
+  --bos-border: #282c36;
+  --bos-border-strong: #3a3f4b;
+  --bos-border-subtle: #1e2129;
+
+  --bos-text-primary: #ecedf0;
+  --bos-text-secondary: #8c919e;
+  --bos-text-tertiary: #5c6270;
+  --bos-text-disabled: #3e424c;
+  --bos-text-link: #60a5fa;
+
+  --bos-accent: #3b82f6;
+  --bos-accent-hover: #60a5fa;
+  --bos-accent-muted: rgba(59,130,246,0.15);
+  --bos-accent-subtle: rgba(59,130,246,0.08);
+
+  --bos-success-muted: rgba(5,150,105,0.15);
+  --bos-success-subtle: rgba(5,150,105,0.08);
+  --bos-warning-muted: rgba(217,119,6,0.15);
+  --bos-warning-subtle: rgba(217,119,6,0.08);
+  --bos-error-muted: rgba(220,38,38,0.15);
+  --bos-error-subtle: rgba(220,38,38,0.08);
+  --bos-info-muted: rgba(59,130,246,0.15);
+
+  --bos-shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+  --bos-shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --bos-shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+  --bos-shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+  --bos-shadow-xl: 0 16px 48px rgba(0,0,0,0.5);
+
+  --bos-focus-ring: 0 0 0 2px rgba(59,130,246,0.3), 0 0 0 4px rgba(59,130,246,0.15);
+}
