@@ -694,6 +694,8 @@ export default function BusinessOSWorkspace() {
   const topbarRef = useRef(null);
   const searchContainerRef = useRef(null);
   const searchInputRef = useRef(null);
+  const mobileDrawerRef = useRef(null);
+  const mobileBackdropRef = useRef(null);
 
   const togglePopover = (name) => setActivePopover(prev => prev === name ? null : name);
   const closePopovers = () => {
@@ -734,6 +736,182 @@ export default function BusinessOSWorkspace() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [setSearchQuery]);
+
+  // Mobile swipe gesture for sidebar drawer with real-time interactive tracking animation
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let isTracking = false;
+    let isDragging = false;
+    let activePointerId = null;
+    let openArmed = false;
+    let closeArmed = false;
+
+    const getDrawerWidth = () => {
+      if (typeof window === 'undefined') return 280;
+      return Math.min(280, window.innerWidth * 0.85);
+    };
+
+    const handlePointerDown = (e) => {
+      // Only process touch pointers (or primary mouse button if testing)
+      if (e.pointerType && e.pointerType === 'mouse' && e.buttons !== 1) return;
+
+      const target = e.target;
+      // Do not trigger if interacting with form inputs, sliders, or explicit no-swipe elements
+      const isInput = target && target.closest && target.closest('input, textarea, select, [contenteditable="true"], [role="slider"], .no-swipe');
+      if (isInput) return;
+
+      startX = e.clientX;
+      startY = e.clientY;
+      currentX = e.clientX;
+      currentY = e.clientY;
+      activePointerId = e.pointerId;
+
+      if (!isMobileMenuOpen) {
+        // Arm OPEN gesture only if touch starts near the screen left edge (<= 40px)
+        if (startX <= 40) {
+          isTracking = true;
+          openArmed = true;
+          closeArmed = false;
+        } else {
+          isTracking = false;
+          openArmed = false;
+          closeArmed = false;
+        }
+      } else {
+        // When drawer is OPEN, allow right-to-left swipe from anywhere
+        isTracking = true;
+        closeArmed = true;
+        openArmed = false;
+      }
+    };
+
+    const handlePointerMove = (e) => {
+      if (!isTracking || (activePointerId !== null && e.pointerId !== activePointerId)) return;
+
+      currentX = e.clientX;
+      currentY = e.clientY;
+      const deltaX = currentX - startX;
+      const deltaY = currentY - startY;
+      const absDeltaY = Math.abs(deltaY);
+
+      if (!isDragging) {
+        if (openArmed) {
+          if (deltaX > 6 && deltaX > absDeltaY) {
+            isDragging = true;
+            if (mobileDrawerRef.current) mobileDrawerRef.current.style.transition = 'none';
+            if (mobileBackdropRef.current) {
+              mobileBackdropRef.current.style.transition = 'none';
+              mobileBackdropRef.current.style.visibility = 'visible';
+            }
+          } else if (absDeltaY > 15) {
+            isTracking = false;
+            return;
+          }
+        } else if (closeArmed) {
+          if (deltaX < -6 && Math.abs(deltaX) > absDeltaY) {
+            isDragging = true;
+            if (mobileDrawerRef.current) mobileDrawerRef.current.style.transition = 'none';
+            if (mobileBackdropRef.current) {
+              mobileBackdropRef.current.style.transition = 'none';
+              mobileBackdropRef.current.style.visibility = 'visible';
+            }
+          } else if (absDeltaY > 15) {
+            isTracking = false;
+            return;
+          }
+        }
+      }
+
+      if (isDragging) {
+        const drawerW = getDrawerWidth();
+        if (openArmed) {
+          const offset = Math.max(0, Math.min(drawerW, deltaX));
+          const translateX = offset - drawerW;
+          const backdropOpacity = (offset / drawerW);
+          if (mobileDrawerRef.current) {
+            mobileDrawerRef.current.style.transform = `translateX(${translateX}px)`;
+          }
+          if (mobileBackdropRef.current) {
+            mobileBackdropRef.current.style.opacity = `${backdropOpacity}`;
+          }
+        } else if (closeArmed) {
+          const offset = Math.max(-drawerW, Math.min(0, deltaX));
+          const backdropOpacity = 1 + (offset / drawerW);
+          if (mobileDrawerRef.current) {
+            mobileDrawerRef.current.style.transform = `translateX(${offset}px)`;
+          }
+          if (mobileBackdropRef.current) {
+            mobileBackdropRef.current.style.opacity = `${Math.max(0, backdropOpacity)}`;
+          }
+        }
+      }
+    };
+
+    const finishGesture = (finalX, finalY) => {
+      if (!isTracking) return;
+      isTracking = false;
+
+      const deltaX = finalX - startX;
+      const deltaY = finalY - startY;
+      const absDeltaY = Math.abs(deltaY);
+
+      if (mobileDrawerRef.current) {
+        mobileDrawerRef.current.style.transition = 'transform 0.28s cubic-bezier(0.16, 1, 0.3, 1)';
+        mobileDrawerRef.current.style.transform = '';
+      }
+      if (mobileBackdropRef.current) {
+        mobileBackdropRef.current.style.transition = 'opacity 0.28s ease, visibility 0.28s ease';
+        mobileBackdropRef.current.style.opacity = '';
+        mobileBackdropRef.current.style.visibility = '';
+      }
+
+      if (openArmed) {
+        if (deltaX > 50 && deltaX > absDeltaY * 1.5) {
+          setIsMobileMenuOpen(true);
+        } else {
+          setIsMobileMenuOpen(false);
+        }
+      } else if (closeArmed) {
+        if (deltaX < -50 && Math.abs(deltaX) > absDeltaY * 1.5) {
+          setIsMobileMenuOpen(false);
+        } else {
+          setIsMobileMenuOpen(true);
+        }
+      }
+
+      activePointerId = null;
+      openArmed = false;
+      closeArmed = false;
+      isDragging = false;
+    };
+
+    const handlePointerUp = (e) => {
+      if (activePointerId !== null && e.pointerId !== activePointerId) return;
+      const finalX = e.clientX !== undefined ? e.clientX : currentX;
+      const finalY = e.clientY !== undefined ? e.clientY : currentY;
+      finishGesture(finalX, finalY);
+    };
+
+    const handlePointerCancel = (e) => {
+      if (activePointerId !== null && e.pointerId !== activePointerId) return;
+      finishGesture(currentX, currentY);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerup', handlePointerUp, { passive: true });
+    window.addEventListener('pointercancel', handlePointerCancel, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+    };
+  }, [isMobileMenuOpen]);
 
   const effectiveRole = previewRole || (tenantRole || 'TEAM').toUpperCase();
   const role = roleMeta[effectiveRole]?.label || effectiveRole;
@@ -1318,7 +1496,7 @@ export default function BusinessOSWorkspace() {
         {page === 'procurement' && <ProcurementWorkspace />}
         {page === 'inventory' && <InventoryWorkspace isDarkMode={isDarkMode} />}
         {page === 'crm' && <CrmWorkspace embedded />}
-        {page === 'accounts' && <AccountsWorkspace />}
+        {page === 'accounts' && <AccountsWorkspace isDarkMode={isDarkMode} />}
         {page === 'hr' && (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
@@ -1430,10 +1608,16 @@ export default function BusinessOSWorkspace() {
       </div>
 
       {/* MOBILE DRAWER */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden">
-          <div className="os-mobile-drawer-backdrop" onClick={() => setIsMobileMenuOpen(false)} />
-          <aside className="os-mobile-drawer">
+      <div className="md:hidden">
+        <div
+          ref={mobileBackdropRef}
+          className={`os-mobile-drawer-backdrop ${isMobileMenuOpen ? 'open' : ''}`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+        <aside
+          ref={mobileDrawerRef}
+          className={`os-mobile-drawer ${isMobileMenuOpen ? 'open' : ''}`}
+        >
             <div className="h-14 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="os-rail-logo text-sm font-bold w-7 h-7">R</div>
@@ -1541,7 +1725,6 @@ export default function BusinessOSWorkspace() {
             </div>
           </aside>
         </div>
-      )}
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
       <nav className="os-mobile-bottom-nav md:hidden" aria-label="Mobile Navigation">
@@ -1563,10 +1746,6 @@ export default function BusinessOSWorkspace() {
             <span className="absolute top-1.5 right-1/4 h-2 w-2 rounded-full bg-rose-500" />
           )}
           <span>Alerts</span>
-        </button>
-        <button onClick={() => setIsMobileMenuOpen(true)} className="os-mobile-tab">
-          <Menu size={18} />
-          <span>Menu</span>
         </button>
       </nav>
     </main>

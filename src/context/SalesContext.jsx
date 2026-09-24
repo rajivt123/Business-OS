@@ -317,7 +317,7 @@ export function SalesProvider({ children }) {
     try {
       let query = supabase
         .from('accounting_bank_accounts')
-        .select('id, account_name, bank_name, account_number, ledger_account_id')
+        .select('id, account_name, bank_name, ledger_account_id')
         .order('created_at', { ascending: false });
 
       if (tenantId) query = query.eq('tenant_id', tenantId);

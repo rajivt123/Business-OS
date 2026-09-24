@@ -136,7 +136,7 @@ export function AccountsProvider({ children }) {
         .select(`
           *,
           lines:accounting_journal_lines(
-            id, account_id, debit, credit, narration,
+            id, account_id, debit, credit,
             account:chart_of_accounts(id, account_code, account_name)
           )
         `)

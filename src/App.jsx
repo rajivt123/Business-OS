@@ -29,16 +29,35 @@ export default function App() {
   const [message, setMessage] = useState('')
   const [authMode, setAuthMode] = useState('login') // 'login' | 'forgot' | 'reset'
   
-  // FIXED: Always start in Light Mode (false) every time the page loads or refreshes!
-  const [isDarkMode, setIsDarkMode] = useState(false) 
+  // Authoritative app theme state with localStorage persistence (no system preference fallback)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rajiv_os_theme') || localStorage.getItem('theme');
+      if (saved === 'dark') return true;
+      if (saved === 'light') return false;
+    }
+    return false; // deterministic default: light mode
+  });
 
   useEffect(() => {
     if (isDarkMode) {
-      document.documentElement.classList.add('dark')
+      document.documentElement.classList.add('dark');
+      try {
+        localStorage.setItem('rajiv_os_theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+      } catch (e) {
+        console.warn('Failed to save theme to localStorage:', e);
+      }
     } else {
-      document.documentElement.classList.remove('dark')
+      document.documentElement.classList.remove('dark');
+      try {
+        localStorage.setItem('rajiv_os_theme', 'light');
+        localStorage.setItem('theme', 'light');
+      } catch (e) {
+        console.warn('Failed to save theme to localStorage:', e);
+      }
     }
-  }, [isDarkMode])
+  }, [isDarkMode]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {

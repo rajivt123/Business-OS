@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -913,6 +915,16 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     inset: 0;
     z-index: 55;
     background: rgba(15, 23, 42, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.28s ease, visibility 0.28s ease;
+    will-change: opacity;
+  }
+  .os-mobile-drawer-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
   }
 
   .os-mobile-drawer {
@@ -927,12 +939,25 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     z-index: 60;
     display: flex;
     flex-direction: column;
-    box-shadow: 10px 0 25px rgba(0, 0, 0, 0.1);
+    box-shadow: 10px 0 25px rgba(0, 0, 0, 0.15);
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+  }
+  .os-mobile-drawer.open {
+    transform: translateX(0);
   }
 }
 
 /* --- RESPONSIVE BREAKPOINTS --- */
 @media (max-width: 768px) {
+  .business-os,
+  .os-main,
+  .os-content,
+  .os-mobile-drawer,
+  .os-mobile-drawer-backdrop {
+    touch-action: pan-y;
+  }
   .os-rail {
     display: none;
   }
@@ -950,3 +975,4 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     align-items: flex-start;
   }
 }
+
