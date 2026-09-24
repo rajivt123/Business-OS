@@ -652,7 +652,38 @@ export default function BusinessOSWorkspace() {
     }
     return '';
   });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 800 : false);
+  const [isRailHovered, setIsRailHovered] = useState(false);
+  const [isRailPinned, setIsRailPinned] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('rajiv_os_rail_pinned') === 'true';
+    }
+    return false;
+  });
+  const hoverTimeoutRef = useRef(null);
+
+  const isExpanded = isRailPinned || isRailHovered;
+
+  const handleMouseEnter = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setIsRailHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsRailHovered(false);
+    }, 120);
+  };
+
+  const toggleRailPinned = () => {
+    setIsRailPinned(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('rajiv_os_rail_pinned', String(next));
+      }
+      return next;
+    });
+  };
   const [previewRole, setPreviewRole] = useState(null);
   const [activePopover, setActivePopover] = useState(null); // 'company' | 'profile' | 'role' | null
   const [showCreateMenu, setShowCreateMenu] = useState(false);
@@ -788,65 +819,143 @@ export default function BusinessOSWorkspace() {
       setIsAiChatOpen?.(true);
     }
     go(id);
+    if (!isRailPinned) {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      setIsRailHovered(false);
+    }
   };
 
   const meta = pageMeta[page] || pageMeta.dashboard;
 
   return <div className={`business-os ${isDarkMode ? 'dark' : ''}`}>
-    {/* DESKTOP COMPACT NAVIGATION RAIL (60px) */}
-    <nav className="os-rail hidden md:flex" aria-label="Main Navigation">
-      <div className="os-rail-brand">
-        <div className="os-rail-logo" title="Rajiv Business OS">
-          R
-        </div>
-      </div>
-
-      <div className="os-rail-nav custom-scrollbar">
-        {filteredNav.map((section, sIdx) => (
-          <div key={section.label} className="w-full flex flex-col items-center">
-            {sIdx > 0 && <div className="os-rail-divider" />}
-            <div className="w-full flex flex-col items-center gap-1">
-              {section.items.map(([id, label, Icon]) => (
-                <button
-                  key={id}
-                  onClick={() => handleNav(id)}
-                  className={`os-rail-btn ${page === id ? 'active' : ''}`}
-                  aria-label={label}
-                >
-                  <Icon size={18} />
-                  {id === 'notifications' && unreadNotificationsCount > 0 && (
-                    <span className="os-rail-badge">
-                      {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
-                    </span>
-                  )}
-                  <div className="os-rail-tooltip">{label}</div>
-                </button>
-              ))}
+    {/* DESKTOP NAVIGATION RAIL WITH HOVER EXPANSION */}
+    <div
+      className={`hidden md:block os-rail-wrapper ${isRailPinned ? 'w-60' : 'w-[60px]'}`}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <nav
+        className={`os-rail ${isExpanded ? 'os-rail-expanded' : ''} ${
+          isRailPinned ? 'os-rail-pinned' : ''
+        }`}
+        aria-label="Main Navigation"
+      >
+        <div className={`os-rail-brand ${isExpanded ? 'px-3 justify-between' : 'justify-center'}`}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="os-rail-logo" title="Rajiv Business OS">
+              R
             </div>
+            {isExpanded && (
+              <div className="flex flex-col min-w-0 overflow-hidden">
+                <span className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white leading-tight truncate">
+                  RAJIV OS
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
+                  Business OS
+                </span>
+              </div>
+            )}
           </div>
-        ))}
-      </div>
+          {isExpanded && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleRailPinned();
+              }}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                isRailPinned ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30' : ''
+              }`}
+              title={isRailPinned ? 'Unpin sidebar (collapse on mouse leave)' : 'Pin sidebar open'}
+              aria-label={isRailPinned ? 'Unpin sidebar' : 'Pin sidebar'}
+            >
+              {isRailPinned ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+            </button>
+          )}
+        </div>
 
-      <div className="os-rail-footer">
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="os-rail-btn"
-          aria-label="Toggle theme"
-          title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        >
-          <span className="text-sm leading-none">{isDarkMode ? '☀' : '◐'}</span>
-          <div className="os-rail-tooltip">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</div>
-        </button>
-        <button
-          onClick={() => go('profile')}
-          className={`os-rail-btn ${page === 'profile' ? 'active' : ''}`}
-          aria-label="My Profile"
-        >
-          <UserRound size={18} />
-          <div className="os-rail-tooltip">My Profile</div>
-        </button>
-      </div>
-    </nav>
+        <div className="os-rail-nav custom-scrollbar">
+          {filteredNav.map((section, sIdx) => (
+            <div key={section.label} className="w-full">
+              {isExpanded ? (
+                <div className="px-3 pt-3 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  {section.label}
+                </div>
+              ) : (
+                sIdx > 0 && <div className="os-rail-divider mx-auto" />
+              )}
+              <div className={`w-full flex flex-col ${isExpanded ? 'gap-0.5 px-2' : 'items-center gap-1'}`}>
+                {section.items.map(([id, label, Icon]) => (
+                  <button
+                    key={id}
+                    onClick={() => handleNav(id)}
+                    className={
+                      isExpanded
+                        ? `os-rail-item-expanded ${page === id ? 'active' : ''}`
+                        : `os-rail-btn ${page === id ? 'active' : ''}`
+                    }
+                    aria-label={label}
+                    title={!isExpanded ? label : undefined}
+                  >
+                    <Icon size={18} className="shrink-0" />
+                    {isExpanded && (
+                      <span className="truncate flex-1 text-left text-xs font-semibold">{label}</span>
+                    )}
+                    {id === 'notifications' && unreadNotificationsCount > 0 && (
+                      <span className={isExpanded ? 'os-rail-badge-expanded' : 'os-rail-badge'}>
+                        {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                      </span>
+                    )}
+                    {!isExpanded && <div className="os-rail-tooltip">{label}</div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className={`os-rail-footer ${isExpanded ? 'px-2' : ''}`}>
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className={isExpanded ? 'os-rail-item-expanded' : 'os-rail-btn'}
+            aria-label="Toggle theme"
+            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            <span className="text-sm leading-none shrink-0 flex items-center justify-center w-5">
+              {isDarkMode ? '☀' : '◐'}
+            </span>
+            {isExpanded && (
+              <span className="truncate flex-1 text-left text-xs font-semibold">
+                {isDarkMode ? 'Light Mode' : 'Dark Mode'}
+              </span>
+            )}
+            {!isExpanded && <div className="os-rail-tooltip">{isDarkMode ? 'Light Mode' : 'Dark Mode'}</div>}
+          </button>
+          <button
+            onClick={() => go('profile')}
+            className={
+              isExpanded
+                ? `os-rail-item-expanded ${page === 'profile' ? 'active' : ''}`
+                : `os-rail-btn ${page === 'profile' ? 'active' : ''}`
+            }
+            aria-label="My Profile"
+            title={!isExpanded ? 'My Profile' : undefined}
+          >
+            <UserRound size={18} className="shrink-0" />
+            {isExpanded && (
+              <div className="truncate flex-1 text-left min-w-0">
+                <div className="truncate text-xs font-bold leading-tight text-slate-800 dark:text-slate-200">
+                  {currentUser?.email?.split('@')[0] || 'My Profile'}
+                </div>
+                <div className="text-[10px] text-slate-400 leading-tight truncate">
+                  {role}
+                </div>
+              </div>
+            )}
+            {!isExpanded && <div className="os-rail-tooltip">My Profile</div>}
+          </button>
+        </div>
+      </nav>
+    </div>
 
     <main className="os-main">
       {/* SINGLE CLEAN TOPBAR */}

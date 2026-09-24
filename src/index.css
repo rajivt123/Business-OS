@@ -102,19 +102,46 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
 }
 
 @layer components {
-  /* --- DESKTOP COMPACT NAVIGATION RAIL (60px) --- */
+  /* --- DESKTOP NAVIGATION RAIL (60px compact with hover expansion to 240px) --- */
+  .os-rail-wrapper {
+    position: relative;
+    z-index: 40;
+    height: 100%;
+    flex-shrink: 0;
+    transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
   .os-rail {
     width: 60px;
-    flex: 0 0 60px;
+    height: 100%;
     background: var(--os-surface);
     border-right: 1px solid var(--os-border);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    height: 100%;
     position: relative;
     z-index: 30;
     user-select: none;
+    transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease;
+    overflow: hidden;
+  }
+
+  .os-rail.os-rail-expanded {
+    width: 240px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    box-shadow: 10px 0 35px -5px rgba(0, 0, 0, 0.15);
+  }
+
+  .dark .os-rail.os-rail-expanded {
+    box-shadow: 10px 0 35px -5px rgba(0, 0, 0, 0.55);
+  }
+
+  .os-rail.os-rail-expanded.os-rail-pinned {
+    position: relative;
+    box-shadow: none;
   }
 
   .os-rail-brand {
@@ -122,8 +149,8 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     width: 100%;
     display: flex;
     align-items: center;
-    justify-content: center;
     border-bottom: 1px solid var(--os-border);
+    transition: padding 0.15s ease;
   }
 
   .os-rail-logo {
@@ -138,6 +165,7 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     font-size: 16px;
     font-weight: 800;
     letter-spacing: -0.02em;
+    flex-shrink: 0;
   }
 
   .os-rail-nav {
@@ -148,7 +176,6 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     padding: 8px 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
   }
 
   .os-rail-divider {
@@ -194,6 +221,63 @@ html.font-scale-130, body.font-scale-130, html.font-scale-2xl, body.font-scale-2
     width: 3px;
     border-radius: 9999px;
     background: var(--os-primary);
+  }
+
+  /* Expanded items */
+  .os-rail-item-expanded {
+    width: 100%;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    color: var(--os-muted);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s ease, background 0.15s ease;
+    text-align: left;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .os-rail-item-expanded:hover {
+    color: var(--os-text);
+    background: var(--os-surface-hover);
+  }
+
+  .os-rail-item-expanded.active {
+    color: var(--os-primary);
+    background: var(--os-primary-subtle);
+    font-weight: 700;
+  }
+
+  .os-rail-item-expanded.active::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 7px;
+    bottom: 7px;
+    width: 3px;
+    border-radius: 9999px;
+    background: var(--os-primary);
+  }
+
+  .os-rail-badge-expanded {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
   .os-rail-tooltip {
