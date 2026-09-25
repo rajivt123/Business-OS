@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import * as XLSX from 'xlsx'
-import { X, AlertCircle, Bell, Trash2, RotateCcw, History, Paperclip, Loader2, ChevronUp, ChevronDown, Plus, ShieldCheck, ArrowRightLeft, CalendarClock, Search, Users, UserPlus, UserCheck, UserX, UserMinus, Lock, Copy, Check, Database, AlertTriangle, Download, ExternalLink, Eye, FileText, FileSpreadsheet } from 'lucide-react'
+import { X, AlertCircle, Bell, Trash2, RotateCcw, History, Paperclip, Loader2, ChevronUp, ChevronDown, Plus, ShieldCheck, ArrowRightLeft, ArrowDown, CalendarClock, Search, Users, UserPlus, UserCheck, UserX, UserMinus, Lock, Copy, Check, Database, AlertTriangle, Download, ExternalLink, Eye, FileText, FileSpreadsheet } from 'lucide-react'
 import { useCrm, getUserDisplayName } from '../../context/CrmContext'
 import {
   listBusinessAttachments,
@@ -77,10 +78,23 @@ export default function Modals() {
   useEffect(() => {
     if (isWorkModalOpen && editingWorkId) {
       loadWorkAttachments(editingWorkId)
+      setPoFile(null)
+      setWoFile(null)
+      setBoqFile(null)
     } else if (isWorkModalOpen && !editingWorkId) {
       setWorkAttachments({ po: null, wo: null, boq: null })
+      setPoFile(null)
+      setWoFile(null)
+      setBoqFile(null)
     }
   }, [isWorkModalOpen, editingWorkId])
+
+  const handleCloseWorkModal = () => {
+    setPoFile(null)
+    setWoFile(null)
+    setBoqFile(null)
+    setIsWorkModalOpen(false)
+  }
 
   const handlePreviewWorkAttachment = async (fieldKey) => {
     const att = workAttachments[fieldKey]
@@ -621,7 +635,7 @@ export default function Modals() {
           <div className={`${tModal} border p-6 rounded-2xl w-full max-w-md`}>
             <div className="flex justify-between items-center mb-6">
               <h3 className={`text-lg font-bold ${tText}`}>{editingWorkId ? 'Edit PO/WO' : 'New PO/WO'}</h3>
-              <button onClick={() => setIsWorkModalOpen(false)} className={`${tMuted} hover:text-sky-500`}><X size={20} /></button>
+              <button type="button" onClick={handleCloseWorkModal} className={`${tMuted} hover:text-sky-500`}><X size={20} /></button>
             </div>
             <form onSubmit={submitWork} className="space-y-4">
               <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${tMuted}`}>System / Title</label>
@@ -651,8 +665,8 @@ export default function Modals() {
                         <p className="truncate font-bold text-slate-800 dark:text-slate-200">
                           {workAttachments.po.file_name}
                         </p>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          Existing PO Attached • {formatBytes(workAttachments.po.file_size_bytes)}
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          Existing file • {formatBytes(workAttachments.po.file_size_bytes)}
                         </span>
                       </div>
                     </div>
@@ -660,39 +674,101 @@ export default function Modals() {
                       <button
                         type="button"
                         onClick={() => handlePreviewWorkAttachment('po')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Eye size={12} /> Preview
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDownloadWorkAttachment('po')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Download size={12} /> Download
                       </button>
-                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
-                        <RotateCcw size={12} /> Replace
-                        <input type="file" onChange={e => handleReplaceWorkAttachment('po', e.target.files[0])} className="hidden" />
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 hover:bg-amber-100 dark:hover:bg-amber-500/20 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> {poFile ? 'Change Selection' : 'Replace'}
+                        <input
+                          type="file"
+                          onChange={e => {
+                            if (e.target.files?.[0]) setPoFile(e.target.files[0])
+                            e.target.value = ''
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       <button
                         type="button"
-                        onClick={() => handleArchiveWorkAttachment('po')}
+                        onClick={() => {
+                          setPoFile(null)
+                          handleArchiveWorkAttachment('po')
+                        }}
                         className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
                       >
                         <Trash2 size={12} /> Remove
                       </button>
                     </div>
+
+                    {/* NEW FILE SELECTED — Pending Replacement State */}
+                    {poFile && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-center gap-1 text-amber-500 dark:text-amber-400 py-0.5">
+                          <ArrowDown size={14} className="animate-bounce" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Replacing with</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/30 text-xs">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
+                              NEW FILE SELECTED
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPoFile(null)}
+                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Discard Selection
+                            </button>
+                          </div>
+                          <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {poFile.name}
+                          </p>
+                          <div className="flex items-center justify-between mt-1 text-[11px]">
+                            <span className="text-slate-500 dark:text-slate-400">{formatBytes(poFile.size)}</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Check size={12} /> Ready to replace on Save
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
                     <input
                       type="file"
-                      onChange={e => setPoFile(e.target.files[0])}
+                      onChange={e => {
+                        if (e.target.files?.[0]) setPoFile(e.target.files[0])
+                        e.target.value = ''
+                      }}
                       className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 ${tText}`}
                     />
                     {poFile && (
-                      <span className="text-[10px] text-amber-500 font-medium block mt-1">Ready to upload on save: {poFile.name} ({formatBytes(poFile.size)})</span>
+                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                            NEW FILE SELECTED • Ready to upload on Save
+                          </span>
+                          <p className="truncate font-bold text-slate-800 dark:text-slate-200">{poFile.name}</p>
+                          <span className="text-[10px] text-slate-400">{formatBytes(poFile.size)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPoFile(null)}
+                          className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 ml-2"
+                        >
+                          Clear
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -713,8 +789,8 @@ export default function Modals() {
                         <p className="truncate font-bold text-slate-800 dark:text-slate-200">
                           {workAttachments.wo.file_name}
                         </p>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          Existing WO Attached • {formatBytes(workAttachments.wo.file_size_bytes)}
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          Existing file • {formatBytes(workAttachments.wo.file_size_bytes)}
                         </span>
                       </div>
                     </div>
@@ -722,39 +798,101 @@ export default function Modals() {
                       <button
                         type="button"
                         onClick={() => handlePreviewWorkAttachment('wo')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Eye size={12} /> Preview
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDownloadWorkAttachment('wo')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Download size={12} /> Download
                       </button>
-                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
-                        <RotateCcw size={12} /> Replace
-                        <input type="file" onChange={e => handleReplaceWorkAttachment('wo', e.target.files[0])} className="hidden" />
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> {woFile ? 'Change Selection' : 'Replace'}
+                        <input
+                          type="file"
+                          onChange={e => {
+                            if (e.target.files?.[0]) setWoFile(e.target.files[0])
+                            e.target.value = ''
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       <button
                         type="button"
-                        onClick={() => handleArchiveWorkAttachment('wo')}
+                        onClick={() => {
+                          setWoFile(null)
+                          handleArchiveWorkAttachment('wo')
+                        }}
                         className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
                       >
                         <Trash2 size={12} /> Remove
                       </button>
                     </div>
+
+                    {/* NEW FILE SELECTED — Pending Replacement State */}
+                    {woFile && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-center gap-1 text-sky-500 dark:text-sky-400 py-0.5">
+                          <ArrowDown size={14} className="animate-bounce" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Replacing with</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/30 text-xs">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
+                              NEW FILE SELECTED
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setWoFile(null)}
+                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Discard Selection
+                            </button>
+                          </div>
+                          <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {woFile.name}
+                          </p>
+                          <div className="flex items-center justify-between mt-1 text-[11px]">
+                            <span className="text-slate-500 dark:text-slate-400">{formatBytes(woFile.size)}</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Check size={12} /> Ready to replace on Save
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
                     <input
                       type="file"
-                      onChange={e => setWoFile(e.target.files[0])}
+                      onChange={e => {
+                        if (e.target.files?.[0]) setWoFile(e.target.files[0])
+                        e.target.value = ''
+                      }}
                       className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 ${tText}`}
                     />
                     {woFile && (
-                      <span className="text-[10px] text-sky-500 font-medium block mt-1">Ready to upload on save: {woFile.name} ({formatBytes(woFile.size)})</span>
+                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                            NEW FILE SELECTED • Ready to upload on Save
+                          </span>
+                          <p className="truncate font-bold text-slate-800 dark:text-slate-200">{woFile.name}</p>
+                          <span className="text-[10px] text-slate-400">{formatBytes(woFile.size)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setWoFile(null)}
+                          className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 ml-2"
+                        >
+                          Clear
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -775,8 +913,8 @@ export default function Modals() {
                         <p className="truncate font-bold text-slate-800 dark:text-slate-200">
                           {workAttachments.boq.file_name}
                         </p>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          Existing BOQ Attached • {formatBytes(workAttachments.boq.file_size_bytes)}
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          Existing file • {formatBytes(workAttachments.boq.file_size_bytes)}
                         </span>
                       </div>
                     </div>
@@ -784,29 +922,73 @@ export default function Modals() {
                       <button
                         type="button"
                         onClick={() => handlePreviewWorkAttachment('boq')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Eye size={12} /> Preview
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDownloadWorkAttachment('boq')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Download size={12} /> Download
                       </button>
-                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
-                        <RotateCcw size={12} /> Replace
-                        <input type="file" onChange={e => handleReplaceWorkAttachment('boq', e.target.files[0])} className="hidden" />
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> {boqFile ? 'Change Selection' : 'Replace'}
+                        <input
+                          type="file"
+                          onChange={e => {
+                            if (e.target.files?.[0]) setBoqFile(e.target.files[0])
+                            e.target.value = ''
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       <button
                         type="button"
-                        onClick={() => handleArchiveWorkAttachment('boq')}
+                        onClick={() => {
+                          setBoqFile(null)
+                          handleArchiveWorkAttachment('boq')
+                        }}
                         className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
                       >
                         <Trash2 size={12} /> Remove
                       </button>
                     </div>
+
+                    {/* NEW FILE SELECTED — Pending Replacement State */}
+                    {boqFile && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-center gap-1 text-indigo-500 dark:text-indigo-400 py-0.5">
+                          <ArrowDown size={14} className="animate-bounce" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Replacing with</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/30 text-xs">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
+                              NEW FILE SELECTED
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setBoqFile(null)}
+                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Discard Selection
+                            </button>
+                          </div>
+                          <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {boqFile.name}
+                          </p>
+                          <div className="flex items-center justify-between mt-1 text-[11px]">
+                            <span className="text-slate-500 dark:text-slate-400">{formatBytes(boqFile.size)}</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Check size={12} /> Ready to replace on Save
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : workForm.boq_url ? (
                   <div className="space-y-2">
@@ -816,7 +998,7 @@ export default function Modals() {
                         <p className="truncate font-bold text-slate-800 dark:text-slate-200">
                           Existing BOQ Attached (Legacy)
                         </p>
-                        <span className="text-[10px] text-slate-400 font-normal">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
                           Supabase Storage File
                         </span>
                       </div>
@@ -825,48 +1007,125 @@ export default function Modals() {
                       <button
                         type="button"
                         onClick={() => handlePreviewWorkAttachment('boq')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Eye size={12} /> Preview
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDownloadWorkAttachment('boq')}
-                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer transition"
                       >
                         <Download size={12} /> Download
                       </button>
-                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
-                        <RotateCcw size={12} /> Replace
-                        <input type="file" onChange={e => handleReplaceWorkAttachment('boq', e.target.files[0])} className="hidden" />
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> {boqFile ? 'Change Selection' : 'Replace'}
+                        <input
+                          type="file"
+                          onChange={e => {
+                            if (e.target.files?.[0]) setBoqFile(e.target.files[0])
+                            e.target.value = ''
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       <button
                         type="button"
-                        onClick={() => handleArchiveWorkAttachment('boq')}
+                        onClick={() => {
+                          setBoqFile(null)
+                          handleArchiveWorkAttachment('boq')
+                        }}
                         className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
                       >
                         <Trash2 size={12} /> Remove
                       </button>
                     </div>
+
+                    {/* NEW FILE SELECTED — Pending Replacement State */}
+                    {boqFile && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-center gap-1 text-indigo-500 dark:text-indigo-400 py-0.5">
+                          <ArrowDown size={14} className="animate-bounce" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider">Replacing with</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-emerald-500/10 border-2 border-emerald-500/30 text-xs">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
+                              NEW FILE SELECTED
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setBoqFile(null)}
+                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Discard Selection
+                            </button>
+                          </div>
+                          <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {boqFile.name}
+                          </p>
+                          <div className="flex items-center justify-between mt-1 text-[11px]">
+                            <span className="text-slate-500 dark:text-slate-400">{formatBytes(boqFile.size)}</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Check size={12} /> Ready to replace on Save
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
                     <input
                       type="file"
-                      onChange={e => setBoqFile(e.target.files[0])}
+                      onChange={e => {
+                        if (e.target.files?.[0]) setBoqFile(e.target.files[0])
+                        e.target.value = ''
+                      }}
                       className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 ${tText}`}
                     />
                     {boqFile && (
-                      <span className="text-[10px] text-indigo-500 font-medium block mt-1">Ready to upload on save: {boqFile.name} ({formatBytes(boqFile.size)})</span>
+                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                            NEW FILE SELECTED • Ready to upload on Save
+                          </span>
+                          <p className="truncate font-bold text-slate-800 dark:text-slate-200">{boqFile.name}</p>
+                          <span className="text-[10px] text-slate-400">{formatBytes(boqFile.size)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setBoqFile(null)}
+                          className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 ml-2"
+                        >
+                          Clear
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
               </div>
 
-              <button type="submit" disabled={isWorkUploading} className="w-full bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition mt-4 shadow-md flex items-center justify-center gap-2">
-                {isWorkUploading ? <Loader2 size={16} className="animate-spin" /> : null}
-                {isWorkUploading ? 'Saving...' : 'Save Document'}
-              </button>
+              <div className="flex items-center gap-2 mt-5">
+                <button
+                  type="button"
+                  onClick={handleCloseWorkModal}
+                  className={`px-4 py-2.5 rounded-lg border text-sm font-semibold transition cursor-pointer ${
+                    isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isWorkUploading}
+                  className="flex-1 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg transition shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  {isWorkUploading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {isWorkUploading ? 'Saving...' : 'Save Document'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1747,16 +2006,29 @@ function ExcelPreviewViewer({ url, isDarkMode }) {
 // --- INSTANT DOCUMENT PREVIEW MODAL COMPONENT ---
 function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal, tText }) {
   if (!docPreviewModal?.isOpen || !docPreviewModal?.url) return null;
+  if (typeof document === 'undefined') return null;
 
   const { url, title } = docPreviewModal;
-  const lowerUrl = url.toLowerCase();
-  const isImage = lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) || lowerUrl.startsWith('data:image');
-  const isExcel = lowerUrl.match(/\.(xlsx|xls|csv|ods)($|\?)/i) || lowerUrl.includes('.xlsx') || lowerUrl.includes('.xls') || lowerUrl.includes('.csv');
-  const isWordOrDoc = lowerUrl.match(/\.(docx|doc|pptx|ppt)($|\?)/i);
+  const lowerUrl = (url || '').toLowerCase();
+  const lowerTitle = (title || '').toLowerCase();
+  const isImage = lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) || lowerUrl.startsWith('data:image') || lowerTitle.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i);
+  const isExcel = lowerUrl.match(/\.(xlsx|xls|csv|ods)($|\?)/i) || lowerUrl.includes('.xlsx') || lowerUrl.includes('.xls') || lowerUrl.includes('.csv') || lowerTitle.match(/\.(xlsx|xls|csv|ods)/i);
+  const isWordOrDoc = lowerUrl.match(/\.(docx|doc|pptx|ppt)($|\?)/i) || lowerTitle.match(/\.(docx|doc|pptx|ppt)/i);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-950/80 backdrop-blur-md transition-all">
-      <div className={`w-full max-w-5xl h-[88vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${tModal}`}>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-5 bg-slate-950/85 backdrop-blur-md transition-all"
+      style={{ zIndex: 9999 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          closeDocPreview();
+        }
+      }}
+    >
+      <div
+        className={`w-full max-w-5xl h-[88vh] flex flex-col rounded-2xl border shadow-2xl overflow-hidden ${tModal}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Top Bar with Document Title & Action Controls */}
         <div className={`px-4 py-3 border-b flex items-center justify-between shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
@@ -1799,8 +2071,12 @@ function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal,
 
             {/* Close Button */}
             <button
-              onClick={closeDocPreview}
-              className={`p-1.5 rounded-lg border transition ${
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                closeDocPreview();
+              }}
+              className={`p-1.5 rounded-lg border transition cursor-pointer ${
                 isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-rose-400' : 'bg-slate-100 border-slate-200 text-slate-500 hover:text-rose-600'
               }`}
               title="Close Preview"
@@ -1832,7 +2108,8 @@ function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal,
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

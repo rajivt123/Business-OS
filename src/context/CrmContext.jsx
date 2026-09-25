@@ -750,7 +750,13 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     if (isAdminPanelOpen) { setIsAdminPanelOpen(false); return true; }
     if (isBinModalOpen) { setIsBinModalOpen(false); return true; }
     if (isStageManagerOpen) { setIsStageManagerOpen(false); return true; }
-    if (isWorkModalOpen) { setIsWorkModalOpen(false); return true; }
+    if (isWorkModalOpen) {
+      setPoFile(null);
+      setWoFile(null);
+      setBoqFile(null);
+      setIsWorkModalOpen(false);
+      return true;
+    }
     if (isReminderModalOpen) { setIsReminderModalOpen(false); return true; }
     if (isIssueModalOpen) { setIsIssueModalOpen(false); return true; }
     if (isSidebarOpen) { setIsSidebarOpen(false); return true; }
@@ -3902,13 +3908,32 @@ USER REQUEST: ${trimmedMsg}`;
 
     if (poFile && targetWorkId) {
       try {
-        await uploadBusinessAttachment({
-          tenantCompanyId: targetTenantCoId,
+        const existingAtts = editingWorkId ? await listBusinessAttachments({
           entityType: 'work',
           entityId: targetWorkId,
           fieldKey: 'po',
-          file: poFile
-        });
+          includeArchived: false
+        }) : [];
+        const oldAtt = Array.isArray(existingAtts) && existingAtts.length > 0 ? existingAtts[0] : null;
+
+        if (oldAtt?.id) {
+          await replaceBusinessAttachment({
+            tenantCompanyId: targetTenantCoId,
+            entityType: 'work',
+            entityId: targetWorkId,
+            fieldKey: 'po',
+            file: poFile,
+            oldAttachmentId: oldAtt.id
+          });
+        } else {
+          await uploadBusinessAttachment({
+            tenantCompanyId: targetTenantCoId,
+            entityType: 'work',
+            entityId: targetWorkId,
+            fieldKey: 'po',
+            file: poFile
+          });
+        }
       } catch (err) {
         console.error('[CrmContext] Error uploading PO to R2:', err);
         showToast(`Warning: Project saved but PO upload failed: ${err.message}`);
@@ -3917,13 +3942,32 @@ USER REQUEST: ${trimmedMsg}`;
 
     if (woFile && targetWorkId) {
       try {
-        await uploadBusinessAttachment({
-          tenantCompanyId: targetTenantCoId,
+        const existingAtts = editingWorkId ? await listBusinessAttachments({
           entityType: 'work',
           entityId: targetWorkId,
           fieldKey: 'wo',
-          file: woFile
-        });
+          includeArchived: false
+        }) : [];
+        const oldAtt = Array.isArray(existingAtts) && existingAtts.length > 0 ? existingAtts[0] : null;
+
+        if (oldAtt?.id) {
+          await replaceBusinessAttachment({
+            tenantCompanyId: targetTenantCoId,
+            entityType: 'work',
+            entityId: targetWorkId,
+            fieldKey: 'wo',
+            file: woFile,
+            oldAttachmentId: oldAtt.id
+          });
+        } else {
+          await uploadBusinessAttachment({
+            tenantCompanyId: targetTenantCoId,
+            entityType: 'work',
+            entityId: targetWorkId,
+            fieldKey: 'wo',
+            file: woFile
+          });
+        }
       } catch (err) {
         console.error('[CrmContext] Error uploading WO to R2:', err);
         showToast(`Warning: Project saved but WO upload failed: ${err.message}`);
@@ -3932,13 +3976,32 @@ USER REQUEST: ${trimmedMsg}`;
 
     if (boqFile && targetWorkId) {
       try {
-        await uploadBusinessAttachment({
-          tenantCompanyId: targetTenantCoId,
+        const existingAtts = editingWorkId ? await listBusinessAttachments({
           entityType: 'work',
           entityId: targetWorkId,
           fieldKey: 'boq',
-          file: boqFile
-        });
+          includeArchived: false
+        }) : [];
+        const oldAtt = Array.isArray(existingAtts) && existingAtts.length > 0 ? existingAtts[0] : null;
+
+        if (oldAtt?.id) {
+          await replaceBusinessAttachment({
+            tenantCompanyId: targetTenantCoId,
+            entityType: 'work',
+            entityId: targetWorkId,
+            fieldKey: 'boq',
+            file: boqFile,
+            oldAttachmentId: oldAtt.id
+          });
+        } else {
+          await uploadBusinessAttachment({
+            tenantCompanyId: targetTenantCoId,
+            entityType: 'work',
+            entityId: targetWorkId,
+            fieldKey: 'boq',
+            file: boqFile
+          });
+        }
       } catch (err) {
         console.error('[CrmContext] Error uploading BOQ to R2:', err);
         showToast(`Warning: Project saved but BOQ upload failed: ${err.message}`);
