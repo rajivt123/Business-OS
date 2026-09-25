@@ -29,6 +29,7 @@ import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
 import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
 import ProfileWorkspace from './profile/ProfileWorkspace';
+import AiChatModal from './ai/AiChatModal';
 import { supabase } from '../lib/supabase';
 import {
   listBusinessAttachments,
@@ -1032,6 +1033,45 @@ export default function BusinessOSWorkspace() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileCompanyOpen, setIsMobileCompanyOpen] = useState(false);
+  const [isMobileDockHidden, setIsMobileDockHidden] = useState(false);
+
+  // Auto-hide mobile bottom dock on scroll down (YouTube style), show on scroll up
+  useEffect(() => {
+    let lastScrollTop = 0;
+    let ticking = false;
+
+    const handleScroll = (e) => {
+      const target = e.target;
+      const currentScrollTop = (target === document || target === window)
+        ? (window.pageYOffset || document.documentElement.scrollTop || 0)
+        : (target?.scrollTop !== undefined ? target.scrollTop : (window.pageYOffset || 0));
+
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const diff = currentScrollTop - lastScrollTop;
+          if (diff > 8 && currentScrollTop > 30) {
+            // Scrolled down -> hide dock
+            setIsMobileDockHidden(true);
+          } else if (diff < -8 || currentScrollTop <= 20) {
+            // Scrolled up or at top -> show dock
+            setIsMobileDockHidden(false);
+          }
+          lastScrollTop = Math.max(0, currentScrollTop);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
+    setIsMobileDockHidden(false);
+  }, [page]);
 
   const topbarRef = useRef(null);
   const searchContainerRef = useRef(null);
@@ -1599,6 +1639,16 @@ export default function BusinessOSWorkspace() {
 
         {/* Right: Global Actions */}
         <div className="flex items-center gap-2">
+          {/* Ask AI Button (Desktop & Tablet) */}
+          <button
+            onClick={() => setIsAiChatOpen?.(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 via-indigo-600 to-sky-600 text-white shadow-md hover:shadow-indigo-500/25 hover:opacity-95 transition-all cursor-pointer shrink-0"
+            title="Ask RAJIV AI"
+          >
+            <Sparkles size={14} className="animate-pulse" />
+            <span>Ask AI</span>
+          </button>
+
           {/* Mobile Search Icon (Mobile Only) */}
           <button
             onClick={() => setIsMobileSearchOpen(true)}
@@ -2068,8 +2118,13 @@ export default function BusinessOSWorkspace() {
           </aside>
         </div>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="os-mobile-bottom-nav md:hidden" aria-label="Mobile Navigation">
+      {/* MOBILE BOTTOM NAVIGATION BAR (Auto-hides on scroll down, shows on scroll up) */}
+      <nav
+        className={`os-mobile-bottom-nav md:hidden transition-transform duration-300 ease-in-out ${
+          isMobileDockHidden ? 'nav-hidden translate-y-full pointer-events-none' : 'translate-y-0'
+        }`}
+        aria-label="Mobile Navigation"
+      >
         <button onClick={() => go('dashboard')} className={`os-mobile-tab ${page === 'dashboard' ? 'active' : ''}`}>
           <LayoutDashboard size={18} />
           <span>Home</span>
@@ -2089,7 +2144,30 @@ export default function BusinessOSWorkspace() {
           )}
           <span>Alerts</span>
         </button>
+        <button
+          onClick={() => setIsAiChatOpen?.(true)}
+          className="os-mobile-tab text-purple-600 dark:text-purple-400 font-bold"
+          title="Open RAJIV AI"
+        >
+          <Sparkles size={18} className="animate-pulse" />
+          <span>AI</span>
+        </button>
       </nav>
+
+      {/* GLOBAL FLOATING AI BUTTON (1-Click AI Assistant across all pages) */}
+      <button
+        type="button"
+        onClick={() => setIsAiChatOpen?.(true)}
+        className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-sky-600 text-white font-bold text-xs shadow-xl shadow-indigo-600/30 hover:shadow-indigo-600/50 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+        title="Open RAJIV AI Assistant"
+        aria-label="Open RAJIV AI Assistant"
+      >
+        <Sparkles size={16} className="animate-pulse group-hover:rotate-12 transition-transform" />
+        <span className="hidden sm:inline tracking-wide font-extrabold">RAJIV AI</span>
+      </button>
+
+      {/* ROOT AI CHAT MODAL */}
+      <AiChatModal />
     </main>
   </div>;
 }

@@ -317,7 +317,10 @@ export function SalesProvider({ children }) {
     try {
       let query = supabase
         .from('accounting_bank_accounts')
-        .select('id, account_name, bank_name, ledger_account_id')
+        .select(`
+          *,
+          ledger_account:chart_of_accounts(id, account_code, account_name)
+        `)
         .order('created_at', { ascending: false });
 
       if (tenantId) query = query.eq('tenant_id', tenantId);
@@ -325,7 +328,11 @@ export function SalesProvider({ children }) {
 
       const { data, error: err } = await query;
       if (err) throw err;
-      setBankAccounts(data || []);
+      const normalized = (data || []).map(b => ({
+        ...b,
+        ledger_account_id: b.ledger_account?.id || b.chart_of_account_id || b.ledger_account_id || null
+      }));
+      setBankAccounts(normalized);
     } catch (err) {
       console.error('[SalesContext] Error fetching bank accounts:', err);
       setBankAccounts([]);

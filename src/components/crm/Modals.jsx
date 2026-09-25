@@ -140,6 +140,16 @@ export default function Modals() {
     }
   }
 
+  const handlePreviewLocalFile = (file, label) => {
+    if (!file) return
+    try {
+      const objectUrl = URL.createObjectURL(file)
+      openDocPreview(objectUrl, `${label} (Unsaved) - ${file.name}`)
+    } catch (err) {
+      console.warn('Could not generate preview for local file:', err)
+    }
+  }
+
   const handleReplaceWorkAttachment = async (fieldKey, file) => {
     if (!file || !editingWorkId) return
     setActionInProgress(prev => ({ ...prev, [fieldKey]: true }))
@@ -631,15 +641,17 @@ export default function Modals() {
       )}
 
       {isWorkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm rounded-2xl">
-          <div className={`${tModal} border p-6 rounded-2xl w-full max-w-md`}>
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className={`${tModal} border p-5 sm:p-6 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl`}>
+            <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className={`text-lg font-bold ${tText}`}>{editingWorkId ? 'Edit PO/WO' : 'New PO/WO'}</h3>
-              <button type="button" onClick={handleCloseWorkModal} className={`${tMuted} hover:text-sky-500`}><X size={20} /></button>
+              <button type="button" onClick={handleCloseWorkModal} className={`${tMuted} hover:text-sky-500 p-1`}><X size={20} /></button>
             </div>
-            <form onSubmit={submitWork} className="space-y-4">
-              <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${tMuted}`}>System / Title</label>
-              <input required type="text" value={workForm.title} onChange={e => setWorkForm({...workForm, title: e.target.value})} className={`w-full rounded-lg p-2.5 outline-none focus:border-sky-500 text-sm border ${tInput}`} />
+            <form onSubmit={submitWork} className={`space-y-4 overflow-y-auto flex-1 pr-1 pb-1 ${customScrollbar}`}>
+              <div>
+                <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${tMuted}`}>System / Title</label>
+                <input required type="text" value={workForm.title} onChange={e => setWorkForm({...workForm, title: e.target.value})} className={`w-full rounded-lg p-2.5 outline-none focus:border-sky-500 text-sm border ${tInput}`} />
+              </div>
               <div className="flex gap-4">
                 <div className="flex-1">
                   <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${tMuted}`}>PO Number</label>
@@ -721,13 +733,22 @@ export default function Modals() {
                             <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
                               NEW FILE SELECTED
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => setPoFile(null)}
-                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
-                            >
-                              Discard Selection
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handlePreviewLocalFile(poFile, 'PO Document')}
+                                className="px-2 py-0.5 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                              >
+                                <Eye size={12} /> Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPoFile(null)}
+                                className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                              >
+                                Discard
+                              </button>
+                            </div>
                           </div>
                           <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
                             {poFile.name}
@@ -753,7 +774,7 @@ export default function Modals() {
                       className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 ${tText}`}
                     />
                     {poFile && (
-                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between">
+                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
                             NEW FILE SELECTED • Ready to upload on Save
@@ -761,13 +782,22 @@ export default function Modals() {
                           <p className="truncate font-bold text-slate-800 dark:text-slate-200">{poFile.name}</p>
                           <span className="text-[10px] text-slate-400">{formatBytes(poFile.size)}</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setPoFile(null)}
-                          className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 ml-2"
-                        >
-                          Clear
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewLocalFile(poFile, 'PO Document')}
+                            className="px-2 py-1 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                          >
+                            <Eye size={12} /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPoFile(null)}
+                            className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -845,13 +875,22 @@ export default function Modals() {
                             <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
                               NEW FILE SELECTED
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => setWoFile(null)}
-                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
-                            >
-                              Discard Selection
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handlePreviewLocalFile(woFile, 'WO Document')}
+                                className="px-2 py-0.5 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                              >
+                                <Eye size={12} /> Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setWoFile(null)}
+                                className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                              >
+                                Discard
+                              </button>
+                            </div>
                           </div>
                           <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
                             {woFile.name}
@@ -877,7 +916,7 @@ export default function Modals() {
                       className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 ${tText}`}
                     />
                     {woFile && (
-                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between">
+                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
                             NEW FILE SELECTED • Ready to upload on Save
@@ -885,13 +924,22 @@ export default function Modals() {
                           <p className="truncate font-bold text-slate-800 dark:text-slate-200">{woFile.name}</p>
                           <span className="text-[10px] text-slate-400">{formatBytes(woFile.size)}</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setWoFile(null)}
-                          className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 ml-2"
-                        >
-                          Clear
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewLocalFile(woFile, 'WO Document')}
+                            className="px-2 py-1 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                          >
+                            <Eye size={12} /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setWoFile(null)}
+                            className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -969,13 +1017,22 @@ export default function Modals() {
                             <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
                               NEW FILE SELECTED
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => setBoqFile(null)}
-                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
-                            >
-                              Discard Selection
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handlePreviewLocalFile(boqFile, 'BOQ Document')}
+                                className="px-2 py-0.5 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                              >
+                                <Eye size={12} /> Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBoqFile(null)}
+                                className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                              >
+                                Discard
+                              </button>
+                            </div>
                           </div>
                           <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
                             {boqFile.name}
@@ -1054,13 +1111,22 @@ export default function Modals() {
                             <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-600 text-white shadow-xs">
                               NEW FILE SELECTED
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => setBoqFile(null)}
-                              className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
-                            >
-                              Discard Selection
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handlePreviewLocalFile(boqFile, 'BOQ Document')}
+                                className="px-2 py-0.5 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                              >
+                                <Eye size={12} /> Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBoqFile(null)}
+                                className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline cursor-pointer"
+                              >
+                                Discard
+                              </button>
+                            </div>
                           </div>
                           <p className="font-bold text-slate-800 dark:text-slate-100 truncate">
                             {boqFile.name}
@@ -1086,7 +1152,7 @@ export default function Modals() {
                       className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 ${tText}`}
                     />
                     {boqFile && (
-                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between">
+                      <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
                             NEW FILE SELECTED • Ready to upload on Save
@@ -1094,20 +1160,29 @@ export default function Modals() {
                           <p className="truncate font-bold text-slate-800 dark:text-slate-200">{boqFile.name}</p>
                           <span className="text-[10px] text-slate-400">{formatBytes(boqFile.size)}</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setBoqFile(null)}
-                          className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 ml-2"
-                        >
-                          Clear
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handlePreviewLocalFile(boqFile, 'BOQ Document')}
+                            className="px-2 py-1 text-xs font-semibold rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/20 flex items-center gap-1 cursor-pointer transition"
+                          >
+                            <Eye size={12} /> Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBoqFile(null)}
+                            className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 mt-5">
+              <div className="flex items-center gap-2 pt-3 shrink-0 border-t border-slate-200/60 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={handleCloseWorkModal}

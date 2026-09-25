@@ -4,7 +4,7 @@ import TaskPanel from './TaskPanel';
 import Modals from './Modals';
 import AiChatModal from '../ai/AiChatModal';
 import { 
-  Building, MapPin, Plus, ChevronDown, Check 
+  Building, MapPin, Plus, ChevronDown, Check, Sparkles 
 } from 'lucide-react'; 
 import { useCrm } from '../../context/CrmContext';
 
@@ -20,7 +20,8 @@ export default function CrmWorkspace({ embedded = false }) {
     handleAddCompany, handleAddUnit,
     openNewWorkModal, openNewTask, openGlobalReminderModal, openNewContactModal,
     openNewEnquiryModal, openNewFollowUpModal,
-    refreshAllData, toastMessage
+    refreshAllData, toastMessage,
+    setIsAiChatOpen
   } = useCrm();
 
   const [isCompanyOpen, setIsCompanyOpen] = useState(false);
@@ -68,8 +69,8 @@ export default function CrmWorkspace({ embedded = false }) {
       <AiChatModal />
 
       {/* CRM CONTEXT TOOLBAR ROW */}
-      <div className="mb-4">
-        <div className="grid grid-cols-2 gap-2 max-w-xl">
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 max-w-xl flex-1 min-w-[260px]">
           {/* CUSTOMER / CLIENT COMPANY SELECTOR */}
           <div className="relative min-w-0" ref={companyDropdownRef}>
             <button
@@ -166,6 +167,15 @@ export default function CrmWorkspace({ embedded = false }) {
             )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsAiChatOpen(true)}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-sky-600 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer shrink-0 ml-auto"
+          title="Open RAJIV AI Assistant"
+        >
+          <Sparkles size={14} className="animate-pulse" />
+          <span>Ask RAJIV AI</span>
+        </button>
       </div>
 
       {/* MAIN CONTENT AREA */}
