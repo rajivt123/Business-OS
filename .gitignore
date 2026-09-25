@@ -35,4 +35,5 @@ Thumbs.db
 
 # Agent scratch directory
 scratch/
+supabase/.temp/
 
