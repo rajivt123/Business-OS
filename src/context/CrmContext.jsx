@@ -1,5 +1,13 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  uploadBusinessAttachment,
+  replaceBusinessAttachment,
+  listBusinessAttachments,
+  createBusinessAttachmentDownloadUrl,
+  archiveBusinessAttachment,
+  isRealUuid
+} from '../lib/storageService';
 
 const CrmContext = createContext();
 
@@ -3218,23 +3226,6 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
 
     setIsUploading(true); 
-    let fileUrl = null;
-    
-    if (attachment) {
-      const fileExt = attachment.name.split('.').pop(); 
-      const fileName = `${Math.random()}.${fileExt}`;
-      const { error } = await supabase.storage.from('attachments').upload(`${activeWorkId}/${fileName}`, attachment);
-      if (error) { 
-        console.error('[CrmContext] Error uploading log attachment:', error);
-        const uploadMsg = `Error uploading file: ${error.message || 'Unknown error'}`;
-        showToast(uploadMsg);
-        alert(uploadMsg); 
-        setIsUploading(false); 
-        return; 
-      }
-      const { data } = supabase.storage.from('attachments').getPublicUrl(`${activeWorkId}/${fileName}`); 
-      fileUrl = data?.publicUrl || null;
-    }
     
     const resolvedStageName = centerView === 'pipeline'
       ? (activeStageDefinitions[activeStageIndex]?.name || activeWork?.stages?.[activeStageIndex] || 'General')
@@ -3244,8 +3235,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       tenant_id: tenantId,
       tenant_company_id: resolvedTenantCompanyId,
       work_id: activeWorkId,
-      content: logInput || "Attached a file.",
-      attachment_url: fileUrl,
+      content: logInput || (attachment ? `Attached file: ${attachment.name}` : "Attached a file."),
+      attachment_url: null, // Legacy column remains for historical data; new uploads use R2 file_attachments
       stage_name: resolvedStageName
     };
 
@@ -3278,7 +3269,26 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
 
     if (data && data[0]) { 
-      setLogs([data[0], ...(logs || [])]); 
+      const newLog = data[0];
+
+      // If a file was attached, upload directly to Cloudflare R2 via business-file-storage
+      if (attachment) {
+        try {
+          const r2Attachment = await uploadBusinessAttachment({
+            tenantCompanyId: resolvedTenantCompanyId,
+            entityType: 'log',
+            entityId: newLog.id,
+            fieldKey: 'attachment',
+            file: attachment
+          });
+          newLog.r2_attachment = r2Attachment;
+        } catch (uploadErr) {
+          console.error('[CrmContext] Error uploading log attachment to R2:', uploadErr);
+          showToast(`Log saved, but file attachment failed: ${uploadErr.message}`);
+        }
+      }
+
+      setLogs([newLog, ...(logs || [])]); 
       setLogInput(''); 
       setAttachment(null);
     }
@@ -3832,58 +3842,22 @@ USER REQUEST: ${trimmedMsg}`;
     // --- END VALIDATION ---
 
     setIsWorkUploading(true); 
-    let finalBoqUrl = workForm.boq_url;
-    let finalPoFileUrl = workForm.po_file_url;
-    let finalWoFileUrl = workForm.wo_file_url;
+    let finalBoqUrl = workForm.boq_url || null;
     
-    if (boqFile) { 
-      const fileExt = boqFile.name.split('.').pop(); 
-      const fileName = `${Math.random()}.${fileExt}`; 
-      const { error } = await supabase.storage.from('attachments').upload(`boqs/${fileName}`, boqFile); 
-      if (!error) { 
-        const { data } = supabase.storage.from('attachments').getPublicUrl(`boqs/${fileName}`); 
-        finalBoqUrl = data.publicUrl;
-      } 
-    }
-
-    if (poFile) { 
-      const fileExt = poFile.name.split('.').pop(); 
-      const fileName = `${Math.random()}.${fileExt}`; 
-      const { error } = await supabase.storage.from('attachments').upload(`pos/${fileName}`, poFile); 
-      if (!error) { 
-        const { data } = supabase.storage.from('attachments').getPublicUrl(`pos/${fileName}`); 
-        finalPoFileUrl = data.publicUrl;
-      } 
-    }
-
-    if (woFile) { 
-      const fileExt = woFile.name.split('.').pop(); 
-      const fileName = `${Math.random()}.${fileExt}`; 
-      const { error } = await supabase.storage.from('attachments').upload(`wos/${fileName}`, woFile); 
-      if (!error) { 
-        const { data } = supabase.storage.from('attachments').getPublicUrl(`wos/${fileName}`); 
-        finalWoFileUrl = data.publicUrl;
-      } 
-    }
-    
+    // Live works table schema has title, po_number, wo_number, boq_url.
+    // It DOES NOT have po_file_url or wo_file_url.
+    // PO, WO, and BOQ document files are stored in file_attachments via R2 business-file-storage.
     const payload = { 
       title: trimmedTitle, 
       po_number: trimmedPO, 
       wo_number: trimmedWO, 
-      boq_url: finalBoqUrl,
-      po_file_url: finalPoFileUrl,
-      wo_file_url: finalWoFileUrl
+      boq_url: finalBoqUrl
     };
     
+    let targetWorkId = editingWorkId;
+
     if (editingWorkId) { 
       let { data, error } = await supabase.from('works').update(payload).eq('id', editingWorkId).select(); 
-      if (error && (error.message?.includes('po_file_url') || error.message?.includes('wo_file_url') || error.code === 'PGRST204')) {
-        const fallbackRes = await supabase.from('works').update({
-          title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl
-        }).eq('id', editingWorkId).select();
-        data = fallbackRes.data;
-        error = fallbackRes.error;
-      }
       if (error) {
         console.error('[Supabase Mutation Error - works update]:', error);
         let errorMsg = error.message;
@@ -3895,21 +3869,17 @@ USER REQUEST: ${trimmedMsg}`;
         return;
       }
       if (data && data.length > 0) {
-        const updatedWork = { ...data[0], po_file_url: finalPoFileUrl, wo_file_url: finalWoFileUrl };
-        setWorks(works.map(w => w.id === editingWorkId ? updatedWork : w));
-        setIsWorkModalOpen(false);
-        fetchMissingData();
-        showToast("Project updated successfully.");
+        targetWorkId = data[0].id;
+        setWorks(works.map(w => w.id === editingWorkId ? data[0] : w));
       }
     } else {
-      let { data, error } = await supabase.from('works').insert([{ unit_id: activeUnitId, company_id: activeCompanyId, tenant_company_id: activeOperatingCompanyId || null, tenant_id: tenantId || null, ...payload }]).select();
-      if (error && (error.message?.includes('po_file_url') || error.message?.includes('wo_file_url') || error.code === 'PGRST204')) {
-        const fallbackRes = await supabase.from('works').insert([{
-          unit_id: activeUnitId, company_id: activeCompanyId, tenant_company_id: activeOperatingCompanyId || null, tenant_id: tenantId || null, title: trimmedTitle, po_number: trimmedPO, wo_number: trimmedWO, boq_url: finalBoqUrl
-        }]).select();
-        data = fallbackRes.data;
-        error = fallbackRes.error;
-      }
+      let { data, error } = await supabase.from('works').insert([{
+        unit_id: activeUnitId,
+        company_id: activeCompanyId,
+        tenant_company_id: activeOperatingCompanyId || null,
+        tenant_id: tenantId || null,
+        ...payload
+      }]).select();
       if (error) {
         console.error('[Supabase Mutation Error - works insert]:', error);
         let errorMsg = error.message;
@@ -3921,15 +3891,143 @@ USER REQUEST: ${trimmedMsg}`;
         return;
       }
       if (data && data.length > 0) { 
-        const newWork = { ...data[0], po_file_url: finalPoFileUrl, wo_file_url: finalWoFileUrl };
-        setWorks([...works, newWork]); 
-        setActiveWorkId(newWork.id); 
-        setIsWorkModalOpen(false); 
-        fetchMissingData();
-        showToast("Project created successfully.");
+        targetWorkId = data[0].id;
+        setWorks([...works, data[0]]); 
+        setActiveWorkId(data[0].id); 
       } 
     }
+
+    // Upload newly selected files directly to Cloudflare R2
+    const targetTenantCoId = activeOperatingCompanyId || activeWork?.tenant_company_id || null;
+
+    if (poFile && targetWorkId) {
+      try {
+        await uploadBusinessAttachment({
+          tenantCompanyId: targetTenantCoId,
+          entityType: 'work',
+          entityId: targetWorkId,
+          fieldKey: 'po',
+          file: poFile
+        });
+      } catch (err) {
+        console.error('[CrmContext] Error uploading PO to R2:', err);
+        showToast(`Warning: Project saved but PO upload failed: ${err.message}`);
+      }
+    }
+
+    if (woFile && targetWorkId) {
+      try {
+        await uploadBusinessAttachment({
+          tenantCompanyId: targetTenantCoId,
+          entityType: 'work',
+          entityId: targetWorkId,
+          fieldKey: 'wo',
+          file: woFile
+        });
+      } catch (err) {
+        console.error('[CrmContext] Error uploading WO to R2:', err);
+        showToast(`Warning: Project saved but WO upload failed: ${err.message}`);
+      }
+    }
+
+    if (boqFile && targetWorkId) {
+      try {
+        await uploadBusinessAttachment({
+          tenantCompanyId: targetTenantCoId,
+          entityType: 'work',
+          entityId: targetWorkId,
+          fieldKey: 'boq',
+          file: boqFile
+        });
+      } catch (err) {
+        console.error('[CrmContext] Error uploading BOQ to R2:', err);
+        showToast(`Warning: Project saved but BOQ upload failed: ${err.message}`);
+      }
+    }
+
+    setPoFile(null);
+    setWoFile(null);
+    setBoqFile(null);
+    setIsWorkModalOpen(false);
     setIsWorkUploading(false);
+    fetchMissingData();
+    showToast(editingWorkId ? "Project updated successfully." : "Project created successfully.");
+  }
+
+  /**
+   * Universal Preview for Work Attachments (PO, WO, BOQ)
+   * Resolves R2 signed download URL from file_attachments, falling back to legacy URL.
+   */
+  async function openWorkAttachmentPreview(workId, fieldKey, title = 'Document Preview', fallbackUrl = null) {
+    if (!workId) return;
+    try {
+      const attachments = await listBusinessAttachments({
+        entityType: 'work',
+        entityId: workId,
+        fieldKey
+      });
+      if (attachments && attachments.length > 0) {
+        const downloadRes = await createBusinessAttachmentDownloadUrl({
+          attachmentId: attachments[0].id
+        });
+        if (downloadRes?.download_url) {
+          openDocPreview(downloadRes.download_url, `${title} (${attachments[0].file_name})`);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[CrmContext] Notice resolving R2 preview for work:', err.message);
+    }
+
+    if (fallbackUrl) {
+      openDocPreview(fallbackUrl, title);
+    } else {
+      showToast(`No ${fieldKey.toUpperCase()} document attached.`);
+    }
+  }
+
+  /**
+   * Universal Preview for Log Attachments
+   * Resolves R2 signed download URL from file_attachments, falling back to legacy attachment_url.
+   */
+  async function viewLogAttachment(log) {
+    if (!log) return;
+    if (log.r2_attachment?.id) {
+      try {
+        const res = await createBusinessAttachmentDownloadUrl({
+          attachmentId: log.r2_attachment.id
+        });
+        if (res?.download_url) {
+          openDocPreview(res.download_url, log.r2_attachment.file_name || 'Log Attachment');
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to get download URL for log attachment:', e);
+      }
+    }
+
+    try {
+      const list = await listBusinessAttachments({
+        entityType: 'log',
+        entityId: log.id,
+        fieldKey: 'attachment'
+      });
+      if (list && list.length > 0) {
+        const res = await createBusinessAttachmentDownloadUrl({
+          attachmentId: list[0].id
+        });
+        if (res?.download_url) {
+          openDocPreview(res.download_url, list[0].file_name || 'Log Attachment');
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (log.attachment_url) {
+      openDocPreview(log.attachment_url, 'Log Attachment');
+    } else {
+      showToast('No attachment found for this log.');
+    }
   }
 
   async function handleDeleteWork(id) { 
@@ -4169,7 +4267,7 @@ USER REQUEST: ${trimmedMsg}`;
     getUserDisplayName: (userOrId, p, tm, cu) => getUserDisplayName(userOrId, (p && p.length) ? p : profiles, (tm && tm.length) ? tm : tenantMembers, cu || currentUser),
     navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
     handleAddIssue, toggleIssueStatus, handleAddLog, startEditingLog, saveLogEdit, handleDeleteLog, handleRestoreLog, handlePermanentDeleteLog, handleAddCompany, handleAddUnit, handleRenameCompany, handleDeleteCompany, handleRenameUnit, handleDeleteUnit,
-    openNewWorkModal, openEditWorkModal, submitWork, handleDeleteWork, openStageManager, updateStageName, moveStage, removeStage, addNewStage, saveStages, handleSearch, jumpToSearchResult, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
+    openNewWorkModal, openEditWorkModal, submitWork, handleDeleteWork, openWorkAttachmentPreview, viewLogAttachment, openStageManager, updateStageName, moveStage, removeStage, addNewStage, saveStages, handleSearch, jumpToSearchResult, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
     isAiChatOpen, setIsAiChatOpen, aiChatMessages, setAiChatMessages, isAiChatSending, handleSendAiChatMessage, handleClearAiChat
   };
 

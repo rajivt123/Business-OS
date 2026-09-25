@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { X, AlertCircle, Bell, Trash2, RotateCcw, History, Paperclip, Loader2, ChevronUp, ChevronDown, Plus, ShieldCheck, ArrowRightLeft, CalendarClock, Search, Users, UserPlus, UserCheck, UserX, UserMinus, Lock, Copy, Check, Database, AlertTriangle, Download, ExternalLink, Eye, FileText, FileSpreadsheet } from 'lucide-react'
 import { useCrm, getUserDisplayName } from '../../context/CrmContext'
+import {
+  listBusinessAttachments,
+  createBusinessAttachmentDownloadUrl,
+  archiveBusinessAttachment,
+  replaceBusinessAttachment,
+  formatBytes
+} from '../../lib/storageService'
 
 export default function Modals() {
   const {
@@ -32,6 +39,135 @@ export default function Modals() {
 
   const deletedLogs = logs.filter(log => log.is_deleted)
   const deletedReminders = reminders.filter(r => r.is_deleted)
+
+  // Work Attachments State for PO, WO, BOQ
+  const [workAttachments, setWorkAttachments] = useState({ po: null, wo: null, boq: null })
+  const [isLoadingWorkAttachments, setIsLoadingWorkAttachments] = useState(false)
+  const [actionInProgress, setActionInProgress] = useState({ po: false, wo: false, boq: false })
+
+  const loadWorkAttachments = async (workId) => {
+    if (!workId) {
+      setWorkAttachments({ po: null, wo: null, boq: null })
+      return
+    }
+    setIsLoadingWorkAttachments(true)
+    try {
+      const attachments = await listBusinessAttachments({
+        entityType: 'work',
+        entityId: workId,
+        includeArchived: false
+      })
+
+      const map = { po: null, wo: null, boq: null }
+      if (Array.isArray(attachments)) {
+        attachments.forEach(att => {
+          if (att.field_key === 'po' && !map.po) map.po = att
+          if (att.field_key === 'wo' && !map.wo) map.wo = att
+          if (att.field_key === 'boq' && !map.boq) map.boq = att
+        });
+      }
+      setWorkAttachments(map)
+    } catch (err) {
+      console.warn('[Modals] Error loading work attachments:', err)
+    } finally {
+      setIsLoadingWorkAttachments(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isWorkModalOpen && editingWorkId) {
+      loadWorkAttachments(editingWorkId)
+    } else if (isWorkModalOpen && !editingWorkId) {
+      setWorkAttachments({ po: null, wo: null, boq: null })
+    }
+  }, [isWorkModalOpen, editingWorkId])
+
+  const handlePreviewWorkAttachment = async (fieldKey) => {
+    const att = workAttachments[fieldKey]
+    if (att?.id) {
+      try {
+        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: att.id })
+        if (res?.download_url) {
+          openDocPreview(res.download_url, `${workForm.title || 'Work'} - ${fieldKey.toUpperCase()} (${att.file_name})`)
+          return
+        }
+      } catch (err) {
+        alert('Failed to generate preview URL: ' + err.message)
+        return
+      }
+    }
+    if (fieldKey === 'boq' && workForm.boq_url) {
+      openDocPreview(workForm.boq_url, `${workForm.title || 'Work'} - BOQ Document`)
+    }
+  }
+
+  const handleDownloadWorkAttachment = async (fieldKey) => {
+    const att = workAttachments[fieldKey]
+    if (att?.id) {
+      try {
+        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: att.id })
+        if (res?.download_url) {
+          const a = document.createElement('a')
+          a.href = res.download_url
+          a.download = att.file_name || `${fieldKey}.pdf`
+          a.target = '_blank'
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          return
+        }
+      } catch (err) {
+        alert('Failed to generate download URL: ' + err.message)
+        return
+      }
+    }
+    if (fieldKey === 'boq' && workForm.boq_url) {
+      window.open(workForm.boq_url, '_blank')
+    }
+  }
+
+  const handleReplaceWorkAttachment = async (fieldKey, file) => {
+    if (!file || !editingWorkId) return
+    setActionInProgress(prev => ({ ...prev, [fieldKey]: true }))
+    try {
+      const oldAtt = workAttachments[fieldKey]
+      await replaceBusinessAttachment({
+        entityType: 'work',
+        entityId: editingWorkId,
+        fieldKey,
+        file,
+        oldAttachmentId: oldAtt?.id
+      })
+      if (fieldKey === 'po') setPoFile(null)
+      if (fieldKey === 'wo') setWoFile(null)
+      if (fieldKey === 'boq') setBoqFile(null)
+      await loadWorkAttachments(editingWorkId)
+    } catch (err) {
+      alert(`Failed to replace ${fieldKey.toUpperCase()} file: ${err.message}`)
+    } finally {
+      setActionInProgress(prev => ({ ...prev, [fieldKey]: false }))
+    }
+  }
+
+  const handleArchiveWorkAttachment = async (fieldKey) => {
+    const att = workAttachments[fieldKey]
+    if (att?.id) {
+      if (!window.confirm(`Are you sure you want to remove this ${fieldKey.toUpperCase()} attachment?`)) return
+      setActionInProgress(prev => ({ ...prev, [fieldKey]: true }))
+      try {
+        await archiveBusinessAttachment({ attachmentId: att.id })
+        await loadWorkAttachments(editingWorkId)
+      } catch (err) {
+        alert(`Failed to remove ${fieldKey.toUpperCase()}: ${err.message}`)
+      } finally {
+        setActionInProgress(prev => ({ ...prev, [fieldKey]: false }))
+      }
+      return
+    }
+    if (fieldKey === 'boq' && workForm.boq_url) {
+      setWorkForm(prev => ({ ...prev, boq_url: '' }))
+    }
+  }
 
   useEffect(() => { if (promptModal?.isOpen) setPromptInput(promptModal.defaultValue || '') }, [promptModal])
 
@@ -500,40 +636,231 @@ export default function Modals() {
                   <input type="text" value={workForm.wo_number} onChange={e => setWorkForm({...workForm, wo_number: e.target.value})} className={`w-full rounded-lg p-2.5 outline-none focus:border-sky-500 text-sm border ${tInput}`} />
                 </div>
               </div>
-              {/* PO File Attachment */}
-              <div className={`p-3 rounded-lg border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
-                <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1.5 ${tMuted}`}>PO Document File (Optional)</label>
-                {workForm.po_file_url && !poFile && (
-                  <div className="flex items-center gap-2 mb-2 text-xs text-amber-500 font-medium">
-                    <Paperclip size={14}/> Existing PO Attached
-                    <button type="button" onClick={() => setWorkForm({...workForm, po_file_url: ''})} className="text-rose-500 ml-auto hover:underline">Remove</button>
+              {/* PO Document File */}
+              <div className={`p-3 rounded-xl border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={`block text-[11px] font-bold uppercase tracking-wider ${tMuted}`}>PO Document File</label>
+                  {actionInProgress.po && <Loader2 size={12} className="animate-spin text-amber-500" />}
+                </div>
+
+                {workAttachments.po ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 font-semibold p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <Paperclip size={14} className="shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-slate-800 dark:text-slate-200">
+                          {workAttachments.po.file_name}
+                        </p>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          Existing PO Attached • {formatBytes(workAttachments.po.file_size_bytes)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewWorkAttachment('po')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Eye size={12} /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWorkAttachment('po')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> Replace
+                        <input type="file" onChange={e => handleReplaceWorkAttachment('po', e.target.files[0])} className="hidden" />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveWorkAttachment('po')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      onChange={e => setPoFile(e.target.files[0])}
+                      className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 ${tText}`}
+                    />
+                    {poFile && (
+                      <span className="text-[10px] text-amber-500 font-medium block mt-1">Ready to upload on save: {poFile.name} ({formatBytes(poFile.size)})</span>
+                    )}
                   </div>
                 )}
-                <input type="file" onChange={e => setPoFile(e.target.files[0])} className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 ${tText}`} />
               </div>
 
-              {/* WO File Attachment */}
-              <div className={`p-3 rounded-lg border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
-                <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1.5 ${tMuted}`}>WO Document File (Optional)</label>
-                {workForm.wo_file_url && !woFile && (
-                  <div className="flex items-center gap-2 mb-2 text-xs text-sky-500 font-medium">
-                    <Paperclip size={14}/> Existing WO Attached
-                    <button type="button" onClick={() => setWorkForm({...workForm, wo_file_url: ''})} className="text-rose-500 ml-auto hover:underline">Remove</button>
+              {/* WO Document File */}
+              <div className={`p-3 rounded-xl border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={`block text-[11px] font-bold uppercase tracking-wider ${tMuted}`}>WO Document File</label>
+                  {actionInProgress.wo && <Loader2 size={12} className="animate-spin text-sky-500" />}
+                </div>
+
+                {workAttachments.wo ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-sky-600 dark:text-sky-400 font-semibold p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/20">
+                      <Paperclip size={14} className="shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-slate-800 dark:text-slate-200">
+                          {workAttachments.wo.file_name}
+                        </p>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          Existing WO Attached • {formatBytes(workAttachments.wo.file_size_bytes)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewWorkAttachment('wo')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-500/30 hover:bg-sky-100 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Eye size={12} /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWorkAttachment('wo')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> Replace
+                        <input type="file" onChange={e => handleReplaceWorkAttachment('wo', e.target.files[0])} className="hidden" />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveWorkAttachment('wo')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      onChange={e => setWoFile(e.target.files[0])}
+                      className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 ${tText}`}
+                    />
+                    {woFile && (
+                      <span className="text-[10px] text-sky-500 font-medium block mt-1">Ready to upload on save: {woFile.name} ({formatBytes(woFile.size)})</span>
+                    )}
                   </div>
                 )}
-                <input type="file" onChange={e => setWoFile(e.target.files[0])} className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100 ${tText}`} />
               </div>
 
-              {/* BOQ File Attachment */}
-              <div className={`p-3 rounded-lg border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
-                <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1.5 ${tMuted}`}>BOQ Document File (Optional)</label>
-                {workForm.boq_url && !boqFile && (
-                  <div className="flex items-center gap-2 mb-2 text-xs text-indigo-500 font-medium">
-                    <Paperclip size={14}/> Existing BOQ Attached 
-                    <button type="button" onClick={() => setWorkForm({...workForm, boq_url: ''})} className="text-rose-500 ml-auto hover:underline">Remove</button>
+              {/* BOQ Document File */}
+              <div className={`p-3 rounded-xl border border-dashed ${isDarkMode ? 'border-slate-700 bg-slate-900/50' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={`block text-[11px] font-bold uppercase tracking-wider ${tMuted}`}>BOQ Document File</label>
+                  {actionInProgress.boq && <Loader2 size={12} className="animate-spin text-indigo-500" />}
+                </div>
+
+                {workAttachments.boq ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 font-semibold p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                      <Paperclip size={14} className="shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-slate-800 dark:text-slate-200">
+                          {workAttachments.boq.file_name}
+                        </p>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          Existing BOQ Attached • {formatBytes(workAttachments.boq.file_size_bytes)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewWorkAttachment('boq')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Eye size={12} /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWorkAttachment('boq')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> Replace
+                        <input type="file" onChange={e => handleReplaceWorkAttachment('boq', e.target.files[0])} className="hidden" />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveWorkAttachment('boq')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : workForm.boq_url ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 font-semibold p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                      <Paperclip size={14} className="shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-slate-800 dark:text-slate-200">
+                          Existing BOQ Attached (Legacy)
+                        </p>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          Supabase Storage File
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewWorkAttachment('boq')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Eye size={12} /> Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWorkAttachment('boq')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Download size={12} /> Download
+                      </button>
+                      <label className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 flex items-center gap-1 cursor-pointer transition">
+                        <RotateCcw size={12} /> Replace
+                        <input type="file" onChange={e => handleReplaceWorkAttachment('boq', e.target.files[0])} className="hidden" />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleArchiveWorkAttachment('boq')}
+                        className="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-500 hover:bg-rose-500/10 ml-auto flex items-center gap-1 cursor-pointer transition"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      onChange={e => setBoqFile(e.target.files[0])}
+                      className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 ${tText}`}
+                    />
+                    {boqFile && (
+                      <span className="text-[10px] text-indigo-500 font-medium block mt-1">Ready to upload on save: {boqFile.name} ({formatBytes(boqFile.size)})</span>
+                    )}
                   </div>
                 )}
-                <input type="file" onChange={e => setBoqFile(e.target.files[0])} className={`w-full text-xs file:mr-3 file:py-1 file:px-2.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 ${tText}`} />
               </div>
 
               <button type="submit" disabled={isWorkUploading} className="w-full bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition mt-4 shadow-md flex items-center justify-center gap-2">

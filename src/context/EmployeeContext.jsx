@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useCrm } from './CrmContext';
+import { uploadBusinessAttachment } from '../lib/storageService';
 
 const EmployeeContext = createContext(null);
 
@@ -461,22 +462,62 @@ export function EmployeeProvider({ children }) {
 
   const saveDocument = async (docData) => {
     try {
+      const { file, ...fieldsToSave } = docData;
       const payload = {
-        ...docData,
+        ...fieldsToSave,
         tenant_id: tenantId || null,
         created_by: authUserId || null
       };
+
+      let insertedId = docData.id;
+
       if (docData.id) {
         const { error } = await supabase.from('employee_documents').update(payload).eq('id', docData.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('employee_documents').insert([payload]);
+        const { data, error } = await supabase.from('employee_documents').insert([payload]).select();
         if (error) throw error;
+        if (data && data[0]) {
+          insertedId = data[0].id;
+        }
       }
+
+      // If a file was attached, upload directly to R2 via business-file-storage
+      if (file && insertedId) {
+        try {
+          await uploadBusinessAttachment({
+            tenantCompanyId: activeOperatingCompanyId,
+            entityType: 'employee_document',
+            entityId: insertedId,
+            fieldKey: 'document',
+            file
+          });
+        } catch (uploadErr) {
+          console.error('[EmployeeContext] Error uploading employee document to R2:', uploadErr);
+        }
+      }
+
       await fetchEmployeeSubRecords(docData.employee_id);
       return { success: true };
     } catch (err) {
       console.error('Error saving document:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const saveEmployeePhoto = async (employeeId, file) => {
+    try {
+      if (!employeeId || !file) return { success: false, error: 'Employee ID and file are required.' };
+      const uploadRes = await uploadBusinessAttachment({
+        tenantCompanyId: activeOperatingCompanyId,
+        entityType: 'employee',
+        entityId: employeeId,
+        fieldKey: 'photo',
+        file
+      });
+      return { success: true, data: uploadRes };
+    } catch (err) {
+      console.error('Error saving employee photo:', err);
       return { success: false, error: err.message };
     }
   };
@@ -629,6 +670,7 @@ export function EmployeeProvider({ children }) {
     deleteNominee,
     saveDocument,
     deleteDocument,
+    saveEmployeePhoto,
     saveFieldValue,
     saveFieldDefinition,
     saveFieldConfiguration,

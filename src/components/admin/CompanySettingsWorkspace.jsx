@@ -204,27 +204,12 @@ export default function CompanySettingsWorkspace() {
           is_primary: Boolean(cpMap[tc.id])
         }));
         setCompanyList(enriched);
+      } else if (operatingCompanies && operatingCompanies.length > 0) {
+        // Use operatingCompanies from CrmContext (which are loaded directly from public.tenant_companies)
+        const validTenantCompanies = operatingCompanies.filter(tc => isRealUuid(tc.id));
+        setCompanyList(validTenantCompanies);
       } else {
-        // Fallback to operatingCompanies from Context or companies table
-        const { data: compData } = await supabase
-          .from('companies')
-          .select('*')
-          .order('created_at', { ascending: true });
-
-        if (compData && compData.length > 0) {
-          const mapped = compData.map(c => ({
-            id: c.tenant_company_id || c.id,
-            company_id: c.id,
-            name: c.name,
-            code: c.name?.substring(0, 4).toUpperCase() || 'COMP',
-            status: 'active',
-            is_primary: true,
-            created_at: c.created_at
-          }));
-          setCompanyList(mapped);
-        } else {
-          setCompanyList(operatingCompanies || []);
-        }
+        setCompanyList([]);
       }
     } catch (err) {
       console.error('[CompanySettings] Fetch list error:', err);
@@ -236,6 +221,10 @@ export default function CompanySettingsWorkspace() {
 
   // Load Detailed Company Settings (for Editing)
   async function loadCompanySettings(companyId) {
+    if (!companyId || !isRealUuid(companyId)) {
+      setErrorMessage(`Invalid company selected: "${companyId}" is not a valid tenant company UUID.`);
+      return;
+    }
     setIsLoadingDetails(true);
     setErrorMessage('');
     setSelectedCompanyId(companyId);

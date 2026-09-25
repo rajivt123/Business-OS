@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRecruitment } from '../../context/RecruitmentContext';
 import { useEmployee } from '../../context/EmployeeContext';
 import { useCrm } from '../../context/CrmContext';
@@ -6,8 +6,15 @@ import PublicApplicationForm from './PublicApplicationForm';
 import {
   Briefcase, Users, Calendar, CheckCircle2, UserCheck, Clock, Plus, Search, Filter,
   Link, Copy, Check, Eye, Edit2, ShieldAlert, Sparkles, Send, FileText, ChevronRight,
-  AlertCircle, ThumbsUp, ThumbsDown, Award, MapPin, Building2, UserPlus, X, RefreshCw
+  AlertCircle, ThumbsUp, ThumbsDown, Award, MapPin, Building2, UserPlus, X, RefreshCw,
+  Upload, Download
 } from 'lucide-react';
+import {
+  listBusinessAttachments,
+  createBusinessAttachmentDownloadUrl,
+  uploadBusinessAttachment,
+  formatBytes
+} from '../../lib/storageService';
 
 const CANDIDATE_STATUSES = [
   'Applied',
@@ -127,6 +134,85 @@ export default function RecruitmentWorkspace() {
     designation_id: '',
     joining_date: new Date().toISOString().split('T')[0]
   });
+
+  // Candidate Resume R2 State
+  const [candidateResumeAttachment, setCandidateResumeAttachment] = useState(null);
+  const [isLoadingResume, setIsLoadingResume] = useState(false);
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCandidate?.id) {
+      setCandidateResumeAttachment(null);
+      return;
+    }
+    let active = true;
+    setIsLoadingResume(true);
+    listBusinessAttachments({
+      entityType: 'recruitment_candidate',
+      entityId: selectedCandidate.id,
+      fieldKey: 'resume'
+    }).then(res => {
+      if (active && res?.success && res.attachments?.length > 0) {
+        setCandidateResumeAttachment(res.attachments[0]);
+      } else if (active) {
+        setCandidateResumeAttachment(null);
+      }
+    }).catch(err => {
+      console.error('Failed to load candidate resume attachment:', err);
+      if (active) setCandidateResumeAttachment(null);
+    }).finally(() => {
+      if (active) setIsLoadingResume(false);
+    });
+    return () => { active = false; };
+  }, [selectedCandidate?.id]);
+
+  const handleOpenCandidateResume = async (attachmentId, download = false) => {
+    try {
+      const res = await createBusinessAttachmentDownloadUrl({ attachmentId });
+      if (res?.download_url) {
+        if (download) {
+          const a = document.createElement('a');
+          a.href = res.download_url;
+          a.download = candidateResumeAttachment?.file_name || 'Resume';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        } else {
+          window.open(res.download_url, '_blank', 'noopener,noreferrer');
+        }
+      } else {
+        alert('Unable to generate download URL for resume.');
+      }
+    } catch (err) {
+      console.error('Download resume error:', err);
+      alert('Failed to open resume: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleUploadCandidateResume = async (file) => {
+    if (!file || !selectedCandidate?.id) return;
+    setIsUploadingResume(true);
+    try {
+      const res = await uploadBusinessAttachment({
+        entityType: 'recruitment_candidate',
+        entityId: selectedCandidate.id,
+        fieldKey: 'resume',
+        file
+      });
+      if (res?.success) {
+        setCandidateResumeAttachment(res.attachment);
+        alert('Candidate resume uploaded to R2 successfully!');
+      } else {
+        alert(res?.error || 'Failed to upload resume.');
+      }
+    } catch (err) {
+      console.error('Upload resume error:', err);
+      alert('Failed to upload resume: ' + err.message);
+    } finally {
+      setIsUploadingResume(false);
+    }
+  };
 
   // Dashboard Metrics
   const metrics = useMemo(() => {
@@ -990,14 +1076,68 @@ export default function RecruitmentWorkspace() {
               </div>
             </div>
 
-            {selectedCandidate.resume_url && (
-              <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 text-xs flex items-center justify-between">
-                <span>Resume Link Attached</span>
-                <a href={selectedCandidate.resume_url} target="_blank" rel="noreferrer" className="os-link flex items-center gap-1 font-bold">
-                  <FileText size={13} /> Open Resume
-                </a>
+            {/* Candidate Resume: Universal R2 + Legacy Fallback */}
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <FileText size={14} className="text-sky-500" /> Candidate Resume
+                </span>
+                {candidateResumeAttachment ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCandidateResume(candidateResumeAttachment.id, false)}
+                      className="text-xs font-bold text-sky-600 hover:underline flex items-center gap-1"
+                    >
+                      <Eye size={12} /> Preview R2
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCandidateResume(candidateResumeAttachment.id, true)}
+                      className="text-xs font-bold text-slate-600 dark:text-slate-300 hover:underline flex items-center gap-1"
+                    >
+                      <Download size={12} /> Download
+                    </button>
+                  </div>
+                ) : selectedCandidate.resume_url ? (
+                  <a
+                    href={selectedCandidate.resume_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="os-link flex items-center gap-1 font-bold text-xs"
+                  >
+                    <FileText size={13} /> Open Legacy Resume
+                  </a>
+                ) : (
+                  <span className="text-[11px] text-slate-400">No resume attached</span>
+                )}
               </div>
-            )}
+
+              {candidateResumeAttachment && (
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  File: <span className="font-medium text-slate-800 dark:text-slate-200">{candidateResumeAttachment.file_name}</span> ({formatBytes(candidateResumeAttachment.file_size_bytes)})
+                </div>
+              )}
+
+              <div className="pt-1 flex items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 shadow-sm transition">
+                  <Upload size={12} />
+                  <span>{isUploadingResume ? 'Uploading to R2...' : candidateResumeAttachment ? 'Replace Resume (R2)' : 'Upload Resume (R2)'}</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={isUploadingResume}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        handleUploadCandidateResume(e.target.files[0]);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+                {isLoadingResume && <span className="text-[10px] text-slate-400">Checking R2 storage...</span>}
+              </div>
+            </div>
 
             <div className="pt-2 flex justify-end gap-2">
               <button onClick={() => setIsCandidateModalOpen(false)} className="os-primary">Close</button>

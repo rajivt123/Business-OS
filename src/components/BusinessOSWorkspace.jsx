@@ -29,6 +29,13 @@ import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
 import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
 import ProfileWorkspace from './profile/ProfileWorkspace';
+import { supabase } from '../lib/supabase';
+import {
+  listBusinessAttachments,
+  createBusinessAttachmentDownloadUrl,
+  uploadBusinessAttachment,
+  formatBytes
+} from '../lib/storageService';
 
 const roleMeta = {
   OWNER: { label: 'Owner', tone: 'violet', home: 'owner' },
@@ -414,7 +421,342 @@ function ReportsPage() {
 }
 
 function DocumentsPage() {
-  return <div className="space-y-4"><div className="grid grid-cols-2 xl:grid-cols-4 gap-3"><StatCard icon={FileText} label="All Documents" value="Unavailable" tone="blue" /><StatCard icon={FolderKanban} label="Project Documents" value="Unavailable" tone="violet" /><StatCard icon={FileCheck2} label="Awaiting Review" value="Unavailable" tone="amber" /><StatCard icon={History} label="Recent Versions" value="Unavailable" tone="emerald" /></div><SectionCard title="Document Library" subtitle="Document backend is not connected in the current application." icon={FileText} action={<UnavailableAction className="os-primary"><Upload size={14} /> Upload</UnavailableAction>}><p className="p-4 text-xs italic text-slate-400">No live documents are available.</p></SectionCard></div>;
+  const { activeOperatingCompany } = useCrm() || {};
+  const [documents, setDocuments] = useState([]);
+  const [attachmentsMap, setAttachmentsMap] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const fetchDocuments = async () => {
+    setIsLoading(true);
+    try {
+      let query = supabase.from('documents').select('*').order('created_at', { ascending: false });
+      if (activeOperatingCompany?.id) {
+        query = query.eq('tenant_company_id', activeOperatingCompany.id);
+      }
+      const { data, error } = await query;
+      if (error) {
+        console.error('Documents query error:', error);
+        // Fallback without tenant_company_id filter if empty
+        const fallback = await supabase.from('documents').select('*').order('created_at', { ascending: false });
+        if (!fallback.error) setDocuments(fallback.data || []);
+      } else {
+        setDocuments(data || []);
+      }
+
+      const docsToScan = data || [];
+      const attMap = {};
+      await Promise.all(
+        docsToScan.map(async (doc) => {
+          try {
+            const res = await listBusinessAttachments({
+              entityType: 'document',
+              entityId: doc.id,
+              fieldKey: 'file'
+            });
+            if (res?.success && res.attachments?.length > 0) {
+              attMap[doc.id] = res.attachments[0];
+            }
+          } catch (e) {
+            console.error('Error fetching doc attachment:', e);
+          }
+        })
+      );
+      setAttachmentsMap(attMap);
+    } catch (err) {
+      console.error('Failed to load documents:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [activeOperatingCompany?.id]);
+
+  const handleUploadDocument = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !selectedFile) {
+      setUploadError('Please specify document title and choose a file.');
+      return;
+    }
+    setUploadError('');
+    setIsUploading(true);
+    try {
+      const ext = selectedFile.name.split('.').pop() || 'file';
+      const tenantCompId = activeOperatingCompany?.id || null;
+      const { data: insertedDoc, error: insertErr } = await supabase
+        .from('documents')
+        .insert({
+          title: newTitle.trim(),
+          file_type: ext,
+          ...(tenantCompId ? { tenant_company_id: tenantCompId } : {})
+        })
+        .select()
+        .single();
+
+      if (insertErr) throw insertErr;
+
+      // Upload file directly to R2
+      const uploadRes = await uploadBusinessAttachment({
+        entityType: 'document',
+        entityId: insertedDoc.id,
+        fieldKey: 'file',
+        file: selectedFile
+      });
+
+      if (!uploadRes.success) {
+        throw new Error(uploadRes.error || 'Failed to upload document file to R2');
+      }
+
+      setIsAddModalOpen(false);
+      setNewTitle('');
+      setSelectedFile(null);
+      await fetchDocuments();
+      alert('Document uploaded to Cloudflare R2 successfully!');
+    } catch (err) {
+      console.error('Upload document error:', err);
+      setUploadError(err.message || 'Failed to upload document');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleOpenDoc = async (doc, download = false) => {
+    const r2Att = attachmentsMap[doc.id];
+    if (r2Att) {
+      try {
+        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: r2Att.id });
+        if (res?.download_url) {
+          if (download) {
+            const a = document.createElement('a');
+            a.href = res.download_url;
+            a.download = r2Att.file_name || doc.title;
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          } else {
+            window.open(res.download_url, '_blank', 'noopener,noreferrer');
+          }
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to get download URL:', err);
+      }
+    }
+    if (doc.file_url) {
+      window.open(doc.file_url, '_blank', 'noopener,noreferrer');
+    } else {
+      alert('No file available for preview.');
+    }
+  };
+
+  const filteredDocs = documents.filter(d =>
+    (d.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (d.file_type || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const r2Count = Object.keys(attachmentsMap).length;
+  const legacyCount = documents.filter(d => !attachmentsMap[d.id] && d.file_url).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <StatCard icon={FileText} label="Total Documents" value={documents.length} tone="blue" />
+        <StatCard icon={FolderKanban} label="Cloudflare R2 Files" value={r2Count} tone="emerald" />
+        <StatCard icon={History} label="Legacy Files" value={legacyCount} tone="violet" />
+        <StatCard icon={FileCheck2} label="Storage Status" value="R2 Central Active" tone="sky" />
+      </div>
+
+      <SectionCard
+        title="Business Document Library"
+        subtitle="Universal Cloudflare R2 business file storage with legacy Supabase URL support"
+        icon={FileText}
+        action={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="os-primary flex items-center gap-1 text-xs"
+            >
+              <Upload size={14} /> Upload Document
+            </button>
+            <button
+              onClick={fetchDocuments}
+              className="os-secondary p-1.5 rounded-lg text-slate-600 dark:text-slate-300"
+              title="Refresh"
+            >
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        }
+      >
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-2 max-w-sm">
+            <Search size={14} className="text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search documents by title or type..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 focus:outline-none"
+            />
+          </div>
+
+          {isLoading && documents.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+              <RefreshCw size={14} className="animate-spin" /> Loading business documents...
+            </div>
+          ) : filteredDocs.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-400">
+              No documents found. Click "Upload Document" to upload a business file to Cloudflare R2.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredDocs.map((doc) => {
+                const r2Att = attachmentsMap[doc.id];
+                const isR2 = Boolean(r2Att);
+                return (
+                  <div key={doc.id} className="py-3 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`p-2.5 rounded-xl ${isR2 ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                        <FileText size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                          {doc.title || 'Untitled Document'}
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                          <span>{doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '—'}</span>
+                          <span>·</span>
+                          <span className="uppercase font-semibold">{doc.file_type || 'FILE'}</span>
+                          {r2Att && (
+                            <>
+                              <span>·</span>
+                              <span>{formatBytes(r2Att.file_size_bytes)}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isR2 ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                          R2 Active
+                        </span>
+                      ) : doc.file_url ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                          Legacy File
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                          Pending File
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDoc(doc, false)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1"
+                        title="Preview"
+                      >
+                        <Eye size={13} />
+                        <span className="hidden sm:inline">Preview</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDoc(doc, true)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1"
+                        title="Download"
+                      >
+                        <Download size={13} />
+                        <span className="hidden sm:inline">Download</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* Upload Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-black uppercase flex items-center gap-2">
+                <Upload size={16} className="text-sky-500" /> Upload Business Document (R2)
+              </h3>
+              <button onClick={() => setIsAddModalOpen(false)}><X size={16} /></button>
+            </div>
+
+            <form onSubmit={handleUploadDocument} className="space-y-3.5 text-xs">
+              {uploadError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 text-rose-600 text-xs font-medium">
+                  {uploadError}
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold block mb-1">Document Title *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Annual Audit Report 2026"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="font-bold block mb-1">Select File (max 150 MB) *</label>
+                <input
+                  type="file"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  className="w-full p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800"
+                  required
+                />
+                {selectedFile && (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Selected: {selectedFile.name} ({formatBytes(selectedFile.size)})
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={isUploading}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploading}
+                  className="os-primary flex items-center gap-1.5 text-xs"
+                >
+                  {isUploading ? <RefreshCw size={13} className="animate-spin" /> : <Upload size={13} />}
+                  <span>{isUploading ? 'Uploading to R2...' : 'Upload & Save'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ApprovalsPage() {

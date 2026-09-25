@@ -10,7 +10,7 @@ export default function CenterPanel() {
     logs, logInput, setLogInput, editingLogId, setEditingLogId, editLogContent, setEditLogContent, setHistoryLog, attachment, setAttachment, isUploading, setIsBinModalOpen,
     reminders, openNewWorkModal, openEditWorkModal, handleDeleteWork, openMoveLogModal,
     startEditingLog, saveLogEdit, handleDeleteLog, openReminderForLog, handleAddLog, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
-    openDocPreview,
+    openDocPreview, openWorkAttachmentPreview, viewLogAttachment,
     projectAssignments, setIsProjectTeamModalOpen, getActiveProjectAssignments, tenantMembers, getUserDisplayName,
     contacts, isContactsLoading, openNewContactModal, openEditContactModal, handleDeleteContact,
     enquiries, isEnquiriesLoading, openNewEnquiryModal, openEditEnquiryModal, handleDeleteEnquiry, saveEnquiry,
@@ -112,39 +112,40 @@ export default function CenterPanel() {
                     </div>
                     <div className="flex flex-wrap gap-1 mt-auto pt-1">
                       {w.po_number && (
-                        w.po_file_url ? (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); openDocPreview(w.po_file_url, `${w.title} - PO Document`); }}
-                            className="os-tab bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
-                            title="Instant View PO Document"
-                          >
-                            <Eye size={10} /> PO: {w.po_number}
-                          </button>
-                        ) : (
-                          <span className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 py-0.5 px-1.5 rounded text-[9px] font-bold tracking-wider uppercase">PO: {w.po_number}</span>
-                        )
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openWorkAttachmentPreview(w.id, 'po', `${w.title} - PO Document`, w.po_file_url);
+                          }}
+                          className="os-tab bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
+                          title="Instant View PO Document"
+                        >
+                          <Eye size={10} /> PO: {w.po_number}
+                        </button>
                       )}
 
                       {w.wo_number && (
-                        w.wo_file_url ? (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); openDocPreview(w.wo_file_url, `${w.title} - WO Document`); }}
-                            className="os-tab bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
-                            title="Instant View WO Document"
-                          >
-                            <Eye size={10} /> WO: {w.wo_number}
-                          </button>
-                        ) : (
-                          <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 py-0.5 px-1.5 rounded text-[9px] font-bold tracking-wider uppercase">WO: {w.wo_number}</span>
-                        )
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openWorkAttachmentPreview(w.id, 'wo', `${w.title} - WO Document`, w.wo_file_url);
+                          }}
+                          className="os-tab bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
+                          title="Instant View WO Document"
+                        >
+                          <Eye size={10} /> WO: {w.wo_number}
+                        </button>
                       )}
 
                       {w.boq_url && (
                         <button 
                           type="button" 
-                          onClick={(e) => { e.stopPropagation(); openDocPreview(w.boq_url, `${w.title} - BOQ`); }} 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openWorkAttachmentPreview(w.id, 'boq', `${w.title} - BOQ`, w.boq_url);
+                          }} 
                           className="os-tab bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-400 py-0.5 px-1.5 text-[9px] font-bold tracking-wider uppercase flex items-center gap-1 cursor-pointer"
                           title="Instant View BOQ Document"
                         >
@@ -532,22 +533,22 @@ export default function CenterPanel() {
                             <p className={`text-xs leading-relaxed whitespace-pre-wrap ${tText}`}>{log.content}</p>
                           )}
                           
-                          {log.attachment_url && (
+                          {(log.attachment_url || log.r2_attachment) && (
                             <div className="mt-2 mb-1">
-                              {log.attachment_url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+                              {log.attachment_url && log.attachment_url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
                                 <img 
                                   src={log.attachment_url} 
                                   alt="Attached file" 
-                                  onClick={() => openDocPreview(log.attachment_url, 'Log Attachment')} 
+                                  onClick={() => viewLogAttachment(log)} 
                                   className="max-h-40 rounded-xl border border-slate-200 dark:border-slate-800 object-cover cursor-pointer hover:opacity-90 transition-all duration-200 shadow-xs" 
                                 />
                               ) : (
                                 <button 
                                   type="button" 
-                                  onClick={() => openDocPreview(log.attachment_url, 'Log Attachment')} 
+                                  onClick={() => viewLogAttachment(log)} 
                                   className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border shadow-xs ${isDarkMode ? 'bg-slate-950 border-slate-800 text-sky-400 hover:bg-slate-800' : 'bg-slate-50 border-slate-200 text-sky-700 hover:bg-slate-100'}`}
                                 >
-                                  <Eye size={13} /> Instant View Attachment
+                                  <Eye size={13} /> Instant View Attachment {log.r2_attachment?.file_name ? `(${log.r2_attachment.file_name})` : ''}
                                 </button>
                               )}
                             </div>

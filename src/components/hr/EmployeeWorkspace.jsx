@@ -4,8 +4,12 @@ import { useCrm } from '../../context/CrmContext';
 import {
   Users, Search, Filter, Plus, Edit2, Eye, EyeOff, X, Save, Trash2, CheckCircle2,
   AlertCircle, ShieldCheck, ShieldAlert, Building2, UserPlus, FileText, Landmark,
-  Heart, CheckSquare, Settings, Lock
+  Heart, CheckSquare, Settings, Lock, Camera, Upload, Download
 } from 'lucide-react';
+import {
+  listBusinessAttachments,
+  createBusinessAttachmentDownloadUrl
+} from '../../lib/storageService';
 
 export default function EmployeeWorkspace() {
   const {
@@ -39,6 +43,7 @@ export default function EmployeeWorkspace() {
     deleteNominee,
     saveDocument,
     deleteDocument,
+    saveEmployeePhoto,
     saveFieldValue,
     saveFieldDefinition,
     saveFieldConfiguration
@@ -401,14 +406,52 @@ export default function EmployeeWorkspace() {
     } else showToast(`Error: ${res.error}`, 'rose');
   };
 
+  const [selectedDocFile, setSelectedDocFile] = useState(null);
+
   const handleAddDocument = async (e) => {
     e.preventDefault();
     if (!selectedEmployee?.id || !docForm.document_name.trim()) return;
-    const res = await saveDocument({ ...docForm, employee_id: selectedEmployee.id });
+    const res = await saveDocument({ ...docForm, file: selectedDocFile, employee_id: selectedEmployee.id });
     if (res.success) {
       showToast('Document record added!', 'emerald');
       setDocForm({ document_name: '', document_type: 'Identity', issue_date: '', expiry_date: '', verification_status: 'Pending' });
+      setSelectedDocFile(null);
     } else showToast(`Error: ${res.error}`, 'rose');
+  };
+
+  const handleViewEmployeeDoc = async (doc) => {
+    try {
+      const attachments = await listBusinessAttachments({
+        entityType: 'employee_document',
+        entityId: doc.id,
+        fieldKey: 'document'
+      });
+      if (attachments && attachments.length > 0) {
+        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: attachments[0].id });
+        if (res?.download_url) {
+          window.open(res.download_url, '_blank');
+          return;
+        }
+      }
+      if (doc.storage_path || doc.file_url) {
+        window.open(doc.storage_path || doc.file_url, '_blank');
+        return;
+      }
+      showToast('No file attached to this document.', 'amber');
+    } catch (err) {
+      showToast('Error opening document: ' + err.message, 'rose');
+    }
+  };
+
+  const handleUploadEmployeePhoto = async (file) => {
+    if (!file || !selectedEmployee?.id) return;
+    const res = await saveEmployeePhoto(selectedEmployee.id, file);
+    if (res.success) {
+      showToast('Employee photo updated!', 'emerald');
+      fetchEmployeeSubRecords(selectedEmployee.id);
+    } else {
+      showToast(`Error updating photo: ${res.error}`, 'rose');
+    }
   };
 
   const handleSaveFieldValueClick = async (defId, val) => {
@@ -860,6 +903,31 @@ export default function EmployeeWorkspace() {
                       <h3 className="text-xs font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400">
                         Section A — Basic Personal Details
                       </h3>
+                    </div>
+
+                    {/* Employee Profile Photo R2 Uploader */}
+                    <div className="p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 flex items-center gap-4 bg-slate-50/50 dark:bg-slate-900/50">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
+                        {empForm.photo_url ? (
+                          <img src={empForm.photo_url} alt="Profile" className="h-full w-full object-cover" />
+                        ) : (
+                          (empForm.first_name || 'E')[0]
+                        )}
+                      </div>
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Employee Photo (Cloudflare R2)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={e => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadEmployeePhoto(file);
+                            }}
+                            className="text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
@@ -1671,45 +1739,67 @@ export default function EmployeeWorkspace() {
               {/* TAB 6: DOCUMENTS */}
               {modalTab === 'documents' && (
                 <div className="space-y-4 text-xs">
-                  <h4 className="font-bold text-sky-600">Employee Documents (employee_documents)</h4>
-                  <form onSubmit={handleAddDocument} className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Document Name (e.g. Passport, Offer Letter)"
-                      value={docForm.document_name}
-                      onChange={e => setDocForm({ ...docForm, document_name: e.target.value })}
-                      className={`p-2 rounded-lg border ${tInput}`}
-                    />
-                    <select
-                      value={docForm.document_type}
-                      onChange={e => setDocForm({ ...docForm, document_type: e.target.value })}
-                      className={`p-2 rounded-lg border ${tInput}`}
-                    >
-                      {['Identity', 'Education', 'Experience', 'Joining', 'Offer', 'Certification', 'Contract'].map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="date"
-                      value={docForm.issue_date}
-                      onChange={e => setDocForm({ ...docForm, issue_date: e.target.value })}
-                      className={`p-2 rounded-lg border ${tInput}`}
-                    />
-                    <button type="submit" className="bg-sky-600 text-white font-bold rounded-lg p-2 hover:bg-sky-500">
-                      + Add Record
-                    </button>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sky-600">Employee Documents (employee_documents)</h4>
+                    <span className="text-[10px] text-slate-400">R2 Central Storage Supported</span>
+                  </div>
+                  <form onSubmit={handleAddDocument} className="space-y-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Document Name (e.g. Passport, Offer Letter)"
+                        value={docForm.document_name}
+                        onChange={e => setDocForm({ ...docForm, document_name: e.target.value })}
+                        className={`p-2 rounded-lg border ${tInput}`}
+                      />
+                      <select
+                        value={docForm.document_type}
+                        onChange={e => setDocForm({ ...docForm, document_type: e.target.value })}
+                        className={`p-2 rounded-lg border ${tInput}`}
+                      >
+                        {['Identity', 'Education', 'Experience', 'Joining', 'Offer', 'Certification', 'Contract'].map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={docForm.issue_date}
+                        onChange={e => setDocForm({ ...docForm, issue_date: e.target.value })}
+                        className={`p-2 rounded-lg border ${tInput}`}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <input
+                        type="file"
+                        onChange={e => setSelectedDocFile(e.target.files[0])}
+                        className="text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"
+                      />
+                      <button type="submit" className="bg-sky-600 text-white font-bold rounded-lg py-1.5 px-4 hover:bg-sky-500 shrink-0">
+                        + Add Document Record
+                      </button>
+                    </div>
                   </form>
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {employeeDocuments.map(doc => (
                       <div key={doc.id} className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <div>
                           <span className="font-bold">{doc.document_name}</span> [{doc.document_type}] • Issued: {doc.issue_date || '—'}
                         </div>
-                        <button onClick={() => deleteDocument(doc.id, selectedEmployee.id)} className="text-rose-500 hover:text-rose-700">
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleViewEmployeeDoc(doc)}
+                            className="p-1 rounded-md text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"
+                            title="View / Download Document"
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button onClick={() => deleteDocument(doc.id, selectedEmployee.id)} className="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
