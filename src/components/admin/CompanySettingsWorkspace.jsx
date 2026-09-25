@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { useCrm } from '../../context/CrmContext';
 import { supabase } from '../../lib/supabase';
-import { processFileForMetadata, formatBytes } from '../../lib/storageService';
+import { processFileForMetadata, formatBytes, getCompanyDocuments } from '../../lib/storageService';
+import CompanyDocumentsManager from './CompanyDocumentsManager';
 
 const REGISTRATION_TYPES = [
   'PAN', 'GSTIN', 'CIN', 'LLPIN', 'TAN', 'IEC', 'Udyam', 'PF', 'ESIC', 'Professional Tax', 'Other'
@@ -260,6 +261,17 @@ export default function CompanySettingsWorkspace() {
 
         const finMonth = cp.financial_year_start_month || '04';
 
+        let docs = [];
+        try {
+          docs = await getCompanyDocuments(companyId);
+        } catch (_) {
+          docs = (settingsData.documents || []).map(d => ({
+            ...d,
+            id: isRealUuid(d.id) ? d.id : undefined,
+            verification_status: (d.verification_status || 'pending').toLowerCase()
+          }));
+        }
+
         setFormData({
           name: tc.name || cp.display_name || cp.legal_name || '',
           legal_name: cp.legal_name || '',
@@ -337,11 +349,7 @@ export default function CompanySettingsWorkspace() {
           welcome_message: cb.welcome_message || 'Welcome to RAJIV Business OS',
           contact_display_text: cb.contact_display_text || '',
 
-          documents: (settingsData.documents || []).map(d => ({
-            ...d,
-            id: isRealUuid(d.id) ? d.id : undefined,
-            verification_status: (d.verification_status || 'pending').toLowerCase()
-          }))
+          documents: docs
         });
       }
 
@@ -1442,10 +1450,18 @@ export default function CompanySettingsWorkspace() {
 
             {/* TAB 10: DOCUMENTS */}
             {activeTab === 'documents' && (
-              <DocumentsTab
-                documents={formData.documents}
-                onChange={docs => handleInputChange('documents', docs)}
-                onArchive={item => archiveChildItem('document', item)}
+              <CompanyDocumentsManager
+                companyId={selectedCompanyId}
+                companyName={formData.name || formData.display_name}
+                isOwner={isOwner}
+                onDocumentsUpdated={docs => {
+                  setFormData(prev => ({
+                    ...prev,
+                    documents: docs
+                  }));
+                }}
+                onError={err => setErrorMessage(err)}
+                onSuccess={msg => setSuccessMessage(msg)}
               />
             )}
 
@@ -2368,125 +2384,8 @@ function BrandingTab({ formData, handleInputChange }) {
   );
 }
 
-function DocumentsTab({ documents = [], onChange, onArchive }) {
-  const fileInputRef = useRef(null);
-  const [selectedDocType, setSelectedDocType] = useState('GST Certificate');
-  const [customType, setCustomType] = useState('');
-  const [docNumber, setDocNumber] = useState('');
-  const [isUploadingProgress, setIsUploadingProgress] = useState(false);
-
-  async function handleFileUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingProgress(true);
-    try {
-      const meta = await processFileForMetadata(file, 'documents', 'company_doc');
-      const newDoc = {
-        id: 'doc_' + Date.now(),
-        document_type: selectedDocType,
-        custom_type: selectedDocType === 'Other' ? customType : '',
-        document_name: file.name,
-        document_number: docNumber || 'DOC-01',
-        verification_status: 'verified',
-        version: '1.0',
-        is_current: true,
-        is_archived: false,
-        file_name: meta.file_name,
-        mime_type: meta.mime_type,
-        file_size: meta.file_size,
-        preview: meta.preview,
-        created_at: new Date().toISOString()
-      };
-
-      onChange([...documents, newDoc]);
-      setDocNumber('');
-    } catch (err) {
-      console.error('Doc upload error:', err);
-    } finally {
-      setIsUploadingProgress(false);
-    }
-  }
-
-  function handleDelete(item) {
-    if (onArchive && item) onArchive(item);
-    onChange(documents.filter(d => d.id !== item.id));
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
-          <FileCheck2 size={16} className="text-sky-500" />
-          Company Document Management & Verification
-        </h3>
-        <p className="text-xs text-slate-400 mt-0.5">Upload, version and archive statutory documents and certificates</p>
-      </div>
-
-      {/* Drag & Drop Upload Zone */}
-      <div className="p-6 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800 text-center space-y-4 bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="max-w-md mx-auto space-y-3">
-          <Upload size={32} className="text-sky-500 mx-auto" />
-          <h4 className="text-xs font-bold text-slate-900 dark:text-white">Drag & drop company document or browse file</h4>
-
-          <div className="grid sm:grid-cols-2 gap-3 text-left">
-            <div>
-              <label className="os-label">Document Type</label>
-              <select
-                value={selectedDocType}
-                onChange={e => setSelectedDocType(e.target.value)}
-                className="os-input cursor-pointer"
-              >
-                {DOCUMENT_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="os-label">Document Number</label>
-              <input
-                type="text"
-                placeholder="e.g. GSTIN12345"
-                value={docNumber}
-                onChange={e => setDocNumber(e.target.value)}
-                className="os-input"
-              />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="os-primary py-2 px-4 mx-auto cursor-pointer"
-          >
-            Browse Document File
-          </button>
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-        </div>
-      </div>
-
-      {/* Documents Table List */}
-      <div className="space-y-2">
-        {documents.map((doc) => (
-          <div key={doc.id} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <FileText size={20} className="text-sky-500 shrink-0" />
-              <div>
-                <span className="font-bold text-xs block">{doc.document_type} - {doc.document_name}</span>
-                <span className="text-[10px] text-slate-400 block">Number: {doc.document_number} | Size: {formatBytes(doc.file_size)}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 capitalize">
-                {doc.verification_status || 'verified'}
-              </span>
-              <button type="button" onClick={() => handleDelete(doc)} className="text-slate-400 hover:text-rose-500">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function DocumentsTab(props) {
+  return <CompanyDocumentsManager {...props} />;
 }
 
 function AuditHistoryTab({ auditHistory = [] }) {
