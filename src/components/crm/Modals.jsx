@@ -25,7 +25,7 @@ export default function Modals() {
     isStageAssignmentModalOpen, stageAssignmentTargetId, closeStageAssignmentModal, stageAssignments, isStageAssignmentsLoading, assignUserToStage, endStageAssignment, getStageAssignments,
     isAdminPanelOpen, setIsAdminPanelOpen, profiles, isFetchingProfiles, fetchProfiles, currentUser, handleUpdateUserRole, handleApproveUser, handleTerminateUser, handleAdminCreateUser,
     moveLogModal, setMoveLogModal, handleMoveLogStage, activeWorkId, works,
-    docPreviewModal, closeDocPreview,
+    docPreviewModal, openDocPreview, closeDocPreview,
     isProjectTeamModalOpen, setIsProjectTeamModalOpen, projectAssignments, isAssignmentsLoading, assignUserToProject, endProjectAssignment, tenantMembers, isFetchingTenantMembers, fetchTenantMembers, tenantId,
     units, contacts, enquiries, followUps,
     isContactModalOpen, setIsContactModalOpen, editingContact, contactForm, setContactForm, saveContact,

@@ -89,6 +89,15 @@ export default function CompanyDocumentsManager({
   const [archiveModalDoc, setArchiveModalDoc] = useState(null);
   const [isArchiving, setIsArchiving] = useState(false);
 
+  // Keep callback props in refs to prevent unnecessary re-fetches and infinite reload loops
+  const onDocumentsUpdatedRef = useRef(onDocumentsUpdated);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onDocumentsUpdatedRef.current = onDocumentsUpdated;
+    onErrorRef.current = onError;
+  });
+
   // Load documents on mount or companyId change
   const loadDocuments = useCallback(async () => {
     if (!companyId) return;
@@ -99,18 +108,18 @@ export default function CompanyDocumentsManager({
       startTransition(() => {
         setDocuments(data || []);
       });
-      if (onDocumentsUpdated) {
-        onDocumentsUpdated(data || []);
+      if (onDocumentsUpdatedRef.current) {
+        onDocumentsUpdatedRef.current(data || []);
       }
     } catch (err) {
       console.error('[CompanyDocumentsManager] loadDocuments error:', err);
       const msg = err.message || 'Failed to fetch company documents.';
       setListError(msg);
-      if (onError) onError(msg);
+      if (onErrorRef.current) onErrorRef.current(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, onDocumentsUpdated, onError]);
+  }, [companyId]);
 
   useEffect(() => {
     if (companyId) {
