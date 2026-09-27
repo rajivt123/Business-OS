@@ -188,36 +188,35 @@ export default function MepDocumentIngestionWorkspace({
       setUploadProgress(90);
 
       // Step 3: Register in mep_document_examples
-      const docPayload = {
-        id: newDocumentId,
-        tenant_id: tenantId || null,
-        tenant_company_id: activeOperatingCompanyId,
-        title: documentTitle.trim(),
-        document_type: finalType,
-        document_number: documentNumber.trim() || null,
-        document_date: documentDate ? new Date(documentDate).toISOString() : null,
-        source_file_name: selectedFile.name,
-        ingestion_status: 'pending',
-        is_authoritative: Boolean(isAuthoritative),
-        metadata: {
-          file_attachment_id: createdAttachmentId,
-          r2_key: uploadResult.storage_key,
-          mime_type: selectedFile.type || 'application/octet-stream',
-          file_size: selectedFile.size,
-          notes: notes.trim() || null
-        },
-        created_by: authUserId
-      };
-
-      const { data: newDocData, error: insertError } = await supabase
-        .from('mep_document_examples')
-        .insert(docPayload)
-        .select()
-        .single();
+      const { data, error: insertError } = await supabase.functions.invoke('mep-document-ingestion', {
+        body: {
+          action: 'register-document',
+          tenant_company_id: activeOperatingCompanyId,
+          document_id: newDocumentId,
+          title: documentTitle.trim(),
+          document_type: finalType,
+          document_number: documentNumber.trim() || null,
+          document_date: documentDate ? new Date(documentDate).toISOString() : null,
+          source_file_name: selectedFile.name,
+          is_authoritative: Boolean(isAuthoritative),
+          metadata: {
+            file_attachment_id: createdAttachmentId,
+            r2_key: uploadResult.storage_key,
+            mime_type: selectedFile.type || 'application/octet-stream',
+            file_size: selectedFile.size,
+            notes: notes.trim() || null
+          }
+        }
+      });
 
       if (insertError) {
         throw new Error(`Document database registration failed: ${insertError.message}`);
       }
+      if (data?.error) {
+        throw new Error(`Document database registration failed: ${data.error}`);
+      }
+      
+      const newDocData = data?.document || { id: newDocumentId, title: documentTitle.trim() };
 
       setUploadProgress(100);
       setUploadStep('complete');

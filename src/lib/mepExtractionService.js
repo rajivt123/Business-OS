@@ -48,75 +48,35 @@ async function fetchActiveJob(documentId, tenantCompanyId) {
  */
 export async function prepareInitialDocumentExtractionJob({
   documentId,
-  tenantId,
   tenantCompanyId,
-  userId
 }) {
   if (!documentId) {
     throw new Error('Document ID is required to prepare an extraction job.');
   }
 
-  // Session-level in-flight deduplication (guards rapid double-clicks / concurrent triggers in same session)
   if (inFlightExtractionJobs.has(documentId)) {
-    console.log(`[mepExtractionService] Request already in-flight for document ${documentId}. Joining existing promise.`);
     return inFlightExtractionJobs.get(documentId);
   }
 
   const jobPromise = (async () => {
-    // 1. Database-backed query: Check for an existing pending/running DOCUMENT_EXTRACTION job
-    const existingActiveJob = await fetchActiveJob(documentId, tenantCompanyId);
-
-    if (existingActiveJob) {
-      console.log('[mepExtractionService] Active extraction job already exists for document:', existingActiveJob.id);
-      return {
-        extraction: existingActiveJob,
-        alreadyExisted: true
-      };
-    }
-
-    // 2. No active job found — insert initial pending job
-    const extPayload = {
-      tenant_id: tenantId || null,
-      tenant_company_id: tenantCompanyId,
-      document_example_id: documentId,
-      extraction_type: 'DOCUMENT_EXTRACTION',
-      provider: 'pending',
-      model_name: null,
-      model_version: null,
-      status: 'pending',
-      created_by: userId
-    };
-
-    const { data: newJob, error: insertError } = await supabase
-      .from('mep_document_extractions')
-      .insert(extPayload)
-      .select()
-      .single();
-
-    if (insertError) {
-      // 3. Concurrency edge-case: If another client/tab inserted simultaneously
-      // Check for uniqueness constraint error (PostgreSQL code 23505) or general duplicate/unique error
-      if (
-        insertError.code === '23505' ||
-        insertError.message?.toLowerCase().includes('duplicate') ||
-        insertError.message?.toLowerCase().includes('unique')
-      ) {
-        console.warn('[mepExtractionService] Unique constraint violation (23505) detected on insert. Re-querying active job...');
-        const fallbackJob = await fetchActiveJob(documentId, tenantCompanyId);
-        if (fallbackJob) {
-          return {
-            extraction: fallbackJob,
-            alreadyExisted: true
-          };
-        }
+    const { data, error } = await supabase.functions.invoke('mep-extraction-worker', {
+      body: {
+        action: 'prepare',
+        tenant_company_id: tenantCompanyId,
+        document_id: documentId
       }
+    });
 
-      throw new Error(`Failed to initialize extraction job: ${insertError.message}`);
+    if (error) {
+      throw new Error(`Failed to initialize extraction job: ${error.message}`);
+    }
+    if (data?.error) {
+      throw new Error(`Failed to initialize extraction job: ${data.error}`);
     }
 
     return {
-      extraction: newJob || extPayload,
-      alreadyExisted: false
+      extraction: data.extraction,
+      alreadyExisted: data.already_existed
     };
   })();
 
@@ -129,10 +89,70 @@ export async function prepareInitialDocumentExtractionJob({
   }
 }
 
+export async function executeExtractionJob({
+  jobId,
+  tenantCompanyId,
+  workerId,
+  options = {}
+}) {
+  const { data, error } = await supabase.functions.invoke('mep-extraction-worker', {
+    body: {
+      action: 'execute',
+      tenant_company_id: tenantCompanyId,
+      job_id: jobId,
+      worker_id: workerId,
+      options
+    }
+  });
+
+  if (error) throw new Error(`Execution failed: ${error.message}`);
+  if (data?.error) throw new Error(`Execution failed: ${data.error}`);
+  return data;
+}
+
+export async function cancelExtractionJob({
+  jobId,
+  tenantCompanyId,
+  reason = 'Cancelled by user'
+}) {
+  const { data, error } = await supabase.functions.invoke('mep-extraction-worker', {
+    body: {
+      action: 'cancel',
+      tenant_company_id: tenantCompanyId,
+      job_id: jobId,
+      reason
+    }
+  });
+
+  if (error) throw new Error(`Cancel failed: ${error.message}`);
+  if (data?.error) throw new Error(`Cancel failed: ${data.error}`);
+  return data;
+}
+
+export async function retryExtractionJob({
+  jobId,
+  tenantCompanyId,
+}) {
+  const { data, error } = await supabase.functions.invoke('mep-extraction-worker', {
+    body: {
+      action: 'retry',
+      tenant_company_id: tenantCompanyId,
+      job_id: jobId
+    }
+  });
+
+  if (error) throw new Error(`Retry failed: ${error.message}`);
+  if (data?.error) throw new Error(`Retry failed: ${data.error}`);
+  
+  return {
+    extraction: data.extraction,
+    alreadyExisted: data.already_existed
+  };
+}
+
 // Re-export Phase 4A extraction architecture, state machine, contracts, and worker orchestrator
 export * from './mep/extraction/constants.js';
 export * from './mep/extraction/extractionEnvelope.js';
 export * from './mep/extraction/documentStrategyRouter.js';
 export * from './mep/extraction/providerContract.js';
 export * from './mep/extraction/dryRunProvider.js';
-export * from './mep/extraction/mepExtractionWorker.js';
