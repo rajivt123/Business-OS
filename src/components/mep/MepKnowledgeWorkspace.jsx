@@ -481,6 +481,25 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     }
   };
 
+  // Handler: Retry failed/cancelled extraction job (Phase 4A)
+  const handleRetryJob = async (jobId) => {
+    if (!jobId || !selectedDoc) return;
+    setIsPreparingJob(true); // Re-use preparing state for UI loading
+    setErrorMsg(null);
+    try {
+      await retryExtractionJob({
+        jobId,
+        tenantCompanyId: selectedDoc.tenant_company_id || activeOperatingCompanyId
+      });
+      await fetchDocumentDetails(selectedDoc.id);
+    } catch (err) {
+      console.error('[MepKnowledgeWorkspace] Error retrying job:', err);
+      setErrorMsg(err.message || 'Failed to retry extraction job.');
+    } finally {
+      setIsPreparingJob(false);
+    }
+  };
+
   // Handler: Download original source document via R2 (Step 9)
   const handleDownloadSourceFile = async (doc) => {
     const attachmentId = doc?.metadata?.file_attachment_id;
@@ -1068,8 +1087,14 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
                             </td>
 
                             {/* Provider */}
-                            <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-300">
-                              {ext.provider || '—'}
+                            <td className="py-3 px-3 font-semibold">
+                              {ext.provider === 'DRY_RUN' ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                                  <CheckCircle2 size={12} /> Dry Run
+                                </span>
+                              ) : (
+                                <span className="text-slate-700 dark:text-slate-300">{ext.provider || '—'}</span>
+                              )}
                             </td>
 
                             {/* Model */}
@@ -1168,13 +1193,13 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
                                 {isTerminal && (s === 'failed' || s === 'cancelled') && !hasActiveExtraction && (
                                   <button
                                     type="button"
-                                    onClick={handlePrepareExtractionForDoc}
+                                    onClick={() => handleRetryJob(ext.id)}
                                     disabled={isPreparingJob}
-                                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1 transition cursor-pointer"
-                                    title="Retry Extraction (Creates new pending job)"
+                                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+                                    title="Retry Extraction via Backend Worker"
                                   >
-                                    <RefreshCw size={11} />
-                                    <span>Retry</span>
+                                    <RefreshCw size={11} className={isPreparingJob ? 'animate-spin' : ''} />
+                                    <span>{isPreparingJob ? 'Retrying...' : 'Retry'}</span>
                                   </button>
                                 )}
                               </div>
