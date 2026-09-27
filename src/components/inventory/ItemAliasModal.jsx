@@ -31,6 +31,21 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
     return mepItemSpecifications.filter(s => s.inventory_item_id === item.id);
   }, [mepItemSpecifications, item]);
 
+  // Safe formatter for JSONB normalized_value
+  const formatNormalizedValue = (val) => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (typeof val === 'object') {
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    }
+    return String(val);
+  };
+
   // Resolve specification display value from actual table columns
   const getSpecDisplayValue = (spec) => {
     if (spec.value_text !== null && spec.value_text !== undefined && spec.value_text !== '') {
@@ -45,8 +60,9 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
     if (spec.value_json !== null && spec.value_json !== undefined) {
       return typeof spec.value_json === 'object' ? JSON.stringify(spec.value_json) : String(spec.value_json);
     }
-    if (spec.normalized_value) {
-      return String(spec.normalized_value);
+    const formattedNorm = formatNormalizedValue(spec.normalized_value);
+    if (formattedNorm) {
+      return formattedNorm;
     }
     return '--';
   };
@@ -260,7 +276,8 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
                 {itemSpecs.map((spec, idx) => {
                   const attrMeta = getAttributeMeta(spec.attribute_definition_id);
                   const displayVal = getSpecDisplayValue(spec);
-                  const hasSecondaryNorm = spec.normalized_value && spec.normalized_value !== displayVal;
+                  const formattedNorm = formatNormalizedValue(spec.normalized_value);
+                  const hasSecondaryNorm = Boolean(formattedNorm && formattedNorm !== displayVal);
 
                   return (
                     <div key={spec.id || idx} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
@@ -282,7 +299,7 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
                         </div>
                         {hasSecondaryNorm && (
                           <p className="text-[10px] text-slate-500 font-mono">
-                            normalized: {spec.normalized_value}
+                            normalized: {formattedNorm}
                           </p>
                         )}
                       </div>
