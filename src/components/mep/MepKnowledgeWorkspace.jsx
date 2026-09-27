@@ -510,7 +510,6 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     setIsDownloading(true);
     try {
       const res = await createBusinessAttachmentDownloadUrl({
-        tenantCompanyId: doc.tenant_company_id || activeOperatingCompanyId,
         attachmentId
       });
       if (res?.download_url) {

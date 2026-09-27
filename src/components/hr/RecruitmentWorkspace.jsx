@@ -169,7 +169,6 @@ export default function RecruitmentWorkspace() {
   const handleOpenCandidateResume = async (attachmentId, download = false) => {
     try {
       const res = await createBusinessAttachmentDownloadUrl({ 
-        tenantCompanyId: activeOperatingCompanyId,
         attachmentId 
       });
       if (res?.download_url) {

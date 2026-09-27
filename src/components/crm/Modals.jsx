@@ -102,7 +102,6 @@ export default function Modals() {
     if (att?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({ 
-          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: att.id 
         })
         if (res?.download_url) {
@@ -124,7 +123,6 @@ export default function Modals() {
     if (att?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({ 
-          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: att.id 
         })
         if (res?.download_url) {

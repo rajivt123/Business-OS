@@ -389,9 +389,9 @@ export async function resolveTenantCompanyId(tenantCompanyId, entityType, entity
       return saved;
     }
   } catch (_) {}
-  // 4. Query active tenant_companies from database
+  // 4. Query any tenant_companies from database as absolute fallback
   try {
-    const { data } = await supabase.from('tenant_companies').select('id').eq('status', 'active').limit(1).maybeSingle();
+    const { data } = await supabase.from('tenant_companies').select('id').limit(1).maybeSingle();
     if (data?.id && isRealUuid(data.id)) {
       return data.id;
     }
@@ -426,10 +426,13 @@ export async function createBusinessAttachmentUploadUrl({
   }
 
   const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, entityType, entityId);
+  if (!resolvedTenantId) {
+    throw new Error('Please select an Operating Company from the top-left dropdown to upload documents.');
+  }
 
   const payload = {
     action: 'create-upload-url',
-    ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
+    tenant_company_id: resolvedTenantId,
     entity_type: entityType,
     entity_id: String(entityId),
     field_key: fieldKey || 'file',
@@ -469,10 +472,13 @@ export async function finalizeBusinessAttachment({
   }
 
   const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, entityType, entityId, attachmentId);
+  if (!resolvedTenantId) {
+    throw new Error('Please select an Operating Company from the top-left dropdown to finalize upload.');
+  }
 
   const payload = {
     action: 'finalize-upload',
-    ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
+    tenant_company_id: resolvedTenantId,
     attachment_id: attachmentId,
     entity_type: entityType,
     entity_id: String(entityId),
@@ -556,16 +562,13 @@ export async function listBusinessAttachments({
  * Step 4: Request temporary signed download URL for a business file attachment.
  * Action: 'create-download-url'
  */
-export async function createBusinessAttachmentDownloadUrl({ tenantCompanyId, attachmentId }) {
+export async function createBusinessAttachmentDownloadUrl({ attachmentId }) {
   if (!attachmentId) {
     throw new Error('Attachment ID is required to generate a download URL.');
   }
 
-  const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, null, null, attachmentId);
-
   const payload = {
     action: 'create-download-url',
-    ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
     attachment_id: attachmentId
   };
 
@@ -588,10 +591,13 @@ export async function archiveBusinessAttachment({ tenantCompanyId, attachmentId 
   }
 
   const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, null, null, attachmentId);
+  if (!resolvedTenantId) {
+    throw new Error('Please select an Operating Company from the top-left dropdown to archive this document.');
+  }
 
   const payload = {
     action: 'archive-attachment',
-    ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
+    tenant_company_id: resolvedTenantId,
     attachment_id: attachmentId
   };
 
@@ -609,10 +615,13 @@ export async function deleteBusinessAttachment({ tenantCompanyId, attachmentId }
   }
 
   const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, null, null, attachmentId);
+  if (!resolvedTenantId) {
+    throw new Error('Please select an Operating Company from the top-left dropdown to delete this document.');
+  }
 
   const payload = {
     action: 'delete-attachment',
-    ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
+    tenant_company_id: resolvedTenantId,
     attachment_id: attachmentId
   };
 

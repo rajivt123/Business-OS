@@ -537,7 +537,6 @@ function DocumentsPage() {
     if (r2Att) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({ 
-          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: r2Att.id 
         });
         if (res?.download_url) {

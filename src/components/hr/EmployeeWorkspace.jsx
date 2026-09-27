@@ -428,7 +428,6 @@ export default function EmployeeWorkspace() {
       });
       if (attachments && attachments.length > 0) {
         const res = await createBusinessAttachmentDownloadUrl({ 
-          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: attachments[0].id 
         });
         if (res?.download_url) {
