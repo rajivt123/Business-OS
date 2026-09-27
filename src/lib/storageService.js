@@ -162,6 +162,8 @@ export function uploadFileToR2(uploadUrl, file, mimeType, onProgress) {
       return reject(new Error('No file provided for upload.'));
     }
 
+    console.log('[R2 Upload] direct PUT starting for file:', file.name, `(${formatBytes(file.size)})`);
+
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', uploadUrl, true);
 
@@ -180,21 +182,26 @@ export function uploadFileToR2(uploadUrl, file, mimeType, onProgress) {
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        console.log('[R2 Upload] direct PUT succeeded with HTTP status:', xhr.status);
         resolve({ success: true, status: xhr.status });
       } else {
+        console.error('[R2 Upload] direct PUT failed with HTTP status:', xhr.status);
         reject(new Error(`Cloudflare R2 upload failed with HTTP status ${xhr.status} (${xhr.statusText || 'Upload rejected'})`));
       }
     };
 
     xhr.onerror = () => {
+      console.error('[R2 Upload] direct PUT encountered network error.');
       reject(new Error('Network error occurred during direct upload to Cloudflare R2. Please check your internet connection.'));
     };
 
     xhr.ontimeout = () => {
-      reject(new Error('Direct upload to Cloudflare R2 timed out.'));
+      console.error('[R2 Upload] direct PUT timed out after 180 seconds.');
+      reject(new Error('Direct upload to Cloudflare R2 timed out after 3 minutes. Please check your connection and try again.'));
     };
 
-    xhr.timeout = 0;
+    // 3 minutes (180,000 ms) timeout to prevent infinite hanging while accommodating large files up to 150 MB
+    xhr.timeout = 180000;
     xhr.send(file);
   });
 }
@@ -611,6 +618,7 @@ export async function uploadBusinessAttachment({
   }
 
   // 1. Create upload URL
+  console.log('[R2 Upload] create-upload-url starting for entity:', entityType, `(field: ${fieldKey})`);
   const uploadData = await createBusinessAttachmentUploadUrl({
     tenantCompanyId,
     entityType,
@@ -626,13 +634,16 @@ export async function uploadBusinessAttachment({
   const uploadUrl = uploadData.upload_url;
 
   if (!uploadUrl || !attachmentId) {
+    console.error('[R2 Upload] create-upload-url failed to return upload URL or attachment ID.');
     throw new Error('Failed to obtain a valid upload URL or attachment ID from storage backend.');
   }
+  console.log('[R2 Upload] create-upload-url succeeded for attachment ID:', attachmentId);
 
   // 2. Direct HTTP PUT to Cloudflare R2
   await uploadFileToR2(uploadUrl, file, file.type, onProgress);
 
   // 3. Finalize upload
+  console.log('[R2 Upload] finalize-upload starting for attachment ID:', attachmentId);
   const finalized = await finalizeBusinessAttachment({
     tenantCompanyId,
     attachmentId,
@@ -646,6 +657,7 @@ export async function uploadBusinessAttachment({
     version,
     metadata
   });
+  console.log('[R2 Upload] finalize-upload succeeded for attachment ID:', attachmentId);
 
   return {
     ...finalized,
@@ -691,12 +703,14 @@ export async function replaceBusinessAttachment({
   // 2. Archive previous attachment
   if (oldAttachmentId) {
     try {
+      console.log('[R2 Upload] archive old attachment starting for ID:', oldAttachmentId);
       await archiveBusinessAttachment({
         tenantCompanyId,
         attachmentId: oldAttachmentId
       });
+      console.log('[R2 Upload] archive old attachment succeeded for ID:', oldAttachmentId);
     } catch (archiveErr) {
-      console.warn('[storageService] Notice: could not archive replaced attachment:', archiveErr.message);
+      console.warn('[R2 Upload] archive old attachment notice:', archiveErr.message);
     }
   }
 

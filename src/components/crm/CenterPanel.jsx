@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { ChevronRight, Plus, FileText, Edit2, Trash2, Settings, AlertCircle, CheckCircle2, Circle, History, Check, Paperclip, Send, Loader2, Bell, X, ArrowRightLeft, Sparkles, Eye, Users, UserPlus, Shield, Phone, Mail, CalendarClock, Tag, Filter, CheckSquare, Square, Building2, BarChart3, Globe, MapPin, ArrowRight } from 'lucide-react'
+import { ChevronRight, Plus, FileText, Edit2, Trash2, Settings, AlertCircle, CheckCircle2, Circle, History, Check, Paperclip, Send, Loader2, Bell, X, ArrowRightLeft, Sparkles, Eye, Users, UserPlus, Shield, Phone, Mail, CalendarClock, Tag, Filter, CheckSquare, Square, Building2, BarChart3, Globe, MapPin, ArrowRight, Download } from 'lucide-react'
 import { useCrm } from '../../context/CrmContext'
+
+function formatBytes(bytes) {
+  if (!bytes || isNaN(bytes)) return '';
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+}
 
 export default function CenterPanel() {
   const {
@@ -10,7 +17,7 @@ export default function CenterPanel() {
     logs, logInput, setLogInput, editingLogId, setEditingLogId, editLogContent, setEditLogContent, setHistoryLog, attachment, setAttachment, isUploading, setIsBinModalOpen,
     reminders, openNewWorkModal, openEditWorkModal, handleDeleteWork, openMoveLogModal,
     startEditingLog, saveLogEdit, handleDeleteLog, openReminderForLog, handleAddLog, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
-    openDocPreview, openWorkAttachmentPreview, viewLogAttachment,
+    openDocPreview, openWorkAttachmentPreview, viewLogAttachment, downloadLogAttachment,
     projectAssignments, setIsProjectTeamModalOpen, getActiveProjectAssignments, tenantMembers, getUserDisplayName,
     contacts, isContactsLoading, openNewContactModal, openEditContactModal, handleDeleteContact,
     enquiries, isEnquiriesLoading, openNewEnquiryModal, openEditEnquiryModal, handleDeleteEnquiry, saveEnquiry,
@@ -534,23 +541,50 @@ export default function CenterPanel() {
                           )}
                           
                           {(log.attachment_url || log.r2_attachment) && (
-                            <div className="mt-2 mb-1">
-                              {log.attachment_url && log.attachment_url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
-                                <img 
-                                  src={log.attachment_url} 
-                                  alt="Attached file" 
-                                  onClick={() => viewLogAttachment(log)} 
-                                  className="max-h-40 rounded-xl border border-slate-200 dark:border-slate-800 object-cover cursor-pointer hover:opacity-90 transition-all duration-200 shadow-xs" 
-                                />
-                              ) : (
-                                <button 
-                                  type="button" 
-                                  onClick={() => viewLogAttachment(log)} 
-                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border shadow-xs ${isDarkMode ? 'bg-slate-950 border-slate-800 text-sky-400 hover:bg-slate-800' : 'bg-slate-50 border-slate-200 text-sky-700 hover:bg-slate-100'}`}
-                                >
-                                  <Eye size={13} /> Instant View Attachment {log.r2_attachment?.file_name ? `(${log.r2_attachment.file_name})` : ''}
-                                </button>
-                              )}
+                            <div className="mt-2.5 mb-1.5">
+                              <div className={`flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl border text-xs transition-all ${isDarkMode ? 'bg-slate-900/90 border-slate-800/80 shadow-xs' : 'bg-slate-50/90 border-slate-200/90 shadow-2xs'}`}>
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                  <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-slate-800 text-sky-400' : 'bg-white text-sky-600 border border-slate-200/60 shadow-2xs'}`}>
+                                    <Paperclip size={14} />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`font-medium text-xs truncate ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`} title={log.r2_attachment?.file_name || log.attachment_url}>
+                                      {log.r2_attachment?.file_name || (log.attachment_url ? log.attachment_url.split('/').pop().split('?')[0] : 'Attachment')}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
+                                      {log.r2_attachment?.file_size ? (
+                                        <span>{formatBytes(log.r2_attachment.file_size)}</span>
+                                      ) : null}
+                                      {log.r2_attachment?.mime_type ? (
+                                        <span>• {log.r2_attachment.mime_type.split('/').pop().toUpperCase()}</span>
+                                      ) : null}
+                                      <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                        R2 Storage
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => viewLogAttachment(log)} 
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition border ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-white hover:bg-slate-100 text-sky-700 border-slate-200 shadow-2xs'}`}
+                                    title="Preview attachment"
+                                  >
+                                    <Eye size={12} />
+                                    <span>Preview</span>
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => downloadLogAttachment(log)} 
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition border ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'}`}
+                                    title="Download attachment"
+                                  >
+                                    <Download size={12} />
+                                    <span>Download</span>
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           )}
 

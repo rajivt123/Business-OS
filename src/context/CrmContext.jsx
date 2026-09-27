@@ -163,6 +163,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [poFile, setPoFile] = useState(null);
   const [woFile, setWoFile] = useState(null);
   const [isWorkUploading, setIsWorkUploading] = useState(false);
+  const [workUploadStage, setWorkUploadStage] = useState('');
+  const [workSaveError, setWorkSaveError] = useState(null);
   
   const [isStageManagerOpen, setIsStageManagerOpen] = useState(false);
   const [editedStages, setEditedStages] = useState([]);
@@ -1778,6 +1780,15 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
   }
 
+  function normalizeToTenantRole(roleStr) {
+    const r = (roleStr || '').trim().toUpperCase();
+    if (r === 'ADMIN' || r === 'OWNER') return 'ADMIN';
+    if (r === 'MANAGER') return 'MANAGER';
+    if (r === 'TEAM' || r === 'MEMBER') return 'TEAM';
+    if (r === 'VIEWER' || r === 'GUEST') return 'VIEWER';
+    return 'TEAM';
+  }
+
   async function handleUpdateUserRole(userId, newRole) {
     const { data, error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId).select();
     if (error) {
@@ -1786,9 +1797,49 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
     }
     if (data) {
       setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole } : p));
+      
+      // Authoritative tenant_memberships synchronization
+      if (tenantId && userId) {
+        try {
+          const mappedTenantRole = normalizeToTenantRole(newRole);
+          const isTerminated = (newRole || '').toLowerCase() === 'terminated';
+
+          const { data: existingMem } = await supabase
+            .from('tenant_memberships')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (existingMem?.id) {
+            await supabase
+              .from('tenant_memberships')
+              .update({
+                role: mappedTenantRole,
+                status: isTerminated ? 'inactive' : 'active'
+              })
+              .eq('id', existingMem.id);
+          } else if (!isTerminated) {
+            await supabase
+              .from('tenant_memberships')
+              .insert([{
+                tenant_id: tenantId,
+                user_id: userId,
+                role: mappedTenantRole,
+                status: 'active'
+              }]);
+          }
+          await fetchTenantMembers(tenantId);
+        } catch (memSyncErr) {
+          console.warn('[CrmContext] Tenant membership sync notice:', memSyncErr.message);
+        }
+      }
+
       const currentSession = await supabase.auth.getSession();
       if (currentSession?.data?.session?.user?.id === userId) {
-        setUserRole(newRole);
+        const tRole = normalizeToTenantRole(newRole);
+        setTenantRole(tRole);
+        setUserRole(normalizeRole(tRole, newRole));
       }
     }
   }
@@ -1829,6 +1880,21 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       if (profileError) {
         console.warn("Profile creation warning:", profileError.message);
       }
+
+      if (tenantId) {
+        try {
+          const mappedTenantRole = normalizeToTenantRole(newRole);
+          await supabase.from('tenant_memberships').insert([{
+            tenant_id: tenantId,
+            user_id: newUserId,
+            role: mappedTenantRole,
+            status: 'active'
+          }]);
+          await fetchTenantMembers(tenantId);
+        } catch (memInsertErr) {
+          console.warn('[CrmContext] New user tenant_memberships insert notice:', memInsertErr.message);
+        }
+      }
     }
 
     await fetchProfiles();
@@ -1848,7 +1914,38 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       console.error('[Supabase Query Error - logs]:', error);
       return;
     }
-    if (data) setLogs(data);
+    if (data) {
+      const logIds = data.map(l => l.id).filter(Boolean);
+      if (logIds.length > 0) {
+        try {
+          const { data: attachments, error: attError } = await supabase
+            .from('file_attachments')
+            .select('*')
+            .eq('entity_type', 'log')
+            .in('entity_id', logIds)
+            .eq('is_archived', false)
+            .order('created_at', { ascending: false });
+
+          if (!attError && Array.isArray(attachments)) {
+            const attByLogId = {};
+            attachments.forEach(att => {
+              if (!attByLogId[att.entity_id]) {
+                attByLogId[att.entity_id] = att;
+              }
+            });
+            const enrichedLogs = data.map(l => ({
+              ...l,
+              r2_attachment: attByLogId[l.id] || null
+            }));
+            setLogs(enrichedLogs);
+            return;
+          }
+        } catch (attErr) {
+          console.warn('[CrmContext] Error loading log attachments:', attErr);
+        }
+      }
+      setLogs(data);
+    }
   }
 
   async function fetchIssues(workId) { 
@@ -3848,6 +3945,8 @@ USER REQUEST: ${trimmedMsg}`;
     // --- END VALIDATION ---
 
     setIsWorkUploading(true); 
+    setWorkUploadStage('Saving project...');
+    setWorkSaveError(null);
     let finalBoqUrl = workForm.boq_url || null;
     
     // Live works table schema has title, po_number, wo_number, boq_url.
@@ -3872,6 +3971,8 @@ USER REQUEST: ${trimmedMsg}`;
         }
         showToast(`Failed to save project: ${errorMsg}`);
         setIsWorkUploading(false);
+        setWorkUploadStage('');
+        setWorkSaveError({ title: 'SAVE FAILED', message: errorMsg });
         return;
       }
       if (data && data.length > 0) {
@@ -3894,6 +3995,8 @@ USER REQUEST: ${trimmedMsg}`;
         }
         showToast(`Failed to create project: ${errorMsg}`);
         setIsWorkUploading(false);
+        setWorkUploadStage('');
+        setWorkSaveError({ title: 'CREATION FAILED', message: errorMsg });
         return;
       }
       if (data && data.length > 0) { 
@@ -3906,7 +4009,13 @@ USER REQUEST: ${trimmedMsg}`;
     // Upload newly selected files directly to Cloudflare R2
     const targetTenantCoId = activeOperatingCompanyId || activeWork?.tenant_company_id || null;
 
+    let poUploadFailed = false;
+    let woUploadFailed = false;
+    let boqUploadFailed = false;
+    const uploadFailureDetails = [];
+
     if (poFile && targetWorkId) {
+      setWorkUploadStage('Uploading PO...');
       try {
         const existingAtts = editingWorkId ? await listBusinessAttachments({
           entityType: 'work',
@@ -3916,6 +4025,7 @@ USER REQUEST: ${trimmedMsg}`;
         }) : [];
         const oldAtt = Array.isArray(existingAtts) && existingAtts.length > 0 ? existingAtts[0] : null;
 
+        setWorkUploadStage(oldAtt?.id ? 'Replacing PO...' : 'Uploading PO...');
         if (oldAtt?.id) {
           await replaceBusinessAttachment({
             tenantCompanyId: targetTenantCoId,
@@ -3934,13 +4044,16 @@ USER REQUEST: ${trimmedMsg}`;
             file: poFile
           });
         }
+        setPoFile(null); // Succeeded: clear selected file
       } catch (err) {
+        poUploadFailed = true;
+        uploadFailureDetails.push(`PO: ${err.message}`);
         console.error('[CrmContext] Error uploading PO to R2:', err);
-        showToast(`Warning: Project saved but PO upload failed: ${err.message}`);
       }
     }
 
     if (woFile && targetWorkId) {
+      setWorkUploadStage('Uploading WO...');
       try {
         const existingAtts = editingWorkId ? await listBusinessAttachments({
           entityType: 'work',
@@ -3950,6 +4063,7 @@ USER REQUEST: ${trimmedMsg}`;
         }) : [];
         const oldAtt = Array.isArray(existingAtts) && existingAtts.length > 0 ? existingAtts[0] : null;
 
+        setWorkUploadStage(oldAtt?.id ? 'Replacing WO...' : 'Uploading WO...');
         if (oldAtt?.id) {
           await replaceBusinessAttachment({
             tenantCompanyId: targetTenantCoId,
@@ -3968,13 +4082,16 @@ USER REQUEST: ${trimmedMsg}`;
             file: woFile
           });
         }
+        setWoFile(null); // Succeeded: clear selected file
       } catch (err) {
+        woUploadFailed = true;
+        uploadFailureDetails.push(`WO: ${err.message}`);
         console.error('[CrmContext] Error uploading WO to R2:', err);
-        showToast(`Warning: Project saved but WO upload failed: ${err.message}`);
       }
     }
 
     if (boqFile && targetWorkId) {
+      setWorkUploadStage('Uploading BOQ...');
       try {
         const existingAtts = editingWorkId ? await listBusinessAttachments({
           entityType: 'work',
@@ -3984,6 +4101,7 @@ USER REQUEST: ${trimmedMsg}`;
         }) : [];
         const oldAtt = Array.isArray(existingAtts) && existingAtts.length > 0 ? existingAtts[0] : null;
 
+        setWorkUploadStage(oldAtt?.id ? 'Replacing BOQ...' : 'Uploading BOQ...');
         if (oldAtt?.id) {
           await replaceBusinessAttachment({
             tenantCompanyId: targetTenantCoId,
@@ -4002,18 +4120,42 @@ USER REQUEST: ${trimmedMsg}`;
             file: boqFile
           });
         }
+        setBoqFile(null); // Succeeded: clear selected file
       } catch (err) {
+        boqUploadFailed = true;
+        uploadFailureDetails.push(`BOQ: ${err.message}`);
         console.error('[CrmContext] Error uploading BOQ to R2:', err);
-        showToast(`Warning: Project saved but BOQ upload failed: ${err.message}`);
       }
     }
 
-    setPoFile(null);
-    setWoFile(null);
-    setBoqFile(null);
-    setIsWorkModalOpen(false);
+    // Stage-aware upload failure handling:
+    // If project was saved but any attachment failed, keep modal open, preserve selected file, distinguish states.
+    if (poUploadFailed || woUploadFailed || boqUploadFailed) {
+      setIsWorkUploading(false);
+      setWorkUploadStage('');
+      const failedTypes = [];
+      if (poUploadFailed) failedTypes.push('PO');
+      if (woUploadFailed) failedTypes.push('WO');
+      if (boqUploadFailed) failedTypes.push('BOQ');
+      
+      const errorMsg = `Project details saved, but ${failedTypes.join('/')} upload failed. Please check your network connection and try again.`;
+      setWorkSaveError({
+        title: 'PROJECT SAVED — FILE UPLOAD FAILED',
+        message: errorMsg,
+        details: uploadFailureDetails.join('; ')
+      });
+      showToast(errorMsg);
+      fetchMissingData();
+      return; // Keep modal open, preserve selected files in state!
+    }
+
+    setWorkUploadStage('Refreshing...');
+    await fetchMissingData();
+    setWorkUploadStage('Saved successfully.');
+    setWorkSaveError(null);
     setIsWorkUploading(false);
-    fetchMissingData();
+    setWorkUploadStage('');
+    setIsWorkModalOpen(false);
     showToast(editingWorkId ? "Project updated successfully." : "Project created successfully.");
   }
 
@@ -4090,6 +4232,62 @@ USER REQUEST: ${trimmedMsg}`;
       openDocPreview(log.attachment_url, 'Log Attachment');
     } else {
       showToast('No attachment found for this log.');
+    }
+  }
+
+  /**
+   * Universal Secure Download for Log Attachments
+   */
+  async function downloadLogAttachment(log) {
+    if (!log) return;
+    if (log.r2_attachment?.id) {
+      try {
+        const res = await createBusinessAttachmentDownloadUrl({
+          attachmentId: log.r2_attachment.id
+        });
+        if (res?.download_url) {
+          const a = document.createElement('a');
+          a.href = res.download_url;
+          a.download = log.r2_attachment.file_name || 'log-attachment';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to download log attachment:', e);
+        showToast('Failed to download attachment: ' + e.message);
+      }
+    }
+
+    try {
+      const list = await listBusinessAttachments({
+        entityType: 'log',
+        entityId: log.id,
+        fieldKey: 'attachment'
+      });
+      if (list && list.length > 0) {
+        const res = await createBusinessAttachmentDownloadUrl({
+          attachmentId: list[0].id
+        });
+        if (res?.download_url) {
+          const a = document.createElement('a');
+          a.href = res.download_url;
+          a.download = list[0].file_name || 'log-attachment';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (log.attachment_url) {
+      window.open(log.attachment_url, '_blank');
+    } else {
+      showToast('No attachment found to download.');
     }
   }
 
@@ -4305,6 +4503,7 @@ USER REQUEST: ${trimmedMsg}`;
     isDarkMode, setIsDarkMode, onSignOut, userRole, isSidebarOpen, setIsSidebarOpen, companies, activeCompanyId, setActiveCompanyId, units, activeUnitId, setActiveUnitId, works, activeWorkId, setActiveWorkId,
     fontSize, setFontSize, increaseFontSize, decreaseFontSize, docPreviewModal, openDocPreview, closeDocPreview,
     centerView, setCenterView, rightView, setRightView, isWorkModalOpen, setIsWorkModalOpen, editingWorkId, workForm, setWorkForm, boqFile, setBoqFile, poFile, setPoFile, woFile, setWoFile, isWorkUploading,
+    workUploadStage, workSaveError, setWorkSaveError,
     isStageManagerOpen, setIsStageManagerOpen, editedStages, activeStageIndex, setActiveStageIndex, issues, activeIssueId, setActiveIssueId, isIssueModalOpen, setIsIssueModalOpen, issueTitleInput, setIssueTitleInput,
     logs, logInput, setLogInput, editingLogId, setEditingLogId, editLogContent, setEditLogContent, historyLog, setHistoryLog, isBinModalOpen, setIsBinModalOpen, attachment, setAttachment, isUploading,
     reminders, missingData, isReminderModalOpen, setIsReminderModalOpen, reminderForm, setReminderForm, modalUnits, modalWorks, searchQuery, setSearchQuery, searchResults, promptModal, closePrompt, confirmModal, closeConfirm,
@@ -4330,7 +4529,7 @@ USER REQUEST: ${trimmedMsg}`;
     getUserDisplayName: (userOrId, p, tm, cu) => getUserDisplayName(userOrId, (p && p.length) ? p : profiles, (tm && tm.length) ? tm : tenantMembers, cu || currentUser),
     navigateToContext, openGlobalReminderModal, openReminderForLog, handleModalCompanyChange, handleModalUnitChange, submitReminder, toggleReminder, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
     handleAddIssue, toggleIssueStatus, handleAddLog, startEditingLog, saveLogEdit, handleDeleteLog, handleRestoreLog, handlePermanentDeleteLog, handleAddCompany, handleAddUnit, handleRenameCompany, handleDeleteCompany, handleRenameUnit, handleDeleteUnit,
-    openNewWorkModal, openEditWorkModal, submitWork, handleDeleteWork, openWorkAttachmentPreview, viewLogAttachment, openStageManager, updateStageName, moveStage, removeStage, addNewStage, saveStages, handleSearch, jumpToSearchResult, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
+    openNewWorkModal, openEditWorkModal, submitWork, handleDeleteWork, openWorkAttachmentPreview, viewLogAttachment, downloadLogAttachment, openStageManager, updateStageName, moveStage, removeStage, addNewStage, saveStages, handleSearch, jumpToSearchResult, aiSummary, setAiSummary, isAiLoading, handleSummarizeProject,
     isAiChatOpen, setIsAiChatOpen, aiChatMessages, setAiChatMessages, isAiChatSending, handleSendAiChatMessage, handleClearAiChat
   };
 

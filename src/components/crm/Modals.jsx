@@ -20,7 +20,7 @@ export default function Modals() {
     companies, modalUnits, modalWorks, handleModalCompanyChange, handleModalUnitChange,
     reminders, handleDeleteReminder, handleRestoreReminder, handlePermanentDeleteReminder,
     isBinModalOpen, setIsBinModalOpen, logs, handleRestoreLog, handlePermanentDeleteLog,
-    historyLog, setHistoryLog, isWorkModalOpen, setIsWorkModalOpen, editingWorkId, workForm, setWorkForm, boqFile, setBoqFile, poFile, setPoFile, woFile, setWoFile, isWorkUploading, submitWork,
+    historyLog, setHistoryLog, isWorkModalOpen, setIsWorkModalOpen, editingWorkId, workForm, setWorkForm, boqFile, setBoqFile, poFile, setPoFile, woFile, setWoFile, isWorkUploading, workUploadStage, workSaveError, setWorkSaveError, submitWork,
     isStageManagerOpen, setIsStageManagerOpen, editedStages, moveStage, updateStageName, updateStageDescription, removeStage, restoreStage, addNewStage, saveStages,
     stageDefinitions, isStageDefinitionsLoading,
     isStageAssignmentModalOpen, stageAssignmentTargetId, closeStageAssignmentModal, stageAssignments, isStageAssignmentsLoading, assignUserToStage, endStageAssignment, getStageAssignments,
@@ -641,12 +641,31 @@ export default function Modals() {
       )}
 
       {isWorkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto ${docPreviewModal?.isOpen ? 'max-md:invisible pointer-events-none' : ''}`}>
           <div className={`${tModal} border p-5 sm:p-6 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl`}>
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className={`text-lg font-bold ${tText}`}>{editingWorkId ? 'Edit PO/WO' : 'New PO/WO'}</h3>
               <button type="button" onClick={handleCloseWorkModal} className={`${tMuted} hover:text-sky-500 p-1`}><X size={20} /></button>
             </div>
+
+            {workSaveError && (
+              <div className="mb-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
+                <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-500" />
+                <div className="flex-1">
+                  <p className="font-bold">Save Alert</p>
+                  <p className="mt-0.5 leading-relaxed">{workSaveError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWorkSaveError(null)}
+                  className="p-1 hover:bg-rose-500/20 rounded text-rose-500 transition cursor-pointer"
+                  title="Dismiss alert"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             <form onSubmit={submitWork} className={`space-y-4 overflow-y-auto flex-1 pr-1 pb-1 ${customScrollbar}`}>
               <div>
                 <label className={`block text-[11px] font-bold uppercase tracking-wider mb-1 ${tMuted}`}>System / Title</label>
@@ -1198,7 +1217,7 @@ export default function Modals() {
                   className="flex-1 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg transition shadow-md flex items-center justify-center gap-2 text-sm cursor-pointer"
                 >
                   {isWorkUploading ? <Loader2 size={16} className="animate-spin" /> : null}
-                  {isWorkUploading ? 'Saving...' : 'Save Document'}
+                  {isWorkUploading ? (workUploadStage || 'Saving...') : 'Save Document'}
                 </button>
               </div>
             </form>
@@ -1919,7 +1938,8 @@ function AdminControlPanelModal({
 
 // --- INSTANT EXCEL SPREADSHEET VIEWER COMPONENT ---
 function ExcelPreviewViewer({ url, isDarkMode }) {
-  const [viewMode, setViewMode] = useState('original'); // 'original' vs 'data'
+  const isLocalBlob = (url || '').startsWith('blob:') || (url || '').startsWith('data:');
+  const [viewMode, setViewMode] = useState(isLocalBlob ? 'data' : 'original'); // 'original' vs 'data'
   const [sheets, setSheets] = useState({});
   const [sheetNames, setSheetNames] = useState([]);
   const [activeSheet, setActiveSheet] = useState('');
@@ -2005,11 +2025,28 @@ function ExcelPreviewViewer({ url, isDarkMode }) {
       {/* VIEWER BODY */}
       <div className="flex-1 overflow-hidden relative bg-white dark:bg-slate-950">
         {viewMode === 'original' ? (
-          <iframe
-            src={officeWebUrl}
-            className="w-full h-full border-0 bg-white z-10"
-            title="Original Excel View"
-          />
+          isLocalBlob ? (
+            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3">
+              <FileSpreadsheet size={44} className="text-emerald-500 animate-pulse" />
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">Local Spreadsheet Selected</h4>
+              <p className="text-xs text-slate-500 max-w-sm">
+                Microsoft Office Live view requires an uploaded cloud URL. Showing raw worksheet data extracted locally.
+              </p>
+              <button
+                type="button"
+                onClick={() => setViewMode('data')}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition shadow-xs cursor-pointer"
+              >
+                Switch to Raw Data Sheet
+              </button>
+            </div>
+          ) : (
+            <iframe
+              src={officeWebUrl}
+              className="w-full h-full border-0 bg-white z-10"
+              title="Original Excel View"
+            />
+          )
         ) : (
           <div className="w-full h-full flex flex-col overflow-hidden bg-white dark:bg-slate-950">
             {sheetNames.length === 0 ? (
@@ -2089,11 +2126,12 @@ function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal,
   const isImage = lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i) || lowerUrl.startsWith('data:image') || lowerTitle.match(/\.(jpeg|jpg|gif|png|webp|svg)($|\?)/i);
   const isExcel = lowerUrl.match(/\.(xlsx|xls|csv|ods)($|\?)/i) || lowerUrl.includes('.xlsx') || lowerUrl.includes('.xls') || lowerUrl.includes('.csv') || lowerTitle.match(/\.(xlsx|xls|csv|ods)/i);
   const isWordOrDoc = lowerUrl.match(/\.(docx|doc|pptx|ppt)($|\?)/i) || lowerTitle.match(/\.(docx|doc|pptx|ppt)/i);
+  const isLocalBlob = (url || '').startsWith('blob:') || (url || '').startsWith('data:');
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-5 bg-slate-950/85 backdrop-blur-md transition-all"
-      style={{ zIndex: 9999 }}
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-2 sm:p-5 bg-slate-950/85 backdrop-blur-md transition-all touch-none sm:touch-auto"
+      style={{ zIndex: 99999 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           closeDocPreview();
@@ -2123,7 +2161,7 @@ function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal,
               download
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs rounded-lg transition shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs rounded-lg transition shadow-sm cursor-pointer"
               title="Download File to your device"
             >
               <Download size={14} />
@@ -2135,7 +2173,7 @@ function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal,
               href={url}
               target="_blank"
               rel="noreferrer"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition border ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition border cursor-pointer ${
                 isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
               }`}
               title="Open document in new browser tab"
@@ -2170,7 +2208,25 @@ function DocPreviewModal({ docPreviewModal, closeDocPreview, isDarkMode, tModal,
           ) : isExcel ? (
             <ExcelPreviewViewer url={url} isDarkMode={isDarkMode} />
           ) : isWordOrDoc ? (
-            <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`} className="w-full h-full border-0 rounded-xl bg-white" title={title} />
+            isLocalBlob ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-3">
+                <FileText size={48} className="text-sky-500 animate-pulse" />
+                <h4 className={`text-base font-bold ${tText}`}>Document Ready for Upload</h4>
+                <p className="text-xs text-slate-500 max-w-md">
+                  Office documents (.docx, .doc, .pptx) cannot be rendered inline locally before upload.
+                  Your file has been verified and will be uploaded safely when you click Save.
+                </p>
+                <a
+                  href={url}
+                  download={title || 'document'}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs rounded-xl shadow-xs transition"
+                >
+                  Download / Verify Local File
+                </a>
+              </div>
+            ) : (
+              <iframe src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`} className="w-full h-full border-0 rounded-xl bg-white" title={title} />
+            )
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center relative rounded-xl overflow-hidden bg-white dark:bg-slate-950 shadow-inner">
               <iframe
@@ -2208,10 +2264,21 @@ function ProjectTeamModal({
     if (fetchTenantMembers) fetchTenantMembers(tenantId);
   }, [tenantId]);
 
-  // Derive active team users from tenant_memberships (authoritative active tenant members).
-  // Exclude: terminated/inactive members, current Admin/user, and users already actively assigned to this project.
-  const eligibleTeammates = (tenantMembers || [])
-    .filter(m => (m.status === 'active' || !m.status) && (m.user_id || m.id))
+  // Derive active team users from both tenant_memberships and profiles.
+  const memberUserIds = new Set(
+    (tenantMembers || [])
+      .filter(m => (m.status === 'active' || !m.status) && (m.user_id || m.id))
+      .map(m => String(m.user_id || m.id).trim().toLowerCase())
+  );
+
+  const combinedCandidateMembers = [
+    ...(tenantMembers || []).filter(m => (m.status === 'active' || !m.status) && (m.user_id || m.id)),
+    ...(profiles || [])
+      .filter(p => p.id && !memberUserIds.has(String(p.id).trim().toLowerCase()) && p.role?.toLowerCase() !== 'terminated')
+      .map(p => ({ user_id: p.id, email: p.email, role: p.role }))
+  ];
+
+  const eligibleTeammates = combinedCandidateMembers
     .map(member => {
       const targetUserId = member.user_id || member.id;
       const normId = String(targetUserId).trim().toLowerCase();
@@ -2229,9 +2296,9 @@ function ProjectTeamModal({
         profileObj?.email || profileObj?.user_email ||
         getUserDisplayName(targetUserId, profiles, tenantMembers);
       return {
-        user_id: targetUserId, // Authoritative Auth User ID from tenant_memberships
+        user_id: targetUserId,
         email,
-        role: member.role || 'Team'
+        role: member.role || profileObj?.role || 'Team'
       };
     })
     .filter(u => {
