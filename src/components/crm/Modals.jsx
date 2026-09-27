@@ -659,23 +659,32 @@ export default function Modals() {
               <button type="button" onClick={handleCloseWorkModal} className={`${tMuted} hover:text-sky-500 p-1`}><X size={20} /></button>
             </div>
 
-            {workSaveError && (
-              <div className="mb-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
-                <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-500" />
-                <div className="flex-1">
-                  <p className="font-bold">Save Alert</p>
-                  <p className="mt-0.5 leading-relaxed">{workSaveError}</p>
+            {workSaveError && (() => {
+              const saveErrorTitle = typeof workSaveError === 'object' ? workSaveError.title : 'Save Alert';
+              const saveErrorMessage = typeof workSaveError === 'object' ? workSaveError.message : String(workSaveError);
+              const saveErrorDetails = typeof workSaveError === 'object' ? workSaveError.details : null;
+              
+              return (
+                <div className="mb-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-500" />
+                  <div className="flex-1">
+                    <p className="font-bold">{saveErrorTitle}</p>
+                    <p className="mt-0.5 leading-relaxed">{saveErrorMessage}</p>
+                    {saveErrorDetails && (
+                      <p className="mt-1 opacity-80 whitespace-pre-wrap">{saveErrorDetails}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setWorkSaveError(null)}
+                    className="p-1 hover:bg-rose-500/20 rounded text-rose-500 transition cursor-pointer"
+                    title="Dismiss alert"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setWorkSaveError(null)}
-                  className="p-1 hover:bg-rose-500/20 rounded text-rose-500 transition cursor-pointer"
-                  title="Dismiss alert"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
+              );
+            })()}
 
             <form onSubmit={submitWork} className={`space-y-4 overflow-y-auto flex-1 pr-1 pb-1 ${customScrollbar}`}>
               <div>

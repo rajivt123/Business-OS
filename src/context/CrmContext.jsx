@@ -4200,7 +4200,10 @@ USER REQUEST: ${trimmedMsg}`;
     if (log.r2_attachment?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({
-          attachmentId: log.r2_attachment.id
+          attachmentId: log.r2_attachment.id,
+          entityType: 'log',
+          entityId: log.id,
+          fieldKey: 'attachment'
         });
         if (res?.download_url) {
           openDocPreview(res.download_url, log.r2_attachment.file_name || 'Log Attachment');
@@ -4219,7 +4222,10 @@ USER REQUEST: ${trimmedMsg}`;
       });
       if (list && list.length > 0) {
         const res = await createBusinessAttachmentDownloadUrl({
-          attachmentId: list[0].id
+          attachmentId: list[0].id,
+          entityType: 'log',
+          entityId: log.id,
+          fieldKey: 'attachment'
         });
         if (res?.download_url) {
           openDocPreview(res.download_url, list[0].file_name || 'Log Attachment');
@@ -4243,7 +4249,10 @@ USER REQUEST: ${trimmedMsg}`;
     if (log.r2_attachment?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({
-          attachmentId: log.r2_attachment.id
+          attachmentId: log.r2_attachment.id,
+          entityType: 'log',
+          entityId: log.id,
+          fieldKey: 'attachment'
         });
         if (res?.download_url) {
           const a = document.createElement('a');
@@ -4269,7 +4278,10 @@ USER REQUEST: ${trimmedMsg}`;
       });
       if (list && list.length > 0) {
         const res = await createBusinessAttachmentDownloadUrl({
-          attachmentId: list[0].id
+          attachmentId: list[0].id,
+          entityType: 'log',
+          entityId: log.id,
+          fieldKey: 'attachment'
         });
         if (res?.download_url) {
           const a = document.createElement('a');
