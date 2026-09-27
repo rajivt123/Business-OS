@@ -25,6 +25,7 @@ import { supabase } from '../../lib/supabase';
 import { useCrm, getUserDisplayName } from '../../context/CrmContext';
 import { useInventory } from '../../context/InventoryContext';
 import { createBusinessAttachmentDownloadUrl, formatBytes } from '../../lib/storageService';
+import { prepareInitialDocumentExtractionJob } from '../../lib/mepExtractionService';
 import LineDetailModal from './LineDetailModal';
 import MepDocumentIngestionWorkspace from './MepDocumentIngestionWorkspace';
 
@@ -313,6 +314,13 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     };
   }, [extractions, extractionLines]);
 
+  // Check if an active/pending extraction job currently exists for the selected document
+  const hasActiveExtraction = useMemo(() => {
+    return extractions.some(e =>
+      ['pending', 'processing', 'in_progress', 'running'].includes((e.status || '').toLowerCase())
+    );
+  }, [extractions]);
+
   // Overall workspace stats
   const overallMetrics = useMemo(() => {
     const totalDocs = documents.length;
@@ -389,29 +397,19 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     return String(val);
   };
 
-  // Handler: Prepare Extraction Job (Step 7)
+  // Handler: Prepare Extraction Job (Step 7 — Idempotent & Database-Backed)
   const handlePrepareExtractionForDoc = async () => {
     if (!selectedDoc?.id) return;
     setIsPreparingJob(true);
     setErrorMsg(null);
     try {
-      const extPayload = {
-        tenant_id: selectedDoc.tenant_id || tenantId,
-        tenant_company_id: selectedDoc.tenant_company_id || activeOperatingCompanyId,
-        document_example_id: selectedDoc.id,
-        extraction_type: 'DOCUMENT_EXTRACTION',
-        provider: 'pending',
-        model_name: null,
-        model_version: null,
-        status: 'pending',
-        created_by: authUserId
-      };
+      const result = await prepareInitialDocumentExtractionJob({
+        documentId: selectedDoc.id,
+        tenantId: selectedDoc.tenant_id || tenantId,
+        tenantCompanyId: selectedDoc.tenant_company_id || activeOperatingCompanyId,
+        userId: authUserId
+      });
 
-      const { error: insertError } = await supabase
-        .from('mep_document_extractions')
-        .insert(extPayload);
-
-      if (insertError) throw insertError;
       await fetchDocumentDetails(selectedDoc.id);
     } catch (err) {
       console.error('[MepKnowledgeWorkspace] Error preparing extraction:', err);
@@ -844,7 +842,7 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
                     </button>
                   )}
 
-                  {docMetrics.totalExtractions === 0 && (
+                  {!hasActiveExtraction && (
                     <button
                       type="button"
                       onClick={handlePrepareExtractionForDoc}
@@ -860,8 +858,7 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
               </div>
 
               {/* Extraction Pending Callout Banner */}
-              {((selectedDoc.ingestion_status || '').toLowerCase() === 'pending' ||
-                extractions.some(e => (e.status || '').toLowerCase() === 'pending')) && (
+              {((selectedDoc.ingestion_status || '').toLowerCase() === 'pending' || hasActiveExtraction) && (
                 <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 text-xs flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <Clock size={16} className="text-amber-500 flex-shrink-0" />
@@ -872,7 +869,7 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
                       </p>
                     </div>
                   </div>
-                  {docMetrics.totalExtractions === 0 && (
+                  {!hasActiveExtraction && (
                     <button
                       type="button"
                       onClick={handlePrepareExtractionForDoc}

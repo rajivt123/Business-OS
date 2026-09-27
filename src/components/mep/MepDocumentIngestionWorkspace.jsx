@@ -21,9 +21,11 @@ import { supabase } from '../../lib/supabase';
 import { useCrm } from '../../context/CrmContext';
 import {
   uploadBusinessAttachment,
+  archiveBusinessAttachment,
   formatBytes,
   validateDocumentFile
 } from '../../lib/storageService';
+import { prepareInitialDocumentExtractionJob } from '../../lib/mepExtractionService';
 
 const DOCUMENT_TYPES = [
   { value: 'BOQ', label: 'Bill of Quantities (BOQ)' },
@@ -157,6 +159,8 @@ export default function MepDocumentIngestionWorkspace({
     setUploadProgress(10);
     setUploadStep('uploading_r2');
 
+    let createdAttachmentId = null;
+
     try {
       // Step 4: Storage Flow — Upload directly to Cloudflare R2 via storageService
       const uploadResult = await uploadBusinessAttachment({
@@ -178,6 +182,8 @@ export default function MepDocumentIngestionWorkspace({
         }
       });
 
+      createdAttachmentId = uploadResult?.attachment_id || uploadResult?.id;
+
       setUploadStep('registering');
       setUploadProgress(90);
 
@@ -194,7 +200,7 @@ export default function MepDocumentIngestionWorkspace({
         ingestion_status: 'pending',
         is_authoritative: Boolean(isAuthoritative),
         metadata: {
-          file_attachment_id: uploadResult.attachment_id || uploadResult.id,
+          file_attachment_id: createdAttachmentId,
           r2_key: uploadResult.storage_key,
           mime_type: selectedFile.type || 'application/octet-stream',
           file_size: selectedFile.size,
@@ -218,42 +224,53 @@ export default function MepDocumentIngestionWorkspace({
       setRegisteredDoc(newDocData || docPayload);
     } catch (err) {
       console.error('[MepDocumentIngestion] Error during ingestion:', err);
-      setErrorMsg(err.message || 'An unexpected error occurred during document ingestion.');
+      let errorReport = err.message || 'An unexpected error occurred during document ingestion.';
+
+      // Safe Failure Handling: Clean up newly created attachment if registration failed
+      if (createdAttachmentId) {
+        try {
+          console.warn(`[MepDocumentIngestion] Document registration failed. Attempting cleanup of newly created attachment:`, createdAttachmentId);
+          // 1. Archive via storageService archiveBusinessAttachment
+          await archiveBusinessAttachment({
+            tenantCompanyId: activeOperatingCompanyId,
+            attachmentId: createdAttachmentId
+          });
+          // 2. Also attempt deletion from file_attachments if permitted by RLS
+          await supabase
+            .from('file_attachments')
+            .delete()
+            .eq('id', createdAttachmentId)
+            .eq('tenant_company_id', activeOperatingCompanyId);
+
+          errorReport += ' (Uploaded temporary storage file was safely cleaned up)';
+          console.log(`[MepDocumentIngestion] Orphaned attachment ${createdAttachmentId} cleaned up successfully.`);
+        } catch (cleanErr) {
+          errorReport += ` (Warning: Automatic cleanup of temporary attachment ${createdAttachmentId} failed: ${cleanErr.message || cleanErr})`;
+          console.error(`[MepDocumentIngestion] Cleanup failed for attachment ${createdAttachmentId}:`, cleanErr);
+        }
+      }
+
+      setErrorMsg(errorReport);
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Step 7: Prepare Extraction Job
+  // Step 7: Prepare Extraction Job (Idempotent & Database-Backed)
   const handlePrepareExtraction = async () => {
     if (!registeredDoc?.id) return;
     setIsPreparingExtraction(true);
     setErrorMsg(null);
 
     try {
-      const extPayload = {
-        tenant_id: registeredDoc.tenant_id || tenantId,
-        tenant_company_id: registeredDoc.tenant_company_id || activeOperatingCompanyId,
-        document_example_id: registeredDoc.id,
-        extraction_type: 'DOCUMENT_EXTRACTION',
-        provider: 'pending',
-        model_name: null,
-        model_version: null,
-        status: 'pending',
-        created_by: authUserId
-      };
+      const result = await prepareInitialDocumentExtractionJob({
+        documentId: registeredDoc.id,
+        tenantId: registeredDoc.tenant_id || tenantId,
+        tenantCompanyId: registeredDoc.tenant_company_id || activeOperatingCompanyId,
+        userId: authUserId
+      });
 
-      const { data: extData, error: extError } = await supabase
-        .from('mep_document_extractions')
-        .insert(extPayload)
-        .select()
-        .single();
-
-      if (extError) {
-        throw new Error(`Failed to initialize extraction job: ${extError.message}`);
-      }
-
-      setPreparedExtraction(extData || extPayload);
+      setPreparedExtraction(result.extraction);
     } catch (err) {
       console.error('[MepDocumentIngestion] Prepare extraction error:', err);
       setErrorMsg(err.message || 'Failed to initialize extraction job.');
