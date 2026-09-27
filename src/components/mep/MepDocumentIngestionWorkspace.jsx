@@ -225,6 +225,7 @@ export default function MepDocumentIngestionWorkspace({
     } catch (err) {
       console.error('[MepDocumentIngestion] Error during ingestion:', err);
       let errorReport = err.message || 'An unexpected error occurred during document ingestion.';
+      let customErrorMsg = errorReport;
 
       // Safe Failure Handling: Clean up newly created attachment if registration failed
       if (createdAttachmentId) {
@@ -233,20 +234,20 @@ export default function MepDocumentIngestionWorkspace({
           // 1. Secure server-side deletion of R2 Object + DB row via edge function
           await deleteBusinessAttachment({
             tenantCompanyId: activeOperatingCompanyId,
-            attachmentId: createdAttachmentId,
-            entityType: 'document',
-            entityId: newDocumentId
+            attachmentId: createdAttachmentId
           });
 
-          errorReport += ' (Uploaded temporary storage file was safely cleaned up)';
+          customErrorMsg = 'Document registration failed. The temporary uploaded file was successfully removed.';
           console.log(`[MepDocumentIngestion] Orphaned attachment ${createdAttachmentId} cleaned up successfully.`);
         } catch (cleanErr) {
-          errorReport += ` (Warning: Automatic cleanup of temporary attachment ${createdAttachmentId} failed: ${cleanErr.message || cleanErr})`;
+          customErrorMsg = `Document registration failed. Automatic cleanup also failed. Attachment ID: ${createdAttachmentId}`;
           console.error(`[MepDocumentIngestion] Cleanup failed for attachment ${createdAttachmentId}:`, cleanErr);
         }
+      } else {
+        customErrorMsg = `Document registration failed. ${errorReport}`;
       }
 
-      setErrorMsg(errorReport);
+      setErrorMsg(customErrorMsg);
     } finally {
       setIsUploading(false);
     }

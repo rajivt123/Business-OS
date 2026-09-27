@@ -603,19 +603,17 @@ export async function archiveBusinessAttachment({ tenantCompanyId, attachmentId 
  * Step 6: Delete an orphaned business file attachment.
  * Action: 'delete-attachment'
  */
-export async function deleteBusinessAttachment({ tenantCompanyId, attachmentId, entityType, entityId }) {
-  if (!attachmentId || !entityType || !entityId) {
-    throw new Error('Attachment ID, entityType, and entityId are required to delete an attachment.');
+export async function deleteBusinessAttachment({ tenantCompanyId, attachmentId }) {
+  if (!attachmentId) {
+    throw new Error('Attachment ID is required to delete an attachment.');
   }
 
-  const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, entityType, entityId, attachmentId);
+  const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, null, null, attachmentId);
 
   const payload = {
     action: 'delete-attachment',
     ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
-    attachment_id: attachmentId,
-    entity_type: entityType,
-    entity_id: String(entityId)
+    attachment_id: attachmentId
   };
 
   const response = await invokeBusinessFileStorage(payload);
