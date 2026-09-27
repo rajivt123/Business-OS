@@ -1,7 +1,33 @@
 import { supabase } from './supabase';
 
+export const ACTIVE_EXTRACTION_STATUSES = ['pending', 'processing', 'in_progress', 'running'];
+
 // In-flight promise registry to prevent duplicate calls within the same browser session/tab
 const inFlightExtractionJobs = new Map();
+
+/**
+ * Fetch the current active extraction job for a document, if one exists.
+ */
+async function fetchActiveJob(documentId, tenantCompanyId) {
+  let query = supabase
+    .from('mep_document_extractions')
+    .select('*')
+    .eq('document_example_id', documentId)
+    .eq('extraction_type', 'DOCUMENT_EXTRACTION')
+    .in('status', ACTIVE_EXTRACTION_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (tenantCompanyId) {
+    query = query.eq('tenant_company_id', tenantCompanyId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn('[mepExtractionService] Notice checking existing extraction jobs:', error.message);
+  }
+  return data && data.length > 0 ? data[0] : null;
+}
 
 /**
  * Prepares an initial extraction job for a document in an idempotent, database-backed manner.
@@ -38,29 +64,12 @@ export async function prepareInitialDocumentExtractionJob({
 
   const jobPromise = (async () => {
     // 1. Database-backed query: Check for an existing pending/running DOCUMENT_EXTRACTION job
-    let checkQuery = supabase
-      .from('mep_document_extractions')
-      .select('*')
-      .eq('document_example_id', documentId)
-      .eq('extraction_type', 'DOCUMENT_EXTRACTION')
-      .in('status', ['pending', 'processing', 'in_progress', 'running'])
-      .order('created_at', { ascending: false })
-      .limit(1);
+    const existingActiveJob = await fetchActiveJob(documentId, tenantCompanyId);
 
-    if (tenantCompanyId) {
-      checkQuery = checkQuery.eq('tenant_company_id', tenantCompanyId);
-    }
-
-    const { data: existingActiveJobs, error: queryErr } = await checkQuery;
-
-    if (queryErr) {
-      console.warn('[mepExtractionService] Notice checking existing extraction jobs:', queryErr.message);
-    }
-
-    if (existingActiveJobs && existingActiveJobs.length > 0) {
-      console.log('[mepExtractionService] Active extraction job already exists for document:', existingActiveJobs[0].id);
+    if (existingActiveJob) {
+      console.log('[mepExtractionService] Active extraction job already exists for document:', existingActiveJob.id);
       return {
-        extraction: existingActiveJobs[0],
+        extraction: existingActiveJob,
         alreadyExisted: true
       };
     }
@@ -86,17 +95,17 @@ export async function prepareInitialDocumentExtractionJob({
 
     if (insertError) {
       // 3. Concurrency edge-case: If another client/tab inserted simultaneously
-      // Check for uniqueness constraint error (code 23505) or general duplicate error
+      // Check for uniqueness constraint error (PostgreSQL code 23505) or general duplicate/unique error
       if (
         insertError.code === '23505' ||
         insertError.message?.toLowerCase().includes('duplicate') ||
         insertError.message?.toLowerCase().includes('unique')
       ) {
-        console.warn('[mepExtractionService] Concurrency detected on insert. Fetching existing active job...');
-        const { data: fallbackJobs } = await checkQuery;
-        if (fallbackJobs && fallbackJobs.length > 0) {
+        console.warn('[mepExtractionService] Unique constraint violation (23505) detected on insert. Re-querying active job...');
+        const fallbackJob = await fetchActiveJob(documentId, tenantCompanyId);
+        if (fallbackJob) {
           return {
-            extraction: fallbackJobs[0],
+            extraction: fallbackJob,
             alreadyExisted: true
           };
         }

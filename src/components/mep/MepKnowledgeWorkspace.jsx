@@ -25,7 +25,7 @@ import { supabase } from '../../lib/supabase';
 import { useCrm, getUserDisplayName } from '../../context/CrmContext';
 import { useInventory } from '../../context/InventoryContext';
 import { createBusinessAttachmentDownloadUrl, formatBytes } from '../../lib/storageService';
-import { prepareInitialDocumentExtractionJob } from '../../lib/mepExtractionService';
+import { prepareInitialDocumentExtractionJob, ACTIVE_EXTRACTION_STATUSES } from '../../lib/mepExtractionService';
 import LineDetailModal from './LineDetailModal';
 import MepDocumentIngestionWorkspace from './MepDocumentIngestionWorkspace';
 
@@ -317,7 +317,7 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
   // Check if an active/pending extraction job currently exists for the selected document
   const hasActiveExtraction = useMemo(() => {
     return extractions.some(e =>
-      ['pending', 'processing', 'in_progress', 'running'].includes((e.status || '').toLowerCase())
+      ACTIVE_EXTRACTION_STATUSES.includes((e.status || '').toLowerCase())
     );
   }, [extractions]);
 
@@ -348,10 +348,10 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
         </span>
       );
     }
-    if (s === 'processing' || s === 'in_progress') {
+    if (s === 'processing' || s === 'in_progress' || s === 'running') {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-300 dark:border-amber-800 animate-pulse">
-          <Clock size={12} /> Processing
+          <Clock size={12} /> {s === 'running' ? 'Running' : 'Processing'}
         </span>
       );
     }
