@@ -9,7 +9,8 @@ import {
   X, Zap, BookOpen, Banknote, CalendarCheck2, Boxes, Calculator, Contact, Landmark, UserRound,
   ClipboardList, FileSpreadsheet, Workflow, CircleUserRound, SlidersHorizontal, ChevronUp,
   MoreHorizontal, Eye, Pencil, Send, Upload, Download, CheckCircle2, XCircle, ClockArrowUp,
-  TriangleAlert, Factory, MapPin, Briefcase, UserCog, Network, KeyRound, History, Layers3, Palmtree
+  TriangleAlert, Factory, MapPin, Briefcase, UserCog, Network, KeyRound, History, Layers3, Palmtree,
+  Brain
 } from 'lucide-react';
 import { useCrm, getUserDisplayName } from '../context/CrmContext';
 import CrmWorkspace from './crm/CrmWorkspace';
@@ -25,6 +26,7 @@ import PayrollWorkspace from './hr/PayrollWorkspace';
 import SalesWorkspace from './sales/SalesWorkspace';
 import ProcurementWorkspace from './procurement/ProcurementWorkspace';
 import InventoryWorkspace from './inventory/InventoryWorkspace';
+import MepKnowledgeWorkspace from './mep/MepKnowledgeWorkspace';
 import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
 import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
@@ -86,6 +88,7 @@ const navSections = [
       ['documents', 'Documents', FileText],
       ['reports', 'Reports', BarChart3],
       ['ai', 'RAJIV AI', Sparkles],
+      ['mep-knowledge', 'MEP Knowledge', Brain],
     ],
   },
   {
@@ -112,6 +115,7 @@ const pageMeta = {
   documents: ['Documents', 'Central business document workspace with context and history.'],
   reports: ['Reports & Analytics', 'Operational, financial, project and people intelligence.'],
   ai: ['RAJIV AI', 'Permission-aware business intelligence and assisted workflows.'],
+  'mep-knowledge': ['MEP Knowledge', 'Inspect MEP document examples, extractions, lines, and AI correction corpus.'],
   admin: ['Administration', 'Organization, users, permissions, workflows and system controls.'],
   'company-settings': ['Company Settings', 'Owner workspace for managing company profiles, registrations, addresses, contacts, bank details, tax settings, branding, documents and audit history.'],
   profile: ['My Profile', 'Manage personal information, work preferences, organization membership and account security.'],
@@ -1994,6 +1998,7 @@ export default function BusinessOSWorkspace() {
         {page === 'documents' && <DocumentsPage />}
         {page === 'reports' && <ReportsPage />}
         {page === 'ai' && <AIPage onOpenAiChat={() => setIsAiChatOpen?.(true)} />}
+        {page === 'mep-knowledge' && <MepKnowledgeWorkspace isDarkMode={isDarkMode} />}
         {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
