@@ -7,6 +7,7 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
     itemAliases = [],
     mepDomains = [],
     mepCategories = [],
+    mepAttributes = [],
     mepItemSpecifications = [],
     createInventoryItemAlias,
     submitting,
@@ -29,6 +30,36 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
     if (!item) return [];
     return mepItemSpecifications.filter(s => s.inventory_item_id === item.id);
   }, [mepItemSpecifications, item]);
+
+  // Resolve specification display value from actual table columns
+  const getSpecDisplayValue = (spec) => {
+    if (spec.value_text !== null && spec.value_text !== undefined && spec.value_text !== '') {
+      return String(spec.value_text);
+    }
+    if (spec.value_numeric !== null && spec.value_numeric !== undefined) {
+      return String(spec.value_numeric);
+    }
+    if (spec.value_boolean !== null && spec.value_boolean !== undefined) {
+      return spec.value_boolean ? 'Yes' : 'No';
+    }
+    if (spec.value_json !== null && spec.value_json !== undefined) {
+      return typeof spec.value_json === 'object' ? JSON.stringify(spec.value_json) : String(spec.value_json);
+    }
+    if (spec.normalized_value) {
+      return String(spec.normalized_value);
+    }
+    return '--';
+  };
+
+  // Resolve attribute metadata from mep_attribute_definitions
+  const getAttributeMeta = (attrDefId) => {
+    if (!attrDefId) return { name: 'Specification', code: '' };
+    const found = mepAttributes.find(a => a.id === attrDefId);
+    return {
+      name: found?.name || found?.code || 'Specification',
+      code: found?.code || ''
+    };
+  };
 
   // Resolve domain display name
   const domainDisplayName = useMemo(() => {
@@ -226,26 +257,49 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
               </div>
             ) : (
               <div className={`rounded-xl border overflow-hidden divide-y divide-slate-800/40 ${tSection}`}>
-                {itemSpecs.map((spec, idx) => (
-                  <div key={spec.id || idx} className="p-3 flex items-center justify-between text-xs">
-                    <div className="space-y-0.5">
-                      <span className="font-semibold text-slate-200">
-                        {spec.attribute_code || spec.specification_name || spec.name || 'Specification'}
-                      </span>
-                      {spec.notes && (
-                        <p className="text-[10px] text-slate-500">{spec.notes}</p>
-                      )}
+                {itemSpecs.map((spec, idx) => {
+                  const attrMeta = getAttributeMeta(spec.attribute_definition_id);
+                  const displayVal = getSpecDisplayValue(spec);
+                  const hasSecondaryNorm = spec.normalized_value && spec.normalized_value !== displayVal;
+
+                  return (
+                    <div key={spec.id || idx} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-slate-200">
+                            {attrMeta.name}
+                          </span>
+                          {spec.is_verified ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3" /> Verified
+                            </span>
+                          ) : null}
+                          {spec.confidence_score !== null && spec.confidence_score !== undefined && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono text-slate-400 bg-slate-800 border border-slate-700">
+                              {Math.round(Number(spec.confidence_score) * 100)}% conf
+                            </span>
+                          )}
+                        </div>
+                        {hasSecondaryNorm && (
+                          <p className="text-[10px] text-slate-500 font-mono">
+                            normalized: {spec.normalized_value}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="text-left sm:text-right shrink-0">
+                        <span className="font-mono text-amber-400 font-semibold text-xs">
+                          {displayVal}
+                        </span>
+                        {spec.source_type && (
+                          <div className="text-[10px] text-slate-500 capitalize">
+                            src: {spec.source_type}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-mono text-amber-400 font-medium">
-                        {spec.attribute_value || spec.value || '--'} {spec.unit || spec.uom || ''}
-                      </span>
-                      {spec.standard && (
-                        <p className="text-[10px] text-slate-500 font-mono">{spec.standard}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
