@@ -359,6 +359,21 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     );
   };
 
+  // Safe formatter for JSONB correction values
+  const formatCorrectionValue = (val) => {
+    if (val === null || val === undefined) return '<empty>';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (typeof val === 'object') {
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    }
+    return String(val);
+  };
+
   // Styling helper tokens
   const tCard = isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
   const tInput = isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900 shadow-sm';
@@ -1179,13 +1194,13 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
                           <div className="p-2 rounded-lg bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40">
                             <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">Previous Value</div>
                             <div className="font-mono text-slate-700 dark:text-slate-300 mt-0.5 line-through break-all">
-                              {corr.previous_value !== null && corr.previous_value !== undefined ? String(corr.previous_value) : '<empty>'}
+                              {formatCorrectionValue(corr.previous_value)}
                             </div>
                           </div>
                           <div className="p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40">
                             <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Corrected Value</div>
                             <div className="font-mono font-semibold text-emerald-800 dark:text-emerald-300 mt-0.5 break-all">
-                              {corr.corrected_value !== null && corr.corrected_value !== undefined ? String(corr.corrected_value) : '<empty>'}
+                              {formatCorrectionValue(corr.corrected_value)}
                             </div>
                           </div>
                         </div>

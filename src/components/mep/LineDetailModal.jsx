@@ -90,6 +90,21 @@ export default function LineDetailModal({
     return 'text-rose-600 dark:text-rose-400';
   };
 
+  // Safe formatter for JSONB correction values
+  const formatCorrectionValue = (val) => {
+    if (val === null || val === undefined) return '<empty>';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (typeof val === 'object') {
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    }
+    return String(val);
+  };
+
   // Safe attribute render
   const renderParsedAttributes = () => {
     const attrs = line.parsed_attributes;
@@ -173,7 +188,9 @@ export default function LineDetailModal({
     }
 
     return (
-      <p className="text-xs text-slate-700 dark:text-slate-300 font-mono">{String(reasons)}</p>
+      <p className="text-xs text-slate-700 dark:text-slate-300 font-mono">
+        {typeof reasons === 'object' ? JSON.stringify(reasons) : String(reasons)}
+      </p>
     );
   };
 
@@ -446,13 +463,13 @@ export default function LineDetailModal({
                         <div className="p-2 rounded-lg bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40">
                           <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">Previous Value</div>
                           <div className="font-mono text-slate-700 dark:text-slate-300 mt-0.5 line-through break-all">
-                            {corr.previous_value !== null && corr.previous_value !== undefined ? String(corr.previous_value) : '<empty>'}
+                            {formatCorrectionValue(corr.previous_value)}
                           </div>
                         </div>
                         <div className="p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40">
                           <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Corrected Value</div>
                           <div className="font-mono font-semibold text-emerald-800 dark:text-emerald-300 mt-0.5 break-all">
-                            {corr.corrected_value !== null && corr.corrected_value !== undefined ? String(corr.corrected_value) : '<empty>'}
+                            {formatCorrectionValue(corr.corrected_value)}
                           </div>
                         </div>
                       </div>
