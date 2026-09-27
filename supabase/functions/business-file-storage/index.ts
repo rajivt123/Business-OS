@@ -56,38 +56,35 @@ async function user(req: Request) {
 }
 
 /**
- * Verify user has membership access to tenant company
+ * Verify user has membership access to specific tenant company
  */
-async function companyAccess(userId: string, tenantCompanyId: string) {
+async function companyAccess(userId: string, tenantCompanyId: string, requiredOp: string = 'read') {
   if (!uuid(tenantCompanyId)) {
     throw new Error("Invalid tenant_company_id format");
   }
 
-  // 1. Fetch tenant_id for tenant_company
-  const { data: opco, error: opcoErr } = await admin
-    .from("tenant_companies")
-    .select("tenant_id")
-    .eq("id", tenantCompanyId)
-    .maybeSingle();
-
-  if (opcoErr || !opco?.tenant_id) {
-    throw new Error("Tenant company not found");
-  }
-
-  // 2. Verify active membership for user in that tenant
-  const { data: member, error: memErr } = await admin
-    .from("tenant_memberships")
-    .select("id, role, status")
-    .eq("tenant_id", opco.tenant_id)
+  // Use the view which correctly enforces specific company-level access,
+  // instead of generic tenant_membership which spans all companies.
+  const { data: access, error: accessErr } = await admin
+    .from("user_company_access")
+    .select("tenant_id, role")
     .eq("user_id", userId)
-    .eq("status", "active")
+    .eq("company_id", tenantCompanyId)
     .maybeSingle();
 
-  if (memErr || !member) {
-    throw new Error("Active tenant membership required");
+  if (accessErr || !access) {
+    throw new Error("Unauthorized: Company access denied or not found");
   }
 
-  return { tenantId: opco.tenant_id, role: member.role };
+  const role = (access.role || '').toLowerCase();
+  
+  if (requiredOp === 'edit' || requiredOp === 'write') {
+    if (role === 'viewer' || role === 'guest' || role === 'readonly') {
+      throw new Error(`Unauthorized: Company ${requiredOp} permission required`);
+    }
+  }
+
+  return { tenantId: access.tenant_id, role: access.role };
 }
 
 /**
@@ -158,7 +155,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Verify company access
-    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id);
+    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id, 'write');
 
     // 1. CREATE UPLOAD URL
     if (action === "create-upload-url") {
@@ -381,6 +378,67 @@ Deno.serve(async (req: Request) => {
           success: true,
           archived: updated,
         }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 6. DELETE (CLEANUP ORPHANED ATTACHMENTS)
+    if (action === "delete-attachment") {
+      const { attachment_id, entity_type, entity_id } = body;
+      if (!attachment_id || !uuid(attachment_id)) {
+        return new Response(JSON.stringify({ error: "Valid attachment_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify attachment exists and belongs to this exact company/entity
+      const { data: att, error: attErr } = await admin
+        .from("file_attachments")
+        .select("*")
+        .eq("id", attachment_id)
+        .eq("tenant_company_id", tenant_company_id)
+        .eq("entity_type", entity_type)
+        .eq("entity_id", String(entity_id))
+        .single();
+
+      if (attErr || !att) {
+        return new Response(JSON.stringify({ error: "Attachment not found or mismatched entity" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Delete from R2 securely
+      try {
+        const { DeleteObjectCommand } = await import("npm:@aws-sdk/client-s3@3");
+        const delCmd = new DeleteObjectCommand({
+          Bucket: att.storage_bucket || r2BucketName,
+          Key: att.storage_key,
+        });
+        await s3Client.send(delCmd);
+      } catch (r2Err: any) {
+        console.error("R2 deletion failed:", r2Err);
+        // Continue to delete DB row even if R2 fails to ensure consistency, 
+        // though typically you want both to succeed.
+      }
+
+      // Delete DB Row
+      const { error: delErr } = await admin
+        .from("file_attachments")
+        .delete()
+        .eq("id", attachment_id)
+        .eq("tenant_company_id", tenant_company_id);
+
+      if (delErr) {
+        return new Response(JSON.stringify({ error: delErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, deleted: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

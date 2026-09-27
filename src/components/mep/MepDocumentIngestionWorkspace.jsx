@@ -22,6 +22,7 @@ import { useCrm } from '../../context/CrmContext';
 import {
   uploadBusinessAttachment,
   archiveBusinessAttachment,
+  deleteBusinessAttachment,
   formatBytes,
   validateDocumentFile
 } from '../../lib/storageService';
@@ -229,17 +230,13 @@ export default function MepDocumentIngestionWorkspace({
       if (createdAttachmentId) {
         try {
           console.warn(`[MepDocumentIngestion] Document registration failed. Attempting cleanup of newly created attachment:`, createdAttachmentId);
-          // 1. Archive via storageService archiveBusinessAttachment
-          await archiveBusinessAttachment({
+          // 1. Secure server-side deletion of R2 Object + DB row via edge function
+          await deleteBusinessAttachment({
             tenantCompanyId: activeOperatingCompanyId,
-            attachmentId: createdAttachmentId
+            attachmentId: createdAttachmentId,
+            entityType: 'document',
+            entityId: newDocumentId
           });
-          // 2. Also attempt deletion from file_attachments if permitted by RLS
-          await supabase
-            .from('file_attachments')
-            .delete()
-            .eq('id', createdAttachmentId)
-            .eq('tenant_company_id', activeOperatingCompanyId);
 
           errorReport += ' (Uploaded temporary storage file was safely cleaned up)';
           console.log(`[MepDocumentIngestion] Orphaned attachment ${createdAttachmentId} cleaned up successfully.`);

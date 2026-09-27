@@ -600,6 +600,29 @@ export async function archiveBusinessAttachment({ tenantCompanyId, attachmentId 
 }
 
 /**
+ * Step 6: Delete an orphaned business file attachment.
+ * Action: 'delete-attachment'
+ */
+export async function deleteBusinessAttachment({ tenantCompanyId, attachmentId, entityType, entityId }) {
+  if (!attachmentId || !entityType || !entityId) {
+    throw new Error('Attachment ID, entityType, and entityId are required to delete an attachment.');
+  }
+
+  const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, entityType, entityId, attachmentId);
+
+  const payload = {
+    action: 'delete-attachment',
+    ...(resolvedTenantId ? { tenant_company_id: resolvedTenantId } : {}),
+    attachment_id: attachmentId,
+    entity_type: entityType,
+    entity_id: String(entityId)
+  };
+
+  const response = await invokeBusinessFileStorage(payload);
+  return response;
+}
+
+/**
  * Complete direct-to-R2 upload orchestrator for a business file attachment
  */
 export async function uploadBusinessAttachment({

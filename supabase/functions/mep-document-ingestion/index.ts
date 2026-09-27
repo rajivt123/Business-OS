@@ -33,34 +33,31 @@ async function user(req: Request) {
   return { id: sub };
 }
 
-async function companyAccess(userId: string, tenantCompanyId: string) {
+async function companyAccess(userId: string, tenantCompanyId: string, requiredOp: string = 'read') {
   if (!uuid(tenantCompanyId)) {
     throw new Error("Invalid tenant_company_id format");
   }
 
-  const { data: opco, error: opcoErr } = await admin
-    .from("tenant_companies")
-    .select("tenant_id")
-    .eq("id", tenantCompanyId)
-    .maybeSingle();
-
-  if (opcoErr || !opco?.tenant_id) {
-    throw new Error("Tenant company not found");
-  }
-
-  const { data: member, error: memErr } = await admin
-    .from("tenant_memberships")
-    .select("id, role, status")
-    .eq("tenant_id", opco.tenant_id)
+  const { data: access, error: accessErr } = await admin
+    .from("user_company_access")
+    .select("tenant_id, role")
     .eq("user_id", userId)
-    .eq("status", "active")
+    .eq("company_id", tenantCompanyId)
     .maybeSingle();
 
-  if (memErr || !member) {
-    throw new Error("Active tenant membership required");
+  if (accessErr || !access) {
+    throw new Error("Unauthorized: Company access denied or not found");
   }
 
-  return { tenantId: opco.tenant_id, role: member.role };
+  const role = (access.role || '').toLowerCase();
+  
+  if (requiredOp === 'edit' || requiredOp === 'write') {
+    if (role === 'viewer' || role === 'guest' || role === 'readonly') {
+      throw new Error(`Unauthorized: Company ${requiredOp} permission required`);
+    }
+  }
+
+  return { tenantId: access.tenant_id, role: access.role };
 }
 
 Deno.serve(async (req: Request) => {
@@ -87,7 +84,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id);
+    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id, 'edit');
 
     if (action === "register-document") {
       const {
