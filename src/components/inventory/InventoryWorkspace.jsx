@@ -11,6 +11,7 @@ import StockTransactionModal from './StockTransactionModal';
 import ReservationModal from './ReservationModal';
 import ReleaseReservationModal from './ReleaseReservationModal';
 import IssueReservationModal from './IssueReservationModal';
+import ItemAliasModal from './ItemAliasModal';
 
 export default function InventoryWorkspace({ isDarkMode }) {
   const {
@@ -20,6 +21,7 @@ export default function InventoryWorkspace({ isDarkMode }) {
     transactions,
     reservations,
     fulfilments = [],
+    itemAliases = [],
     isLoading,
     metrics,
     getCurrentStock,
@@ -37,6 +39,7 @@ export default function InventoryWorkspace({ isDarkMode }) {
 
   // Modals
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [selectedItemForAliases, setSelectedItemForAliases] = useState(null);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [txModalType, setTxModalType] = useState('RECEIPT');
@@ -390,40 +393,66 @@ export default function InventoryWorkspace({ isDarkMode }) {
                     <th className="p-3.5 text-right">Reorder Level</th>
                     <th className="p-3.5 text-right">Reorder Qty</th>
                     <th className="p-3.5 text-center">Status</th>
+                    <th className="p-3.5 text-right">Aliases</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-500 text-xs">
+                      <td colSpan={10} className="p-8 text-center text-slate-500 text-xs">
                         No item master records found.
                       </td>
                     </tr>
                   ) : (
-                    filteredItems.map(item => (
-                      <tr key={item.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
-                        <td className="p-3.5 font-mono font-bold text-amber-500">{item.item_code}</td>
-                        <td className="p-3.5 font-semibold">
-                          {item.name}
-                          {item.description && (
-                            <p className={`text-[11px] font-normal ${tMuted} truncate max-w-xs`}>{item.description}</p>
-                          )}
-                        </td>
-                        <td className="p-3.5">{item.category || 'General'}</td>
-                        <td className="p-3.5 capitalize">{item.item_type?.replace('_', ' ')}</td>
-                        <td className="p-3.5 font-mono font-semibold">{item.base_uom_code}</td>
-                        <td className="p-3.5 font-mono">{item.hsn_sac_code || '--'}</td>
-                        <td className="p-3.5 text-right font-mono">{item.reorder_level || 0}</td>
-                        <td className="p-3.5 text-right font-mono">{item.reorder_quantity || 0}</td>
-                        <td className="p-3.5 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            item.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
-                          }`}>
-                            {item.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    filteredItems.map(item => {
+                      const aliases = (itemAliases || []).filter(a => a.inventory_item_id === item.id);
+                      return (
+                        <tr key={item.id} className={isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
+                          <td className="p-3.5 font-mono font-bold text-amber-500">{item.item_code}</td>
+                          <td className="p-3.5 font-semibold">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{item.name}</span>
+                              {item.domain_code && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                  {item.domain_code}
+                                </span>
+                              )}
+                            </div>
+                            {item.description && (
+                              <p className={`text-[11px] font-normal ${tMuted} truncate max-w-xs mt-0.5`}>{item.description}</p>
+                            )}
+                          </td>
+                          <td className="p-3.5">{item.category || 'General'}</td>
+                          <td className="p-3.5 capitalize">{item.item_type?.replace('_', ' ')}</td>
+                          <td className="p-3.5 font-mono font-semibold">{item.base_uom_code}</td>
+                          <td className="p-3.5 font-mono">{item.hsn_sac_code || '--'}</td>
+                          <td className="p-3.5 text-right font-mono">{item.reorder_level || 0}</td>
+                          <td className="p-3.5 text-right font-mono">{item.reorder_quantity || 0}</td>
+                          <td className="p-3.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {item.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedItemForAliases(item)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition ${
+                                aliases.length > 0
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                  : 'border-slate-700/60 hover:border-slate-600 text-slate-400 hover:text-slate-200'
+                              }`}
+                              title="View & manage item aliases"
+                            >
+                              <Tag className="w-3 h-3 text-amber-500" />
+                              <span>{aliases.length > 0 ? `${aliases.length} ${aliases.length === 1 ? 'Alias' : 'Aliases'}` : '+ Alias'}</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -939,6 +968,13 @@ export default function InventoryWorkspace({ isDarkMode }) {
           setSelectedReservationToIssue(null);
         }}
         reservation={selectedReservationToIssue}
+        isDarkMode={isDarkMode}
+      />
+
+      <ItemAliasModal
+        item={selectedItemForAliases}
+        isOpen={!!selectedItemForAliases}
+        onClose={() => setSelectedItemForAliases(null)}
         isDarkMode={isDarkMode}
       />
     </div>

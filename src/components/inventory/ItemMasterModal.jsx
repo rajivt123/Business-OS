@@ -16,6 +16,8 @@ export default function ItemMasterModal({ isOpen, onClose, isDarkMode }) {
     hsn_sac_code: '',
     reorder_level: '100',
     reorder_quantity: '200',
+    domain_code: '',
+    normalized_name: '',
     is_active: true
   });
 
@@ -235,6 +237,51 @@ export default function ItemMasterModal({ isOpen, onClose, isDarkMode }) {
                   min="0"
                   className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* MEP Engineering Identity & Domain (Optional) */}
+          <div className={`p-4 rounded-xl border ${tSection}`}>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-500 mb-4 flex items-center gap-2">
+              <Package className="w-4 h-4" /> MEP Engineering Identity (Optional)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 ${tLabel}`}>
+                  Domain Code
+                </label>
+                <select
+                  name="domain_code"
+                  value={form.domain_code}
+                  onChange={handleChange}
+                  className={`w-full rounded-lg px-3 py-2 text-sm border ${tInput}`}
+                >
+                  <option value="">-- None / General --</option>
+                  <option value="HVAC">HVAC (Heating, Ventilation & AC)</option>
+                  <option value="PLUMBING">PLUMBING (Drainage, Water & Sanitary)</option>
+                  <option value="FIRE_FIGHTING">FIRE_FIGHTING (Fire Protection & Sprinklers)</option>
+                  <option value="ELECTRICAL">ELECTRICAL (Power & Distribution)</option>
+                  <option value="ELV">ELV (Extra Low Voltage / Security / Data)</option>
+                  <option value="CIVIL">CIVIL (Structural Materials)</option>
+                  <option value="INSTRUMENTATION">INSTRUMENTATION (Controls & Automation)</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">Classifies item into standard MEP engineering domain</p>
+              </div>
+
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 ${tLabel}`}>
+                  Normalized Standard Name
+                </label>
+                <input
+                  type="text"
+                  name="normalized_name"
+                  value={form.normalized_name}
+                  onChange={handleChange}
+                  placeholder="e.g. pipe_ms_black_heavy_100mm"
+                  className={`w-full rounded-lg px-3 py-2 text-sm border font-mono ${tInput}`}
+                />
+                <p className="text-[10px] text-slate-500 mt-1">Canonical engineering name for cross-document matching</p>
               </div>
             </div>
           </div>

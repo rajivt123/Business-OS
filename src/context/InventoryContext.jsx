@@ -40,6 +40,7 @@ export function InventoryProvider({ children }) {
   const [transactions, setTransactions] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [fulfilments, setFulfilments] = useState([]);
+  const [itemAliases, setItemAliases] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -204,6 +205,25 @@ export function InventoryProvider({ children }) {
     }
   }, [tenantId]);
 
+  const fetchItemAliases = useCallback(async (opCoId) => {
+    try {
+      let q = supabase
+        .from('inventory_item_aliases')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (opCoId) q = q.eq('tenant_company_id', opCoId);
+      else if (tenantId) q = q.eq('tenant_id', tenantId);
+
+      const { data, error: err } = await q;
+      if (err) throw err;
+      setItemAliases(data || []);
+    } catch (err) {
+      console.error('[InventoryContext] Error fetching item aliases:', err);
+      setItemAliases([]);
+    }
+  }, [tenantId]);
+
   const refreshAllInventory = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -214,14 +234,15 @@ export function InventoryProvider({ children }) {
         fetchStockBalances(activeOperatingCompanyId),
         fetchTransactions(activeOperatingCompanyId),
         fetchReservations(activeOperatingCompanyId),
-        fetchFulfilments(activeOperatingCompanyId)
+        fetchFulfilments(activeOperatingCompanyId),
+        fetchItemAliases(activeOperatingCompanyId)
       ]);
     } catch (err) {
       setError(err.message || 'Failed to load inventory data');
     } finally {
       setIsLoading(false);
     }
-  }, [activeOperatingCompanyId, fetchItems, fetchLocations, fetchStockBalances, fetchTransactions, fetchReservations, fetchFulfilments]);
+  }, [activeOperatingCompanyId, fetchItems, fetchLocations, fetchStockBalances, fetchTransactions, fetchReservations, fetchFulfilments, fetchItemAliases]);
 
   useEffect(() => {
     refreshAllInventory();
@@ -296,6 +317,23 @@ export function InventoryProvider({ children }) {
         idempotency_key: crypto.randomUUID()
       };
 
+      // Optional MEP Identity Foundation fields (Phase 1)
+      if (itemPayload.normalized_name !== undefined && itemPayload.normalized_name !== null && itemPayload.normalized_name !== '') {
+        payload.normalized_name = itemPayload.normalized_name.trim();
+      }
+      if (itemPayload.domain_code !== undefined && itemPayload.domain_code !== null && itemPayload.domain_code !== '') {
+        payload.domain_code = itemPayload.domain_code.trim();
+      }
+      if (itemPayload.identity_attributes !== undefined && itemPayload.identity_attributes !== null) {
+        payload.identity_attributes = itemPayload.identity_attributes;
+      }
+      if (itemPayload.identity_version !== undefined && itemPayload.identity_version !== null) {
+        payload.identity_version = Number(itemPayload.identity_version) || 1;
+      }
+      if (itemPayload.identity_source !== undefined && itemPayload.identity_source !== null && itemPayload.identity_source !== '') {
+        payload.identity_source = itemPayload.identity_source;
+      }
+
       const { data, error: rpcErr } = await supabase.rpc('create_inventory_item_atomic', {
         p_payload: payload
       });
@@ -313,6 +351,60 @@ export function InventoryProvider({ children }) {
       setSubmitting(false);
     }
   }, [tenantId, activeOperatingCompanyId, submitting, refreshAllInventory]);
+
+  // 1b. Create Inventory Item Alias Atomic (Phase 1 MEP Identity Foundation)
+  const createInventoryItemAlias = useCallback(async (aliasPayload) => {
+    if (submitting) return { success: false, error: 'Submission in progress' };
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      if (!activeOperatingCompanyId && !tenantId) {
+        throw new Error('Tenant or Operating Company context is required');
+      }
+
+      if (!aliasPayload.inventory_item_id) {
+        throw new Error('Inventory Item ID is required');
+      }
+
+      if (!aliasPayload.alias_text || !aliasPayload.alias_text.trim()) {
+        throw new Error('Alias text is required');
+      }
+
+      const payload = {
+        tenant_id: tenantId,
+        tenant_company_id: activeOperatingCompanyId,
+        inventory_item_id: aliasPayload.inventory_item_id,
+        alias_text: aliasPayload.alias_text.trim(),
+        normalized_alias: aliasPayload.normalized_alias ? aliasPayload.normalized_alias.trim() : aliasPayload.alias_text.trim().toLowerCase(),
+        alias_type: aliasPayload.alias_type?.trim() || 'vendor',
+        party_type: aliasPayload.party_type || null,
+        party_id: aliasPayload.party_id || null,
+        source_type: aliasPayload.source_type || 'manual',
+        source_id: aliasPayload.source_id || null,
+        source_line_id: aliasPayload.source_line_id || null,
+        confidence_score: aliasPayload.confidence_score !== undefined ? Number(aliasPayload.confidence_score) : 1.0,
+        is_verified: aliasPayload.is_verified !== false,
+        idempotency_key: aliasPayload.idempotency_key || crypto.randomUUID()
+      };
+
+      const { data, error: rpcErr } = await supabase.rpc('create_inventory_item_alias_atomic', {
+        p_payload: payload
+      });
+
+      if (rpcErr) throw rpcErr;
+
+      await fetchItemAliases(activeOperatingCompanyId);
+      return { success: true, data };
+    } catch (err) {
+      console.error('[InventoryContext] createInventoryItemAlias Error:', err);
+      const msg = err.message || 'Failed to create item alias';
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setSubmitting(false);
+    }
+  }, [tenantId, activeOperatingCompanyId, submitting, fetchItemAliases]);
 
   // 2. Create Inventory Location Atomic
   const createLocation = useCallback(async (locPayload) => {
@@ -578,6 +670,7 @@ export function InventoryProvider({ children }) {
     transactions,
     reservations,
     fulfilments,
+    itemAliases,
     isLoading,
     submitting,
     error,
@@ -588,12 +681,14 @@ export function InventoryProvider({ children }) {
     getAvailableStock,
     refreshAllInventory,
     fetchFulfilments,
+    fetchItemAliases,
     createItem,
     createLocation,
     postTransaction,
     createReservation,
     releaseReservation,
     issueInventoryAgainstReservation,
+    createInventoryItemAlias,
     isManagementOrAdmin,
     works
   };
