@@ -32,7 +32,8 @@ export default function Modals() {
     isContactModalOpen, setIsContactModalOpen, editingContact, contactForm, setContactForm, saveContact,
     isEnquiryModalOpen, setIsEnquiryModalOpen, editingEnquiry, enquiryForm, setEnquiryForm, saveEnquiry,
     isFollowUpModalOpen, setIsFollowUpModalOpen, editingFollowUp, followUpForm, setFollowUpForm, saveFollowUp,
-    isCustomerModalOpen, closeCustomerModal, editingCustomer, customerForm, setCustomerForm, handleUpsertCustomerProfile
+    isCustomerModalOpen, closeCustomerModal, editingCustomer, customerForm, setCustomerForm, handleUpsertCustomerProfile,
+    activeOperatingCompanyId
   } = useCrm()
 
   const [promptInput, setPromptInput] = useState('')
@@ -100,7 +101,10 @@ export default function Modals() {
     const att = workAttachments[fieldKey]
     if (att?.id) {
       try {
-        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: att.id })
+        const res = await createBusinessAttachmentDownloadUrl({ 
+          tenantCompanyId: activeOperatingCompanyId,
+          attachmentId: att.id 
+        })
         if (res?.download_url) {
           openDocPreview(res.download_url, `${workForm.title || 'Work'} - ${fieldKey.toUpperCase()} (${att.file_name})`)
           return
@@ -119,7 +123,10 @@ export default function Modals() {
     const att = workAttachments[fieldKey]
     if (att?.id) {
       try {
-        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: att.id })
+        const res = await createBusinessAttachmentDownloadUrl({ 
+          tenantCompanyId: activeOperatingCompanyId,
+          attachmentId: att.id 
+        })
         if (res?.download_url) {
           const a = document.createElement('a')
           a.href = res.download_url

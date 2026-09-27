@@ -4173,6 +4173,7 @@ USER REQUEST: ${trimmedMsg}`;
       });
       if (attachments && attachments.length > 0) {
         const downloadRes = await createBusinessAttachmentDownloadUrl({
+          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: attachments[0].id
         });
         if (downloadRes?.download_url) {
@@ -4200,6 +4201,7 @@ USER REQUEST: ${trimmedMsg}`;
     if (log.r2_attachment?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({
+          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: log.r2_attachment.id
         });
         if (res?.download_url) {
@@ -4219,6 +4221,7 @@ USER REQUEST: ${trimmedMsg}`;
       });
       if (list && list.length > 0) {
         const res = await createBusinessAttachmentDownloadUrl({
+          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: list[0].id
         });
         if (res?.download_url) {
@@ -4243,6 +4246,7 @@ USER REQUEST: ${trimmedMsg}`;
     if (log.r2_attachment?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({
+          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: log.r2_attachment.id
         });
         if (res?.download_url) {
@@ -4269,6 +4273,7 @@ USER REQUEST: ${trimmedMsg}`;
       });
       if (list && list.length > 0) {
         const res = await createBusinessAttachmentDownloadUrl({
+          tenantCompanyId: activeOperatingCompanyId,
           attachmentId: list[0].id
         });
         if (res?.download_url) {

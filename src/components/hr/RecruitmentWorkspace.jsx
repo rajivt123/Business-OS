@@ -56,7 +56,7 @@ export default function RecruitmentWorkspace() {
   } = useRecruitment();
 
   const { departments = [], designations = [], employees = [] } = useEmployee() || {};
-  const { isDarkMode, activeOperatingCompany } = useCrm() || {};
+  const { isDarkMode, activeOperatingCompany, activeOperatingCompanyId } = useCrm() || {};
 
   // Internal tab state: 'dashboard' | 'positions' | 'candidates' | 'interviews' | 'onboarding'
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -168,7 +168,10 @@ export default function RecruitmentWorkspace() {
 
   const handleOpenCandidateResume = async (attachmentId, download = false) => {
     try {
-      const res = await createBusinessAttachmentDownloadUrl({ attachmentId });
+      const res = await createBusinessAttachmentDownloadUrl({ 
+        tenantCompanyId: activeOperatingCompanyId,
+        attachmentId 
+      });
       if (res?.download_url) {
         if (download) {
           const a = document.createElement('a');

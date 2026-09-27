@@ -426,7 +426,7 @@ function ReportsPage() {
 }
 
 function DocumentsPage() {
-  const { activeOperatingCompany } = useCrm() || {};
+  const { activeOperatingCompany, activeOperatingCompanyId } = useCrm() || {};
   const [documents, setDocuments] = useState([]);
   const [attachmentsMap, setAttachmentsMap] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -536,7 +536,10 @@ function DocumentsPage() {
     const r2Att = attachmentsMap[doc.id];
     if (r2Att) {
       try {
-        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: r2Att.id });
+        const res = await createBusinessAttachmentDownloadUrl({ 
+          tenantCompanyId: activeOperatingCompanyId,
+          attachmentId: r2Att.id 
+        });
         if (res?.download_url) {
           if (download) {
             const a = document.createElement('a');

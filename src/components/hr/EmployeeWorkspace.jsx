@@ -427,7 +427,10 @@ export default function EmployeeWorkspace() {
         fieldKey: 'document'
       });
       if (attachments && attachments.length > 0) {
-        const res = await createBusinessAttachmentDownloadUrl({ attachmentId: attachments[0].id });
+        const res = await createBusinessAttachmentDownloadUrl({ 
+          tenantCompanyId: activeOperatingCompanyId,
+          attachmentId: attachments[0].id 
+        });
         if (res?.download_url) {
           window.open(res.download_url, '_blank');
           return;
