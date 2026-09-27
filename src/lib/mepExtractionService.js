@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 export const ACTIVE_EXTRACTION_STATUSES = ['pending', 'processing', 'in_progress', 'running'];
 
@@ -128,3 +128,11 @@ export async function prepareInitialDocumentExtractionJob({
     inFlightExtractionJobs.delete(documentId);
   }
 }
+
+// Re-export Phase 4A extraction architecture, state machine, contracts, and worker orchestrator
+export * from './mep/extraction/constants.js';
+export * from './mep/extraction/extractionEnvelope.js';
+export * from './mep/extraction/documentStrategyRouter.js';
+export * from './mep/extraction/providerContract.js';
+export * from './mep/extraction/dryRunProvider.js';
+export * from './mep/extraction/mepExtractionWorker.js';

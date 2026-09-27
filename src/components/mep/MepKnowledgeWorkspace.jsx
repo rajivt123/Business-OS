@@ -19,14 +19,22 @@ import {
   Upload,
   Download,
   Sparkles,
-  ExternalLink
+  Ban,
+  Play,
+  FileCode2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useCrm, getUserDisplayName } from '../../context/CrmContext';
 import { useInventory } from '../../context/InventoryContext';
 import { createBusinessAttachmentDownloadUrl, formatBytes } from '../../lib/storageService';
-import { prepareInitialDocumentExtractionJob, ACTIVE_EXTRACTION_STATUSES } from '../../lib/mepExtractionService';
+import {
+  prepareInitialDocumentExtractionJob,
+  executeExtractionJob,
+  cancelExtractionJob,
+  ACTIVE_EXTRACTION_STATUSES
+} from '../../lib/mepExtractionService';
 import LineDetailModal from './LineDetailModal';
+import RawExtractionModal from './RawExtractionModal';
 import MepDocumentIngestionWorkspace from './MepDocumentIngestionWorkspace';
 
 export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
@@ -85,6 +93,13 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
   const [isIngesting, setIsIngesting] = useState(false);
   const [isPreparingJob, setIsPreparingJob] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Raw Extraction Envelope Modal (Phase 4A)
+  const [selectedRawEnvelope, setSelectedRawEnvelope] = useState(null);
+  const [selectedExtractionJobForModal, setSelectedExtractionJobForModal] = useState(null);
+  const [isRawModalOpen, setIsRawModalOpen] = useState(false);
+  const [isExecutingWorker, setIsExecutingWorker] = useState(false);
+  const [executingJobId, setExecutingJobId] = useState(null);
 
   // -------------------------------------------------------------
   // FETCHERS (Company Scoped & Read-Only Inspection)
@@ -331,7 +346,7 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     };
   }, [documents]);
 
-  // Status badge styling helper
+  // Status badge styling helper (5 distinct lifecycle states)
   const renderIngestionStatusBadge = (status) => {
     const s = (status || 'pending').toLowerCase();
     if (s === 'completed' || s === 'success') {
@@ -348,16 +363,23 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
         </span>
       );
     }
+    if (s === 'cancelled' || s === 'canceled') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+          <Ban size={12} /> Cancelled
+        </span>
+      );
+    }
     if (s === 'processing' || s === 'in_progress' || s === 'running') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-300 dark:border-amber-800 animate-pulse">
-          <Clock size={12} /> {s === 'running' ? 'Running' : 'Processing'}
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-300 dark:border-blue-800 animate-pulse">
+          <RefreshCw size={12} className="animate-spin" /> {s === 'running' ? 'Running' : 'Processing'}
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
-        <Clock size={12} /> {status || 'Pending'}
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+        <Clock size={12} /> Pending
       </span>
     );
   };
@@ -403,7 +425,7 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
     setIsPreparingJob(true);
     setErrorMsg(null);
     try {
-      const result = await prepareInitialDocumentExtractionJob({
+      await prepareInitialDocumentExtractionJob({
         documentId: selectedDoc.id,
         tenantId: selectedDoc.tenant_id || tenantId,
         tenantCompanyId: selectedDoc.tenant_company_id || activeOperatingCompanyId,
@@ -416,6 +438,46 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
       setErrorMsg(err.message || 'Failed to prepare extraction job.');
     } finally {
       setIsPreparingJob(false);
+    }
+  };
+
+  // Handler: Execute extraction worker (Phase 4A contract verification)
+  const handleExecuteWorkerForJob = async (jobId) => {
+    if (!jobId || !selectedDoc) return;
+    setIsExecutingWorker(true);
+    setExecutingJobId(jobId);
+    setErrorMsg(null);
+    try {
+      await executeExtractionJob({
+        jobId,
+        tenantCompanyId: selectedDoc.tenant_company_id || activeOperatingCompanyId,
+        userId: authUserId
+      });
+      await fetchDocumentDetails(selectedDoc.id);
+    } catch (err) {
+      console.error('[MepKnowledgeWorkspace] Error running extraction worker:', err);
+      setErrorMsg(err.message || 'Worker execution failed.');
+    } finally {
+      setIsExecutingWorker(false);
+      setExecutingJobId(null);
+    }
+  };
+
+  // Handler: Cancel active extraction job (Phase 4A)
+  const handleCancelJob = async (jobId) => {
+    if (!jobId || !selectedDoc) return;
+    setErrorMsg(null);
+    try {
+      await cancelExtractionJob({
+        jobId,
+        tenantCompanyId: selectedDoc.tenant_company_id || activeOperatingCompanyId,
+        userId: authUserId,
+        reason: 'Extraction job cancelled by user'
+      });
+      await fetchDocumentDetails(selectedDoc.id);
+    } catch (err) {
+      console.error('[MepKnowledgeWorkspace] Error cancelling job:', err);
+      setErrorMsg(err.message || 'Failed to cancel extraction job.');
     }
   };
 
@@ -972,73 +1034,154 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className={`border-b border-slate-200 dark:border-slate-800 ${tHeader} text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[11px]`}>
-                      <th className="py-3 px-4">Extraction Type</th>
-                      <th className="py-3 px-4">Provider</th>
-                      <th className="py-3 px-4">Model</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Confidence</th>
-                      <th className="py-3 px-4">Started</th>
-                      <th className="py-3 px-4">Completed</th>
-                      <th className="py-3 px-4">Error If Failed</th>
+                      <th className="py-3 px-3">Extraction Type</th>
+                      <th className="py-3 px-3">Provider</th>
+                      <th className="py-3 px-3">Model</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-2">Confidence</th>
+                      <th className="py-3 px-3">Started</th>
+                      <th className="py-3 px-3">Completed</th>
+                      <th className="py-3 px-3">Envelope</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {extractions.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-slate-400 italic">
+                        <td colSpan={9} className="py-8 text-center text-slate-400 italic">
                           No extraction runs recorded for this document.
                         </td>
                       </tr>
                     ) : (
-                      extractions.map((ext) => (
-                        <tr key={ext.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
-                          {/* Extraction Type */}
-                          <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">
-                            {ext.extraction_type || 'DOCUMENT_EXTRACTION'}
-                          </td>
+                      extractions.map((ext) => {
+                        const s = (ext.status || 'pending').toLowerCase();
+                        const isPending = s === 'pending';
+                        const isProcessing = s === 'processing' || s === 'in_progress' || s === 'running';
+                        const isTerminal = s === 'completed' || s === 'failed' || s === 'cancelled';
+                        const isJobRunningNow = isExecutingWorker && executingJobId === ext.id;
 
-                          {/* Provider */}
-                          <td className="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">
-                            {ext.provider || '—'}
-                          </td>
+                        return (
+                          <tr key={ext.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                            {/* Extraction Type */}
+                            <td className="py-3 px-3 font-bold text-slate-800 dark:text-slate-200">
+                              {ext.extraction_type || 'DOCUMENT_EXTRACTION'}
+                            </td>
 
-                          {/* Model */}
-                          <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">
-                            {ext.model_name || '—'}
-                          </td>
+                            {/* Provider */}
+                            <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-300">
+                              {ext.provider || '—'}
+                            </td>
 
-                          {/* Status */}
-                          <td className="py-3 px-4">
-                            {renderIngestionStatusBadge(ext.status)}
-                          </td>
+                            {/* Model */}
+                            <td className="py-3 px-3 font-mono text-slate-600 dark:text-slate-400">
+                              {ext.model_name || '—'}
+                            </td>
 
-                          {/* Confidence */}
-                          <td className="py-3 px-4">
-                            {renderConfidenceBadge(ext.confidence_score)}
-                          </td>
+                            {/* Status */}
+                            <td className="py-3 px-3">
+                              {renderIngestionStatusBadge(ext.status)}
+                            </td>
 
-                          {/* Started */}
-                          <td className="py-3 px-4 text-slate-500 text-[11px]">
-                            {ext.started_at ? new Date(ext.started_at).toLocaleString() : '—'}
-                          </td>
+                            {/* Confidence */}
+                            <td className="py-3 px-2">
+                              {renderConfidenceBadge(ext.confidence_score)}
+                            </td>
 
-                          {/* Completed */}
-                          <td className="py-3 px-4 text-slate-500 text-[11px]">
-                            {ext.completed_at ? new Date(ext.completed_at).toLocaleString() : '—'}
-                          </td>
+                            {/* Started */}
+                            <td className="py-3 px-3 text-slate-500 text-[11px]">
+                              {ext.started_at ? new Date(ext.started_at).toLocaleString() : '—'}
+                            </td>
 
-                          {/* Error If Failed */}
-                          <td className="py-3 px-4 max-w-[240px]">
-                            {ext.error_message ? (
-                              <div className="p-1.5 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 text-[11px] font-mono break-words">
-                                {ext.error_message}
+                            {/* Completed */}
+                            <td className="py-3 px-3 text-slate-500 text-[11px]">
+                              {ext.completed_at ? new Date(ext.completed_at).toLocaleString() : '—'}
+                            </td>
+
+                            {/* Envelope Inspection */}
+                            <td className="py-3 px-3">
+                              {ext.raw_output ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRawEnvelope(ext.raw_output);
+                                    setSelectedExtractionJobForModal(ext);
+                                    setIsRawModalOpen(true);
+                                  }}
+                                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/50 flex items-center gap-1.5 transition cursor-pointer"
+                                  title="Inspect Raw Extraction Output Envelope"
+                                >
+                                  <FileCode2 size={13} />
+                                  <span>Inspect</span>
+                                </button>
+                              ) : ext.error_message ? (
+                                <div className="text-[10px] text-rose-600 font-mono max-w-[130px] truncate" title={ext.error_message}>
+                                  {ext.error_message}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-xs italic">—</span>
+                              )}
+                            </td>
+
+                            {/* Actions (Phase 4A Worker Execution / Cancel / Retry) */}
+                            <td className="py-3 px-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {isPending && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExecuteWorkerForJob(ext.id)}
+                                      disabled={isExecutingWorker}
+                                      className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-sky-600 hover:bg-sky-500 text-white flex items-center gap-1 transition cursor-pointer shadow-sm disabled:opacity-50"
+                                      title="Run extraction worker contract verification"
+                                    >
+                                      {isJobRunningNow ? (
+                                        <RefreshCw size={11} className="animate-spin" />
+                                      ) : (
+                                        <Play size={11} />
+                                      )}
+                                      <span>{isJobRunningNow ? 'Running...' : 'Run Worker'}</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelJob(ext.id)}
+                                      disabled={isExecutingWorker}
+                                      className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer disabled:opacity-50"
+                                      title="Cancel Extraction Job"
+                                    >
+                                      <Ban size={14} />
+                                    </button>
+                                  </>
+                                )}
+
+                                {isProcessing && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCancelJob(ext.id)}
+                                    className="px-2 py-1 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-100 flex items-center gap-1 transition cursor-pointer"
+                                    title="Cancel In-Progress Extraction"
+                                  >
+                                    <Ban size={12} />
+                                    <span>Cancel</span>
+                                  </button>
+                                )}
+
+                                {isTerminal && (s === 'failed' || s === 'cancelled') && !hasActiveExtraction && (
+                                  <button
+                                    type="button"
+                                    onClick={handlePrepareExtractionForDoc}
+                                    disabled={isPreparingJob}
+                                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center gap-1 transition cursor-pointer"
+                                    title="Retry Extraction (Creates new pending job)"
+                                  >
+                                    <RefreshCw size={11} />
+                                    <span>Retry</span>
+                                  </button>
+                                )}
                               </div>
-                            ) : (
-                              <span className="text-slate-400 italic">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -1399,6 +1542,19 @@ export default function MepKnowledgeWorkspace({ isDarkMode = false }) {
         categories={mepCategories}
         profiles={profiles}
         tenantMembers={tenantMembers}
+        isDarkMode={isDarkMode}
+      />
+
+      {/* RAW EXTRACTION ENVELOPE MODAL (Phase 4A) */}
+      <RawExtractionModal
+        isOpen={isRawModalOpen}
+        onClose={() => {
+          setIsRawModalOpen(false);
+          setSelectedRawEnvelope(null);
+          setSelectedExtractionJobForModal(null);
+        }}
+        rawOutput={selectedRawEnvelope}
+        extractionJob={selectedExtractionJobForModal}
         isDarkMode={isDarkMode}
       />
     </div>

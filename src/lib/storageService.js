@@ -20,7 +20,7 @@
  * All uploads use presigned signed PUT URLs directly to Cloudflare R2.
  */
 
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 export const MAX_DOCUMENT_FILE_SIZE_BYTES = 150 * 1024 * 1024; // 150 MB
 
