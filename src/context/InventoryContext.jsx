@@ -41,6 +41,11 @@ export function InventoryProvider({ children }) {
   const [reservations, setReservations] = useState([]);
   const [fulfilments, setFulfilments] = useState([]);
   const [itemAliases, setItemAliases] = useState([]);
+  const [mepDomains, setMepDomains] = useState([]);
+  const [mepCategories, setMepCategories] = useState([]);
+  const [mepAttributes, setMepAttributes] = useState([]);
+  const [mepUnits, setMepUnits] = useState([]);
+  const [mepItemSpecifications, setMepItemSpecifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -224,6 +229,72 @@ export function InventoryProvider({ children }) {
     }
   }, [tenantId]);
 
+  const fetchMepReferenceData = useCallback(async () => {
+    if (!authUserId) return;
+    try {
+      const [domainsRes, catsRes, attrsRes, unitsRes] = await Promise.all([
+        supabase.from('mep_domains').select('*'),
+        supabase.from('mep_item_categories').select('*'),
+        supabase.from('mep_attribute_definitions').select('*'),
+        supabase.from('mep_units').select('*')
+      ]);
+
+      if (domainsRes.data) {
+        const sortedDomains = [...domainsRes.data].sort((a, b) => {
+          if (a.display_order !== undefined && b.display_order !== undefined && a.display_order !== b.display_order) {
+            return (a.display_order || 0) - (b.display_order || 0);
+          }
+          return (a.name || a.code || '').localeCompare(b.name || b.code || '');
+        });
+        setMepDomains(sortedDomains);
+      }
+      if (catsRes.data) {
+        const sortedCats = [...catsRes.data].sort((a, b) => {
+          if (a.display_order !== undefined && b.display_order !== undefined && a.display_order !== b.display_order) {
+            return (a.display_order || 0) - (b.display_order || 0);
+          }
+          return (a.name || a.code || '').localeCompare(b.name || b.code || '');
+        });
+        setMepCategories(sortedCats);
+      }
+      if (attrsRes.data) {
+        const sortedAttrs = [...attrsRes.data].sort((a, b) => {
+          if (a.sort_order !== undefined && b.sort_order !== undefined && a.sort_order !== b.sort_order) {
+            return (a.sort_order || 0) - (b.sort_order || 0);
+          }
+          return (a.name || a.code || '').localeCompare(b.name || b.code || '');
+        });
+        setMepAttributes(sortedAttrs);
+      }
+      if (unitsRes.data) {
+        const sortedUnits = [...unitsRes.data].sort((a, b) => (a.code || a.name || '').localeCompare(b.code || b.name || ''));
+        setMepUnits(sortedUnits);
+      }
+    } catch (err) {
+      console.error('[InventoryContext] Error fetching MEP reference data:', err);
+    }
+  }, [authUserId]);
+
+  const fetchMepItemSpecifications = useCallback(async (opCoId) => {
+    if (!authUserId) return;
+    try {
+      let q = supabase
+        .from('mep_item_specifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (opCoId) q = q.eq('tenant_company_id', opCoId);
+      else if (tenantId) q = q.eq('tenant_id', tenantId);
+
+      const { data, error: err } = await q;
+      if (err) throw err;
+      setMepItemSpecifications(data || []);
+    } catch (err) {
+      console.error('[InventoryContext] Error fetching MEP item specifications:', err);
+      setMepItemSpecifications([]);
+    }
+  }, [tenantId, authUserId]);
+
   const refreshAllInventory = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -235,14 +306,16 @@ export function InventoryProvider({ children }) {
         fetchTransactions(activeOperatingCompanyId),
         fetchReservations(activeOperatingCompanyId),
         fetchFulfilments(activeOperatingCompanyId),
-        fetchItemAliases(activeOperatingCompanyId)
+        fetchItemAliases(activeOperatingCompanyId),
+        fetchMepItemSpecifications(activeOperatingCompanyId),
+        fetchMepReferenceData()
       ]);
     } catch (err) {
       setError(err.message || 'Failed to load inventory data');
     } finally {
       setIsLoading(false);
     }
-  }, [activeOperatingCompanyId, fetchItems, fetchLocations, fetchStockBalances, fetchTransactions, fetchReservations, fetchFulfilments, fetchItemAliases]);
+  }, [activeOperatingCompanyId, fetchItems, fetchLocations, fetchStockBalances, fetchTransactions, fetchReservations, fetchFulfilments, fetchItemAliases, fetchMepItemSpecifications, fetchMepReferenceData]);
 
   useEffect(() => {
     refreshAllInventory();
@@ -317,12 +390,15 @@ export function InventoryProvider({ children }) {
         idempotency_key: crypto.randomUUID()
       };
 
-      // Optional MEP Identity Foundation fields (Phase 1)
+      // Optional MEP Identity Foundation fields (Phase 1 & Phase 2)
       if (itemPayload.normalized_name !== undefined && itemPayload.normalized_name !== null && itemPayload.normalized_name !== '') {
         payload.normalized_name = itemPayload.normalized_name.trim();
       }
       if (itemPayload.domain_code !== undefined && itemPayload.domain_code !== null && itemPayload.domain_code !== '') {
         payload.domain_code = itemPayload.domain_code.trim();
+      }
+      if (itemPayload.mep_category_id !== undefined && itemPayload.mep_category_id !== null && itemPayload.mep_category_id !== '') {
+        payload.mep_category_id = itemPayload.mep_category_id;
       }
       if (itemPayload.identity_attributes !== undefined && itemPayload.identity_attributes !== null) {
         payload.identity_attributes = itemPayload.identity_attributes;
@@ -671,6 +747,11 @@ export function InventoryProvider({ children }) {
     reservations,
     fulfilments,
     itemAliases,
+    mepDomains,
+    mepCategories,
+    mepAttributes,
+    mepUnits,
+    mepItemSpecifications,
     isLoading,
     submitting,
     error,
@@ -682,6 +763,8 @@ export function InventoryProvider({ children }) {
     refreshAllInventory,
     fetchFulfilments,
     fetchItemAliases,
+    fetchMepReferenceData,
+    fetchMepItemSpecifications,
     createItem,
     createLocation,
     postTransaction,

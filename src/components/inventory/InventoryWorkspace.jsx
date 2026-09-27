@@ -62,7 +62,11 @@ export default function InventoryWorkspace({ isDarkMode }) {
 
   // Filtered items
   const filteredItems = items.filter(i => {
-    const matchSearch = !searchQuery || i.item_code?.toLowerCase().includes(searchQuery.toLowerCase()) || i.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !searchQuery ||
+      i.item_code?.toLowerCase().includes(q) ||
+      i.name?.toLowerCase().includes(q) ||
+      i.normalized_name?.toLowerCase().includes(q);
     const matchCategory = !filterCategory || i.category === filterCategory;
     const matchType = !filterType || i.item_type === filterType;
     return matchSearch && matchCategory && matchType;

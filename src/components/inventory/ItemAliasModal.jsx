@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
-import { X, Tag, CheckCircle2, AlertCircle, Plus, Loader2, ShieldCheck, Bookmark, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, Tag, CheckCircle2, AlertCircle, Plus, Loader2, ShieldCheck, Bookmark, Layers } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 
 export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
-  const { itemAliases = [], createInventoryItemAlias, submitting, isManagementOrAdmin } = useInventory();
+  const {
+    itemAliases = [],
+    mepDomains = [],
+    mepCategories = [],
+    mepItemSpecifications = [],
+    createInventoryItemAlias,
+    submitting,
+    isManagementOrAdmin
+  } = useInventory();
   
   const [aliasText, setAliasText] = useState('');
   const [aliasType, setAliasType] = useState('vendor');
@@ -11,9 +19,58 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  if (!isOpen || !item) return null;
+  const aliases = useMemo(() => {
+    if (!item) return [];
+    return itemAliases.filter(a => a.inventory_item_id === item.id);
+  }, [itemAliases, item]);
 
-  const aliases = itemAliases.filter(a => a.inventory_item_id === item.id);
+  // Read-only specifications linked to this canonical item
+  const itemSpecs = useMemo(() => {
+    if (!item) return [];
+    return mepItemSpecifications.filter(s => s.inventory_item_id === item.id);
+  }, [mepItemSpecifications, item]);
+
+  // Resolve domain display name
+  const domainDisplayName = useMemo(() => {
+    if (!item?.domain_code) return '--';
+    const d = mepDomains.find(dom => dom.code === item.domain_code);
+    return d?.name || item.domain_code;
+  }, [mepDomains, item?.domain_code]);
+
+  // Resolve MEP Category display name
+  const mepCategoryDisplayName = useMemo(() => {
+    if (item?.mep_category_id) {
+      const c = mepCategories.find(cat => cat.id === item.mep_category_id);
+      if (c) return c.name || c.code;
+    }
+    return item?.category || '--';
+  }, [mepCategories, item?.mep_category_id, item?.category]);
+
+  // Parse identity attributes
+  const identityAttrEntries = useMemo(() => {
+    if (!item?.identity_attributes) return [];
+    let obj = item.identity_attributes;
+    if (typeof obj === 'string') {
+      try {
+        obj = JSON.parse(obj);
+      } catch {
+        return [];
+      }
+    }
+    if (typeof obj === 'object' && obj !== null) {
+      return Object.entries(obj).filter(([_, v]) => v !== null && v !== undefined && v !== '');
+    }
+    return [];
+  }, [item?.identity_attributes]);
+
+  const formatAttrKey = (key) => {
+    return key
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
+  if (!isOpen || !item) return null;
 
   const tModal = isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900 shadow-2xl';
   const tHeader = isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50/50';
@@ -66,7 +123,7 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className={`max-w-[700px] w-full max-h-[90vh] flex flex-col rounded-xl border ${tModal}`}>
+      <div className={`max-w-[750px] w-full max-h-[90vh] flex flex-col rounded-xl border ${tModal}`}>
         {/* Header */}
         <div className={`px-6 py-4 border-b flex justify-between items-center shrink-0 ${tHeader}`}>
           <div className="flex items-center gap-3">
@@ -75,7 +132,7 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold">Item Identity & Aliases</h2>
+                <h2 className="text-lg font-bold">Item Identity & Details</h2>
                 <span className="font-mono text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
                   {item.item_code}
                 </span>
@@ -99,19 +156,19 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {/* Item Identity Context */}
-          <div className={`p-4 rounded-xl border ${tSection} space-y-2`}>
+          <div className={`p-4 rounded-xl border ${tSection} space-y-3`}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Category</span>
-                <span className="font-semibold">{item.category || 'General'}</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">Domain</span>
+                <span className="font-semibold text-sky-400">{domainDisplayName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-bold">MEP Category</span>
+                <span className="font-semibold">{mepCategoryDisplayName}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-bold">Base UOM</span>
                 <span className="font-mono font-semibold">{item.base_uom_code || 'NOS'}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Item Type</span>
-                <span className="capitalize">{item.item_type?.replace('_', ' ') || 'Raw Material'}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-bold">Status</span>
@@ -127,6 +184,68 @@ export default function ItemAliasModal({ item, isOpen, onClose, isDarkMode }) {
               <div className="pt-2 border-t border-slate-800/40 text-xs">
                 <span className="text-slate-500 text-[10px] uppercase font-bold block">Canonical Normalized Name</span>
                 <span className="font-mono text-amber-400/90 text-xs">{item.normalized_name}</span>
+              </div>
+            )}
+
+            {/* Identity Attributes (JSON Key-Value Pairs) */}
+            <div className="pt-2 border-t border-slate-800/40 text-xs">
+              <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1.5">
+                Identity Attributes {identityAttrEntries.length > 0 && `(${identityAttrEntries.length})`}
+              </span>
+              {identityAttrEntries.length === 0 ? (
+                <span className="text-[11px] text-slate-500 italic">No identity attributes recorded for this item.</span>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {identityAttrEntries.map(([k, v]) => (
+                    <div key={k} className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/60 space-y-0.5">
+                      <span className="text-[10px] text-slate-500 block uppercase font-medium truncate" title={k}>
+                        {formatAttrKey(k)}
+                      </span>
+                      <span className="font-semibold text-slate-200 text-xs block truncate" title={String(v)}>
+                        {String(v)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Read-Only Item Specifications (Phase 2) */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" /> Company Specifications ({itemSpecs.length})
+              </h3>
+              <span className="text-[10px] text-slate-500">Read-Only</span>
+            </div>
+
+            {itemSpecs.length === 0 ? (
+              <div className={`p-4 rounded-xl border text-center text-xs text-slate-500 ${tSection}`}>
+                <p>No company-specific engineering specifications linked to this canonical item.</p>
+              </div>
+            ) : (
+              <div className={`rounded-xl border overflow-hidden divide-y divide-slate-800/40 ${tSection}`}>
+                {itemSpecs.map((spec, idx) => (
+                  <div key={spec.id || idx} className="p-3 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <span className="font-semibold text-slate-200">
+                        {spec.attribute_code || spec.specification_name || spec.name || 'Specification'}
+                      </span>
+                      {spec.notes && (
+                        <p className="text-[10px] text-slate-500">{spec.notes}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono text-amber-400 font-medium">
+                        {spec.attribute_value || spec.value || '--'} {spec.unit || spec.uom || ''}
+                      </span>
+                      {spec.standard && (
+                        <p className="text-[10px] text-slate-500 font-mono">{spec.standard}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
