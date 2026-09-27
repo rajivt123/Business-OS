@@ -562,14 +562,17 @@ export async function listBusinessAttachments({
  * Step 4: Request temporary signed download URL for a business file attachment.
  * Action: 'create-download-url'
  */
-export async function createBusinessAttachmentDownloadUrl({ attachmentId }) {
+export async function createBusinessAttachmentDownloadUrl({ attachmentId, entityType, entityId, fieldKey }) {
   if (!attachmentId) {
     throw new Error('Attachment ID is required to generate a download URL.');
   }
 
   const payload = {
     action: 'create-download-url',
-    attachment_id: attachmentId
+    attachment_id: attachmentId,
+    entity_type: entityType,
+    entity_id: entityId ? String(entityId) : undefined,
+    field_key: fieldKey
   };
 
   const response = await invokeBusinessFileStorage(payload);

@@ -102,7 +102,10 @@ export default function Modals() {
     if (att?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({ 
-          attachmentId: att.id 
+          attachmentId: att.id,
+          entityType: 'work',
+          entityId: editingWorkId,
+          fieldKey
         })
         if (res?.download_url) {
           openDocPreview(res.download_url, `${workForm.title || 'Work'} - ${fieldKey.toUpperCase()} (${att.file_name})`)
@@ -123,7 +126,10 @@ export default function Modals() {
     if (att?.id) {
       try {
         const res = await createBusinessAttachmentDownloadUrl({ 
-          attachmentId: att.id 
+          attachmentId: att.id,
+          entityType: 'work',
+          entityId: editingWorkId,
+          fieldKey
         })
         if (res?.download_url) {
           const a = document.createElement('a')
