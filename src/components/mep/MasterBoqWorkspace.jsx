@@ -583,9 +583,23 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     return parent ? parent.originalDescription : null;
   };
 
+  const isBillableItem = (line) => {
+    if (line.lineType === "section" || line.lineType === "header") return false;
+    const hasQty = line.quantity !== 0 && line.quantity !== null && line.quantity !== "";
+    const hasUom = !!line.uom;
+    const hasSupply = !!line.supplyRate || !!line.supplyAmount;
+    const hasInstall = !!line.installationRate || !!line.installationAmount;
+    const hasTotal = !!line.lineTotalAmount;
+    
+    if (!hasQty && !hasUom && !hasSupply && !hasInstall && !hasTotal) {
+      return false;
+    }
+    return true;
+  };
+
   const exportCommercial = (type) => {
     const data = [];
-    const billableLines = boqLines.filter(l => l.lineType !== "section" && l.lineType !== "header");
+    const billableLines = boqLines.filter(isBillableItem);
     let totalSupply = 0;
     let totalInstallation = 0;
     let grandTotal = 0;
@@ -986,7 +1000,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {filteredLines.filter(l => l.lineType !== "section" && l.lineType !== "header").length === 0 ? (
+                    {filteredLines.filter(isBillableItem).length === 0 ? (
                       <tr>
                         <td
                           colSpan="13"
@@ -1002,7 +1016,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                         </td>
                       </tr>
                     ) : (
-                      filteredLines.filter(l => l.lineType !== "section" && l.lineType !== "header").map((line) => (
+                      filteredLines.filter(isBillableItem).map((line) => (
                         <tr
                           key={line.id}
                           className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${selectedLineForReview?.id === line.id ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
@@ -1011,11 +1025,11 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             {line.lineNo}
                           </td>
                           <td
-                            className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs truncate"
+                            className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs"
                             title={line.originalDescription}
                           >
-                            {getParentDescription(line) && <div className="text-xs text-slate-400 mb-1 truncate font-medium">{getParentDescription(line)}</div>}
-                            {line.originalDescription}
+                            {getParentDescription(line) && <div className="text-xs text-slate-400 mb-1 truncate font-medium" title={getParentDescription(line)}>{getParentDescription(line)}</div>}
+                            <div className="truncate">{line.originalDescription}</div>
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
                             {line.quantity}
