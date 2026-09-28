@@ -1,12 +1,55 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  FileText, Upload, ChevronRight, Search, Filter, AlertCircle,
-  CheckCircle2, Clock, Ban, ListChecks, ArrowRight,
-  Database, FileBarChart, HardDrive, LayoutGrid, Eye, Check, X, RefreshCw, Plus
-} from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useCrm } from '../../context/CrmContext';
-import { useInventory } from '../../context/InventoryContext';
+  FileText,
+  Upload,
+  ChevronRight,
+  Search,
+  Filter,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Ban,
+  ListChecks,
+  ArrowRight,
+  Database,
+  FileBarChart,
+  HardDrive,
+  LayoutGrid,
+  Eye,
+  Check,
+  X,
+  RefreshCw,
+  Plus,
+} from "lucide-react";
+import { supabase } from "../../lib/supabase";
+import { useCrm } from "../../context/CrmContext";
+import { useInventory } from "../../context/InventoryContext";
+import { createBusinessAttachmentDownloadUrl } from "../../lib/storageService";
+import * as XLSX from "xlsx";
+
+const parseSupabaseError = async (err) => {
+  if (!err) return "Unknown error occurred.";
+  try {
+    if (err?.context) {
+      if (typeof err.context.json === "function") {
+        const body = await err.context.json();
+        if (body?.error) return body.error;
+        if (body?.message) return body.message;
+      }
+      if (typeof err.context.text === "function") {
+        const text = await err.context.text();
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error) return parsed.error;
+          if (parsed?.message) return parsed.message;
+        } catch (_) {
+          if (text) return text;
+        }
+      }
+    }
+  } catch (_) {}
+  return err?.error || err?.message || "Unknown error";
+};
 
 export default function MasterBoqWorkspace({ isDarkMode = false }) {
   const crmContext = useCrm() || {};
@@ -16,11 +59,11 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
   const { items = [] } = invContext;
 
   // View steps: 'SELECT_PROJECT' -> 'UPLOAD_SOURCE' -> 'MASTER_BOQ'
-  const [currentView, setCurrentView] = useState('SELECT_PROJECT');
-  
+  const [currentView, setCurrentView] = useState("SELECT_PROJECT");
+
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectDocs, setProjectDocs] = useState([]);
-  const [selectedSourceId, setSelectedSourceId] = useState('');
+  const [selectedSourceId, setSelectedSourceId] = useState("");
 
   // Data states
   const [boqLines, setBoqLines] = useState([]);
@@ -31,22 +74,23 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [aiStatusMsg, setAiStatusMsg] = useState(null);
 
   // Review panel
   const [selectedLineForReview, setSelectedLineForReview] = useState(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [candidates, setCandidates] = useState([]);
-  const [manualSelectedItemId, setManualSelectedItemId] = useState('');
+  const [manualSelectedItemId, setManualSelectedItemId] = useState("");
   const [showChangeItem, setShowChangeItem] = useState(false);
 
   // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   useEffect(() => {
-    if (currentView === 'SELECT_PROJECT') {
+    if (currentView === "SELECT_PROJECT") {
       setSelectedProject(null);
-      setSelectedSourceId('');
+      setSelectedSourceId("");
       setBoqLines([]);
       setCurrentMasterBoqId(null);
       setMasterBoqStatus(null);
@@ -58,21 +102,49 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
   const handleProjectSelect = async (workId) => {
     setSelectedProject(workId);
-    setCurrentView('UPLOAD_SOURCE');
+    setCurrentView("UPLOAD_SOURCE");
     setIsLoadingDocs(true);
     setErrorMsg(null);
     try {
       const { data, error } = await supabase
-        .from('file_attachments')
-        .select('*')
-        .eq('tenant_company_id', activeOperatingCompanyId)
-        .eq('entity_type', 'work')
-        .eq('entity_id', String(workId))
-        .eq('is_current', true)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: false });
+        .from("file_attachments")
+        .select("*")
+        .eq("tenant_company_id", activeOperatingCompanyId)
+        .eq("entity_type", "work")
+        .eq("entity_id", String(workId))
+        .eq("field_key", "boq")
+        .eq("is_current", true)
+        .eq("is_archived", false)
+        .order("created_at", { ascending: false });
+
       if (error) throw error;
-      setProjectDocs(data || []);
+
+      const workData = works.find((w) => w.id === workId);
+      const docs = [];
+
+      if (data && data.length > 0) {
+        data.forEach((d) => {
+          docs.push({
+            type: "new",
+            id: d.id,
+            attachment: d,
+          });
+        });
+      }
+      if (workData && workData.boq_url) {
+        docs.push({
+          type: "legacy",
+          id: "legacy_boq",
+          boq_url: workData.boq_url,
+        });
+      }
+
+      setProjectDocs(docs);
+      if (docs.length > 0) {
+        setSelectedSourceId(docs[0].id);
+      } else {
+        setSelectedSourceId("");
+      }
     } catch (e) {
       setErrorMsg(e.message);
     } finally {
@@ -82,100 +154,238 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
   const handleAIEntry = async () => {
     if (!selectedSourceId) {
-      setErrorMsg('Please select a source document first.');
+      setErrorMsg("Please select a source document first.");
       return;
     }
+
+    const workData = works.find((w) => w.id === selectedProject);
+    const selectedDoc = projectDocs.find((d) => d.id === selectedSourceId);
+    if (!selectedDoc && !workData?.boq_url) {
+      setErrorMsg(
+        "Please attach a BOQ document to this Work before using AI Entry.",
+      );
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMsg(null);
+    setAiStatusMsg("Reading BOQ locally…");
+
     try {
-      // 1. Fetch extraction
-      const { data: extData, error: extError } = await supabase
-        .from('mep_document_extractions')
-        .select('id')
-        .eq('source_document_id', selectedSourceId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-        
-      if (extError || !extData) {
-        throw new Error("Document extraction is not available for this document yet.");
+      let resolvedBoqUrl = "";
+      let resolvedFileName = "BOQ";
+      let resolvedMimeType = "application/pdf";
+
+      if (selectedDoc?.type === "legacy" || selectedSourceId === "legacy_boq") {
+        resolvedBoqUrl = selectedDoc?.boq_url || workData?.boq_url;
+        let urlExt = "";
+        try {
+          const urlObj = new URL(resolvedBoqUrl);
+          const rawName = urlObj.pathname.split("/").pop() || "";
+          if (rawName.includes(".")) {
+            urlExt = "." + rawName.split(".").pop();
+          }
+        } catch (_) {}
+        resolvedFileName = `BOQ — Existing Legacy BOQ${urlExt}`;
+        const lowerUrl = (resolvedBoqUrl || "").toLowerCase();
+        if (lowerUrl.includes(".xlsx")) {
+          resolvedMimeType =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+          if (!resolvedFileName.endsWith(".xlsx")) resolvedFileName += ".xlsx";
+        } else if (lowerUrl.includes(".xls")) {
+          resolvedMimeType = "application/vnd.ms-excel";
+          if (!resolvedFileName.endsWith(".xls")) resolvedFileName += ".xls";
+        } else if (lowerUrl.includes(".csv")) {
+          resolvedMimeType = "text/csv";
+          if (!resolvedFileName.endsWith(".csv")) resolvedFileName += ".csv";
+        } else {
+          resolvedMimeType = "application/pdf";
+        }
+      } else if (selectedDoc?.type === "new" && selectedDoc.attachment) {
+        const { download_url } = await createBusinessAttachmentDownloadUrl({
+          attachmentId: selectedDoc.attachment.id,
+          entityType: "work",
+          entityId: selectedProject,
+          fieldKey: "boq",
+        });
+        resolvedBoqUrl = download_url;
+        resolvedFileName = selectedDoc.attachment.file_name || "BOQ Document";
+        resolvedMimeType =
+          selectedDoc.attachment.mime_type || "application/octet-stream";
+      } else if (workData?.boq_url) {
+        resolvedBoqUrl = workData.boq_url;
+        resolvedFileName = "BOQ — Existing Legacy BOQ";
+        resolvedMimeType = "application/pdf";
       }
 
-      // 2. Fetch extracted lines
-      const { data: extLines, error: linesError } = await supabase
-        .from('mep_extraction_lines')
-        .select('*')
-        .eq('extraction_id', extData.id);
+      if (!resolvedBoqUrl) {
+        throw new Error("Unable to resolve BOQ document source URL.");
+      }
 
-      if (linesError || !extLines || extLines.length === 0) {
+      const isSpreadsheet =
+        resolvedMimeType.includes("spreadsheet") ||
+        resolvedMimeType.includes("excel") ||
+        resolvedMimeType === "text/csv" ||
+        resolvedFileName.toLowerCase().endsWith(".xlsx") ||
+        resolvedFileName.toLowerCase().endsWith(".xls") ||
+        resolvedFileName.toLowerCase().endsWith(".csv");
+        
+      if (!isSpreadsheet) {
+        throw new Error("Local extraction for PDF/image documents is not available yet. Please use Manual Entry or select an Excel/CSV BOQ.");
+      }
+
+      // Call extraction service
+      const { data: aiData, error: aiError } = await supabase.functions.invoke(
+        "mep-document-local",
+        {
+          body: {
+            action: "extract-master-boq-local",
+            tenant_company_id: activeOperatingCompanyId,
+            work_id: selectedProject,
+            source_url: resolvedBoqUrl,
+            source_file_name: resolvedFileName,
+            mime_type: resolvedMimeType,
+          },
+        },
+      );
+
+      if (aiError) throw new Error(await parseSupabaseError(aiError));
+      if (aiData?.error) throw new Error(aiData.error);
+      if (!aiData?.success || !aiData?.extraction_id) {
+        throw new Error(
+          aiData?.message ||
+            "Extraction failed to return valid extraction data.",
+        );
+      }
+
+      const extractionId = aiData.extraction_id;
+      const documentId = aiData.document_id;
+      
+      setAiStatusMsg("Extracting BOQ rows…");
+
+      // 2. Fetch extracted lines from mep_extraction_lines
+      const { data: extLines, error: linesError } = await supabase
+        .from("mep_extraction_lines")
+        .select("*")
+        .eq("extraction_id", extractionId)
+        .order("line_no", { ascending: true });
+
+      if (linesError) {
+        throw new Error(
+          `Failed to query extraction lines: ${linesError.message}`,
+        );
+      }
+      if (!extLines || extLines.length === 0) {
         throw new Error("No lines found in the extraction.");
       }
+      
+      setAiStatusMsg("Preparing Master BOQ…");
 
-      // 3. Create Master BOQ draft
-      const { data: createData, error: createError } = await supabase.functions.invoke('master-boq-service', {
-        body: {
-          action: "create",
-          tenant_company_id: activeOperatingCompanyId,
-          work_id: selectedProject,
-          title: "AI Master BOQ",
-          boq_code: "BOQ-" + new Date().getTime(),
-          version: "1.0",
-          source_document_id: selectedSourceId,
-          source_extraction_id: extData.id,
-          notes: "Created via AI Entry Workflow",
-          lines: extLines.map(l => ({
-            original_description: l.raw_description,
-            quantity: l.extracted_qty,
-            uom_code: l.extracted_uom,
-            make: l.extracted_make,
-            model: l.extracted_model,
-            line_no: l.sequence_index?.toString() || ""
-          }))
-        }
-      });
+      // 3. Map actual mep_extraction_lines schema
+      const mappedLines = extLines.map((l) => ({
+        original_description: l.raw_description,
+        normalized_description: l.normalized_description,
+        quantity: l.quantity,
+        uom_code: l.uom_code,
+        make: l.make,
+        model: l.model,
+        specification: l.parsed_attributes,
+        line_no: l.line_no,
+        source_line_ref: l.source_line_ref,
+        parent_line_ref: l.parent_line_ref,
+        line_type: l.line_type,
+        procurement_scope: l.procurement_scope,
+        supply_quantity: l.supply_quantity,
+        supply_uom_code: l.supply_uom_code,
+        supply_rate: l.supply_rate,
+        supply_amount: l.supply_amount,
+        installation_quantity: l.installation_quantity,
+        installation_uom_code: l.installation_uom_code,
+        installation_rate: l.installation_rate,
+        installation_amount: l.installation_amount,
+        line_total_amount: l.line_total_amount,
+        source_po_number: l.source_po_number,
+        source_wo_number: l.source_wo_number,
+        inventory_item_id: l.candidate_inventory_item_id,
+        match_confidence: l.match_confidence,
+        match_method: l.match_method,
+        match_explanation: l.match_reasons,
+        source_extraction_line_id: l.id,
+        source_page: l.source_page,
+        source_section: l.source_section,
+        material_code: l.material_code,
+        hsn_code: l.hsn_code,
+      }));
 
-      if (createError) throw createError;
+      // 4. Create Master BOQ draft (omit version so backend assigns next available version)
+      const { data: createData, error: createError } =
+        await supabase.functions.invoke("master-boq-service", {
+          body: {
+            action: "create",
+            tenant_company_id: activeOperatingCompanyId,
+            work_id: selectedProject,
+            title: "AI Master BOQ",
+            boq_code: "BOQ-" + Date.now(),
+            source_extraction_id: extractionId,
+            notes: "Created via local deterministic BOQ extraction",
+            lines: mappedLines,
+          },
+        });
+
+      if (createError) throw new Error(await parseSupabaseError(createError));
       if (createData?.error) throw new Error(createData.error);
 
-      setCurrentMasterBoqId(createData.master_boq_id);
-      setCurrentView('MASTER_BOQ');
-      await fetchMasterBoq(createData.master_boq_id);
+      const masterBoqId = createData?.master_boq_id || createData?.boq_id;
+      if (!masterBoqId)
+        throw new Error("Backend did not return a master_boq_id.");
+
+      setCurrentMasterBoqId(masterBoqId);
+      setCurrentView("MASTER_BOQ");
+      await fetchMasterBoq(masterBoqId);
     } catch (e) {
       setErrorMsg(e.message);
     } finally {
       setIsProcessing(false);
+      setAiStatusMsg(null);
     }
   };
 
   const handleManualEntry = async () => {
     if (!selectedSourceId) {
-      setErrorMsg('Please select a source document first.');
+      setErrorMsg("Please select a source document first.");
       return;
     }
     setIsProcessing(true);
     setErrorMsg(null);
     try {
-      const { data: createData, error: createError } = await supabase.functions.invoke('master-boq-service', {
-        body: {
-          action: "create",
-          tenant_company_id: activeOperatingCompanyId,
-          work_id: selectedProject,
-          title: "Manual Master BOQ",
-          boq_code: "BOQ-" + new Date().getTime(),
-          version: "1.0",
-          source_document_id: selectedSourceId,
-          source_extraction_id: null,
-          notes: "Created via Manual Entry Workflow",
-          lines: []
-        }
-      });
-      
-      if (createError) throw createError;
+      const selectedDoc = projectDocs.find((d) => d.id === selectedSourceId);
+
+      const { data: createData, error: createError } =
+        await supabase.functions.invoke("master-boq-service", {
+          body: {
+            action: "create",
+            tenant_company_id: activeOperatingCompanyId,
+            work_id: selectedProject,
+            title: "Manual Master BOQ",
+            boq_code: "BOQ-" + Date.now(),
+            source_document_id:
+              selectedDoc?.type === "new" ? selectedDoc?.attachment?.id : null,
+            source_extraction_id: null,
+            notes: "Created via Manual Entry Workflow",
+            lines: [],
+          },
+        });
+
+      if (createError) throw new Error(await parseSupabaseError(createError));
       if (createData?.error) throw new Error(createData.error);
 
-      setCurrentMasterBoqId(createData.master_boq_id);
-      setCurrentView('MASTER_BOQ');
-      await fetchMasterBoq(createData.master_boq_id);
+      const masterBoqId = createData?.master_boq_id || createData?.boq_id;
+      if (!masterBoqId)
+        throw new Error("Backend did not return a master_boq_id.");
+
+      setCurrentMasterBoqId(masterBoqId);
+      setCurrentView("MASTER_BOQ");
+      await fetchMasterBoq(masterBoqId);
     } catch (e) {
       setErrorMsg(e.message);
     } finally {
@@ -185,40 +395,76 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
   const fetchMasterBoq = async (id) => {
     try {
-      const { data, error } = await supabase.functions.invoke('master-boq-service', {
-        body: { action: 'get', master_boq_id: id }
-      });
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke(
+        "master-boq-service",
+        {
+          body: { action: "get", master_boq_id: id },
+        },
+      );
+      if (error) throw new Error(await parseSupabaseError(error));
       if (data?.error) throw new Error(data.error);
-      
-      if (data?.boq) {
-        setMasterBoqStatus(data.boq.status);
-        const mappedLines = (data.boq.lines || []).map(l => ({
-          id: l.id,
-          lineNo: l.line_no || '',
-          originalDescription: l.original_description || '',
-          normalizedDescription: l.normalized_description || '',
-          quantity: l.quantity || 0,
-          uom: l.uom_code || '',
-          make: l.make || '',
-          model: l.model || '',
-          specification: l.specification || '',
-          masterItemCode: l.inventory_item_id ? items.find(i => i.id === l.inventory_item_id)?.item_code || 'Unknown Item' : '',
-          inventoryItemId: l.inventory_item_id,
-          matchStatus: l.match_status || 'unmatched',
-          confidence: l.match_confidence || 0,
-          matchMethod: l.match_method || '',
-          matchReasons: l.match_explanation || ''
-        }));
-        setBoqLines(mappedLines);
-        
-        // Refresh selected line if open
-        if (selectedLineForReview) {
-          const updated = mappedLines.find(ml => ml.id === selectedLineForReview.id);
-          setSelectedLineForReview(updated || null);
-        }
+
+      const rawLines = Array.isArray(data?.lines)
+        ? data.lines
+        : Array.isArray(data?.boq?.lines)
+          ? data.boq.lines
+          : [];
+
+      setMasterBoqStatus(data?.boq?.status || "draft");
+
+      const mappedLines = rawLines.map((l) => ({
+        id: l.id,
+        lineNo: l.line_no || "",
+        originalDescription: l.original_description || "",
+        normalizedDescription: l.normalized_description || "",
+        quantity: l.quantity || 0,
+        uom: l.uom_code || "",
+        make: l.make || "",
+        model: l.model || "",
+        specification:
+          typeof l.specification === "object" && l.specification !== null
+            ? l.specification.raw_specification ||
+              JSON.stringify(l.specification)
+            : l.specification || "",
+        masterItemCode: l.inventory_item_id
+          ? items.find((i) => i.id === l.inventory_item_id)?.item_code ||
+            "Unknown Item"
+          : "",
+        itemType: l.inventory_item_id
+          ? items.find((i) => i.id === l.inventory_item_id)?.item_type || ""
+          : "",
+        domain: l.inventory_item_id
+          ? items.find((i) => i.id === l.inventory_item_id)?.domain_code || ""
+          : "",
+        hsn: l.inventory_item_id
+          ? items.find((i) => i.id === l.inventory_item_id)?.hsn_code || ""
+          : "",
+        inventoryItemId: l.inventory_item_id,
+        matchStatus: l.match_status || "unmatched",
+        confidence: l.match_confidence || 0,
+        matchMethod: l.match_method || "",
+        matchReasons: l.match_explanation || "",
+        supplyRate: l.supply_rate || 0,
+        supplyAmount: l.supply_amount || 0,
+        installationRate: l.installation_rate || 0,
+        installationAmount: l.installation_amount || 0,
+        lineTotalAmount: l.line_total_amount || 0,
+        sourcePoNumber: l.source_po_number || "",
+        sourceWoNumber: l.source_wo_number || "",
+        lineType: l.line_type || "item",
+        parentLineRef: l.parent_line_ref || "",
+        procurementScope: l.procurement_scope || "",
+      }));
+      setBoqLines(mappedLines);
+
+      // Refresh selected line if open
+      if (selectedLineForReview) {
+        const updated = mappedLines.find(
+          (ml) => ml.id === selectedLineForReview.id,
+        );
+        setSelectedLineForReview(updated || null);
       }
-    } catch(e) {
+    } catch (e) {
       setErrorMsg("Failed to fetch BOQ: " + e.message);
     }
   };
@@ -228,18 +474,21 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     setCandidates([]);
     setErrorMsg(null);
     try {
-      const { data, error } = await supabase.functions.invoke('mep-item-identification', {
-        body: {
-          action: "identify",
-          tenant_company_id: activeOperatingCompanyId,
-          raw_description: line.originalDescription,
-          parsed_attributes: { make: line.make, model: line.model },
-          domain_code: "MEP",
-          source_type: "BOQ",
-          source_id: selectedSourceId,
-          source_line_id: line.id
-        }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "mep-item-identification",
+        {
+          body: {
+            action: "identify",
+            tenant_company_id: activeOperatingCompanyId,
+            raw_description: line.originalDescription,
+            parsed_attributes: { make: line.make, model: line.model },
+            domain_code: "MEP",
+            source_type: "master_boq",
+            source_id: currentMasterBoqId,
+            source_line_id: line.id,
+          },
+        },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
@@ -251,39 +500,51 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     }
   };
 
-  const handleUpdateLine = async (lineId, inventoryItemId, decision, conf=0, method='', reasons='', overrideNormDesc='') => {
+  const handleUpdateLine = async (
+    lineId,
+    inventoryItemId,
+    decision,
+    conf = 0,
+    method = "",
+    reasons = "",
+    overrideNormDesc = "",
+  ) => {
     try {
-      const lineData = boqLines.find(l => l.id === lineId);
+      const lineData = boqLines.find((l) => l.id === lineId);
       if (!lineData) return;
 
       setIsProcessing(true);
       setErrorMsg(null);
 
-      const { data, error } = await supabase.functions.invoke('master-boq-service', {
-        body: {
-          action: 'update-line',
-          master_boq_line_id: lineId,
-          inventory_item_id: inventoryItemId,
-          normalized_description: overrideNormDesc || lineData.normalizedDescription,
-          specification: lineData.specification,
-          make: lineData.make,
-          model: lineData.model,
-          quantity: lineData.quantity,
-          uom_code: lineData.uom,
-          remarks: '',
-          match_method: method,
-          match_confidence: conf,
-          match_explanation: reasons,
-          decision: decision
-        }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "master-boq-service",
+        {
+          body: {
+            action: "update-line",
+            master_boq_line_id: lineId,
+            inventory_item_id: inventoryItemId,
+            normalized_description:
+              overrideNormDesc || lineData.normalizedDescription,
+            specification: lineData.specification,
+            make: lineData.make,
+            model: lineData.model,
+            quantity: lineData.quantity,
+            uom_code: lineData.uom,
+            remarks: "",
+            match_method: method,
+            match_confidence: conf,
+            match_explanation: reasons,
+            decision: decision,
+          },
+        },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
       await fetchMasterBoq(currentMasterBoqId);
       setCandidates([]);
       setShowChangeItem(false);
-      setManualSelectedItemId('');
+      setManualSelectedItemId("");
     } catch (e) {
       setErrorMsg("Update failed: " + e.message);
     } finally {
@@ -295,12 +556,15 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     try {
       setIsProcessing(true);
       setErrorMsg(null);
-      const { data, error } = await supabase.functions.invoke('master-boq-service', {
-        body: { action: 'approve', master_boq_id: currentMasterBoqId }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "master-boq-service",
+        {
+          body: { action: "approve", master_boq_id: currentMasterBoqId },
+        },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      
+
       await fetchMasterBoq(currentMasterBoqId);
     } catch (e) {
       setErrorMsg("Approval failed: " + e.message);
@@ -309,12 +573,94 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     }
   };
 
+  const getParentDescription = (line) => {
+    if (!line.parentLineRef) return null;
+    const parent = boqLines.find(l => l.lineNo === line.parentLineRef || l.id === line.parentLineRef);
+    return parent ? parent.originalDescription : null;
+  };
+
+  const exportCommercial = (type) => {
+    const data = [];
+    const billableLines = boqLines.filter(l => l.lineType !== "section" && l.lineType !== "header");
+    let totalSupply = 0;
+    let totalInstallation = 0;
+    let grandTotal = 0;
+
+    billableLines.forEach(l => {
+      const parentDesc = getParentDescription(l);
+      const fullDesc = parentDesc ? `${parentDesc} > ${l.originalDescription}` : l.originalDescription;
+      
+      const row = {
+        "Line No": l.lineNo,
+        "Description": fullDesc,
+        "Qty": l.quantity,
+        "UOM": l.uom,
+      };
+
+      if (type === 'supply' || type === 'combined') {
+        row["Supply Rate"] = l.supplyRate;
+        row["Supply Amount"] = l.supplyAmount;
+        totalSupply += (l.supplyAmount || 0);
+      }
+      
+      if (type === 'installation' || type === 'combined') {
+        row["Installation Rate"] = l.installationRate;
+        row["Installation Amount"] = l.installationAmount;
+        totalInstallation += (l.installationAmount || 0);
+      }
+
+      if (type === 'combined') {
+        row["Total Amount"] = l.lineTotalAmount;
+        grandTotal += (l.lineTotalAmount || 0);
+      }
+
+      row["PO Reference"] = l.sourcePoNumber || "";
+      row["WO Reference"] = l.sourceWoNumber || "";
+      
+      data.push(row);
+    });
+
+    const totalsRow = {
+      "Line No": "",
+      "Description": "TOTAL",
+      "Qty": "",
+      "UOM": "",
+    };
+    
+    if (type === 'supply' || type === 'combined') {
+      totalsRow["Supply Rate"] = "";
+      totalsRow["Supply Amount"] = totalSupply;
+    }
+    if (type === 'installation' || type === 'combined') {
+      totalsRow["Installation Rate"] = "";
+      totalsRow["Installation Amount"] = totalInstallation;
+    }
+    if (type === 'combined') {
+      totalsRow["Total Amount"] = grandTotal;
+    }
+    totalsRow["PO Reference"] = "";
+    totalsRow["WO Reference"] = "";
+
+    data.push(totalsRow);
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Master BOQ");
+    
+    const filename = `Master_BOQ_${type}_${Date.now()}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  };
+
   const filteredLines = useMemo(() => {
-    return boqLines.filter(line => {
-      if (statusFilter !== 'ALL' && line.matchStatus !== statusFilter) return false;
+    return boqLines.filter((line) => {
+      if (statusFilter !== "ALL" && line.matchStatus !== statusFilter)
+        return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        return (line.originalDescription?.toLowerCase().includes(q) || line.lineNo?.toLowerCase().includes(q));
+        return (
+          line.originalDescription?.toLowerCase().includes(q) ||
+          line.lineNo?.toLowerCase().includes(q)
+        );
       }
       return true;
     });
@@ -322,22 +668,32 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
   const StatusBadge = ({ status }) => {
     const config = {
-      unmatched: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-      candidate: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20',
-      matched: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20',
-      verified: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20',
-      rejected: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20',
+      unmatched:
+        "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
+      candidate:
+        "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
+      matched:
+        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+      verified:
+        "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20",
+      rejected:
+        "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20",
     };
     const c = config[status?.toLowerCase()] || config.unmatched;
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border uppercase ${c}`}>
-        {status || 'unmatched'}
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border uppercase ${c}`}
+      >
+        {status || "unmatched"}
       </span>
     );
   };
 
-  const selectedWorkTitle = works.find(w => w.id === selectedProject)?.title || selectedProject;
-  const selectedDocTitle = projectDocs.find(d => d.id === selectedSourceId)?.file_name || 'Document';
+  const selectedWorkTitle =
+    works.find((w) => w.id === selectedProject)?.title || selectedProject;
+  const selectedDocTitle =
+    projectDocs.find((d) => d.id === selectedSourceId)?.attachment?.file_name ||
+    "Legacy BOQ";
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans">
@@ -349,35 +705,44 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
               Master BOQ
             </h1>
             <div className="flex items-center gap-2 mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {currentView !== 'SELECT_PROJECT' && (
+              {currentView !== "SELECT_PROJECT" && (
                 <span>{selectedWorkTitle}</span>
               )}
-              {currentView === 'MASTER_BOQ' && selectedSourceId && (
+              {currentView === "MASTER_BOQ" && selectedSourceId && (
                 <>
                   <ChevronRight className="w-4 h-4" />
                   <span>{selectedDocTitle}</span>
                 </>
               )}
-              {masterBoqStatus === 'APPROVED' && (
+              {masterBoqStatus === "APPROVED" && (
                 <>
                   <ChevronRight className="w-4 h-4" />
-                  <span className="text-emerald-600 dark:text-emerald-400 font-medium tracking-wide">MASTER BOQ APPROVED</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium tracking-wide">
+                    MASTER BOQ APPROVED
+                  </span>
                 </>
               )}
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {currentView === 'MASTER_BOQ' && (
+            {currentView === "MASTER_BOQ" && (
               <>
-                <button className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors">
-                  Export BOQ
-                </button>
-                <button 
+                <div className="relative group">
+                  <button className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors flex items-center gap-2">
+                    Commercial Output <ChevronRight className="w-3 h-3 rotate-90" />
+                  </button>
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 border border-slate-200 dark:border-slate-700 flex flex-col py-1">
+                    <button onClick={() => exportCommercial('supply')} className="text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">PO – Supply</button>
+                    <button onClick={() => exportCommercial('installation')} className="text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">WO – Installation</button>
+                    <button onClick={() => exportCommercial('combined')} className="text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20">PO – Combined</button>
+                  </div>
+                </div>
+                <button
                   onClick={handleApprove}
-                  disabled={isProcessing || masterBoqStatus === 'APPROVED'}
+                  disabled={isProcessing || masterBoqStatus === "APPROVED"}
                   className="px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 shadow-sm transition-colors disabled:opacity-50"
                 >
-                  {isProcessing ? 'Processing...' : 'Approve Master BOQ'}
+                  {isProcessing ? "Processing..." : "Approve Master BOQ"}
                 </button>
               </>
             )}
@@ -387,37 +752,47 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           <div className="mt-3 p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg text-sm flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-none" />
             <span className="flex-1">{errorMsg}</span>
-            <button onClick={() => setErrorMsg(null)}><X className="w-4 h-4" /></button>
+            <button onClick={() => setErrorMsg(null)}>
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 overflow-hidden flex relative">
-        {currentView === 'SELECT_PROJECT' && (
+        {currentView === "SELECT_PROJECT" && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 z-10 backdrop-blur-sm">
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-w-lg w-full p-6 max-h-full flex flex-col">
               <div className="flex items-center gap-3 mb-4 flex-none">
                 <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400">
                   <Database className="w-6 h-6" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Select Project</h2>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Select Project
+                </h2>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 flex-none">
                 Choose a project to begin building or reviewing its Master BOQ.
               </p>
               <div className="space-y-2 overflow-auto flex-1">
                 {works.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No projects found.</p>
+                  <p className="text-sm text-slate-500 text-center py-4">
+                    No projects found.
+                  </p>
                 ) : (
-                  works.map(w => (
+                  works.map((w) => (
                     <button
                       key={w.id}
                       onClick={() => handleProjectSelect(w.id)}
                       className="w-full text-left px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
                     >
-                      <div className="font-medium text-slate-900 dark:text-slate-100">{w.title}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Select to choose document</div>
+                      <div className="font-medium text-slate-900 dark:text-slate-100">
+                        {w.title}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Select to choose document
+                      </div>
                     </button>
                   ))
                 )}
@@ -426,35 +801,60 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           </div>
         )}
 
-        {currentView === 'UPLOAD_SOURCE' && (
+        {currentView === "UPLOAD_SOURCE" && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 z-10 backdrop-blur-sm">
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-w-lg w-full p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400">
                   <FileBarChart className="w-6 h-6" />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Source BOQ Document</h2>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Source BOQ Document
+                </h2>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                Select a document (Final BOQ, Client PO, etc.) from the project attachments.
+                Select a document (Final BOQ, Client PO, etc.) from the project
+                attachments.
               </p>
-              
+
               {isLoadingDocs ? (
-                <div className="py-8 flex justify-center"><RefreshCw className="w-6 h-6 animate-spin text-slate-400" /></div>
+                <div className="py-8 flex justify-center">
+                  <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
+                </div>
               ) : (
                 <div className="mb-6 space-y-4">
-                  <select 
+                  {projectDocs.length === 0 && (
+                    <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-400 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                      No BOQ document attached to this project.
+                    </div>
+                  )}
+                  <select
                     value={selectedSourceId}
                     onChange={(e) => setSelectedSourceId(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">-- Select Source Document --</option>
-                    {projectDocs.map(doc => {
-                      const sizeMB = doc.file_size_bytes ? (doc.file_size_bytes / 1024 / 1024).toFixed(2) + ' MB' : '';
-                      const mime = doc.mime_type ? doc.mime_type.split('/').pop().toUpperCase() : 'FILE';
-                      const label = `${doc.file_name} ${sizeMB ? `(${sizeMB}, ${mime})` : ''}`;
+                    {projectDocs.map((doc) => {
+                      if (doc.type === "legacy") {
+                        return (
+                          <option key={doc.id} value={doc.id}>
+                            BOQ — Existing Legacy BOQ
+                          </option>
+                        );
+                      }
+
+                      const d = doc.attachment;
+                      const sizeMB = d.file_size_bytes
+                        ? (d.file_size_bytes / 1024 / 1024).toFixed(2) + " MB"
+                        : "";
+                      const mime = d.mime_type
+                        ? d.mime_type.split("/").pop().toUpperCase()
+                        : "FILE";
+                      const label = `BOQ — ${d.file_name} ${sizeMB ? `(${sizeMB}, ${mime})` : ""}`;
                       return (
-                        <option key={doc.id} value={doc.id}>{label}</option>
+                        <option key={doc.id} value={doc.id}>
+                          {label}
+                        </option>
                       );
                     })}
                   </select>
@@ -474,14 +874,23 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                   disabled={!selectedSourceId || isProcessing}
                   className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm disabled:opacity-50 flex justify-center items-center gap-2"
                 >
-                  {isProcessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <HardDrive className="w-4 h-4" />}
-                  AI Entry
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      {aiStatusMsg || "Processing..."}
+                    </>
+                  ) : (
+                    <>
+                      <HardDrive className="w-4 h-4" />
+                      AI Entry
+                    </>
+                  )}
                 </button>
               </div>
 
               <div className="mt-4 flex justify-between">
                 <button
-                  onClick={() => setCurrentView('SELECT_PROJECT')}
+                  onClick={() => setCurrentView("SELECT_PROJECT")}
                   className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 >
                   Back
@@ -491,7 +900,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           </div>
         )}
 
-        {currentView === 'MASTER_BOQ' && (
+        {currentView === "MASTER_BOQ" && (
           <div className="flex-1 flex overflow-hidden">
             {/* BOQ Grid */}
             <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
@@ -502,13 +911,13 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                     type="text"
                     placeholder="Search descriptions, lines..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-slate-100"
                   />
                 </div>
                 <select
                   value={statusFilter}
-                  onChange={e => setStatusFilter(e.target.value)}
+                  onChange={(e) => setStatusFilter(e.target.value)}
                   className="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="ALL">All Statuses</option>
@@ -518,63 +927,121 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                   <option value="verified">Verified</option>
                   <option value="rejected">Rejected</option>
                 </select>
-                
-                {/* Manual line add could be placed here if needed */}
+
                 <div className="flex-1" />
-                {masterBoqStatus !== 'APPROVED' && (
+                {masterBoqStatus !== "APPROVED" && (
                   <button className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm flex items-center gap-2">
                     <Plus className="w-4 h-4" /> Add Line
                   </button>
                 )}
               </div>
-              
+
               <div className="flex-1 overflow-auto">
                 <table className="w-full text-left border-collapse min-w-max">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700 shadow-sm">
                     <tr>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Line No</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Original Description</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Norm. Desc</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Qty</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">UOM</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Master Item</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Match Status</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Method</th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Line No
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Description
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Qty
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        UOM
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Supply Rate
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Supply Amount
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Installation Rate
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Installation Amount
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Total
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        PO/WO Reference
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Master Item
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Match Status
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {filteredLines.length === 0 ? (
+                    {filteredLines.filter(l => l.lineType !== "section" && l.lineType !== "header").length === 0 ? (
                       <tr>
-                        <td colSpan="9" className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                        <td
+                          colSpan="13"
+                          className="px-4 py-12 text-center text-slate-500 dark:text-slate-400"
+                        >
                           <LayoutGrid className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-                          <p className="text-lg font-medium text-slate-900 dark:text-slate-100">No lines available</p>
-                          <p className="text-sm mt-1">Manual entry mode or no lines extracted.</p>
+                          <p className="text-lg font-medium text-slate-900 dark:text-slate-100">
+                            No lines available
+                          </p>
+                          <p className="text-sm mt-1">
+                            Manual entry mode or no lines extracted.
+                          </p>
                         </td>
                       </tr>
                     ) : (
-                      filteredLines.map((line) => (
-                        <tr 
-                          key={line.id} 
-                          className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${selectedLineForReview?.id === line.id ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                      filteredLines.filter(l => l.lineType !== "section" && l.lineType !== "header").map((line) => (
+                        <tr
+                          key={line.id}
+                          className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${selectedLineForReview?.id === line.id ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
                         >
-                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-slate-100 font-medium">{line.lineNo}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs truncate" title={line.originalDescription}>
+                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-slate-100 font-medium">
+                            {line.lineNo}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs truncate"
+                            title={line.originalDescription}
+                          >
+                            {getParentDescription(line) && <div className="text-xs text-slate-400 mb-1 truncate font-medium">{getParentDescription(line)}</div>}
                             {line.originalDescription}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs truncate" title={line.normalizedDescription}>
-                            {line.normalizedDescription || '-'}
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.quantity}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{line.quantity}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{line.uom}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.uom}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.supplyRate || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.supplyAmount || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.installationRate || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.installationAmount || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                            {line.lineTotalAmount || "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                            {line.sourcePoNumber || line.sourceWoNumber ? `${line.sourcePoNumber || ''} ${line.sourceWoNumber || ''}`.trim() : "-"}
+                          </td>
                           <td className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">
-                            {line.masterItemCode || '-'}
+                            {line.masterItemCode || "-"}
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <StatusBadge status={line.matchStatus} />
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                            {line.matchMethod || '-'}
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <button
@@ -619,18 +1086,29 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                 <div className="flex-1 overflow-auto p-4 space-y-6">
                   {/* Original Content */}
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Original BOQ Text</h4>
+                    <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                      Original BOQ Text
+                    </h4>
                     <p className="text-sm text-slate-900 dark:text-slate-100 leading-relaxed">
                       {selectedLineForReview.originalDescription}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Line No</div>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">{selectedLineForReview.lineNo}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Line No
+                        </div>
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          {selectedLineForReview.lineNo}
+                        </div>
                       </div>
                       <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Qty / UOM</div>
-                        <div className="font-medium text-slate-900 dark:text-slate-100">{selectedLineForReview.quantity} {selectedLineForReview.uom}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          Qty / UOM
+                        </div>
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          {selectedLineForReview.quantity}{" "}
+                          {selectedLineForReview.uom}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -638,32 +1116,47 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                   {/* AI Recommendation / Identification */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between px-1">
-                      <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Document AI Identification</h4>
-                      {selectedLineForReview.matchStatus === 'unmatched' && !isIdentifying && candidates.length === 0 && (
-                        <button 
-                          onClick={() => handleStartIdentification(selectedLineForReview)}
-                          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium flex items-center gap-1"
-                        >
-                          <HardDrive className="w-3 h-3" /> Start AI Match
-                        </button>
-                      )}
+                      <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Document AI Identification
+                      </h4>
+                      {selectedLineForReview.matchStatus === "unmatched" &&
+                        !isIdentifying &&
+                        candidates.length === 0 && (
+                          <button
+                            onClick={() =>
+                              handleStartIdentification(selectedLineForReview)
+                            }
+                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium flex items-center gap-1"
+                          >
+                            <HardDrive className="w-3 h-3" /> Start AI Match
+                          </button>
+                        )}
                     </div>
 
                     {isIdentifying && (
                       <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700 text-center flex flex-col items-center">
                         <RefreshCw className="w-5 h-5 text-blue-500 animate-spin mb-2" />
-                        <span className="text-xs text-slate-500">Querying AI model...</span>
+                        <span className="text-xs text-slate-500">
+                          Querying AI model...
+                        </span>
                       </div>
                     )}
 
                     {!isIdentifying && candidates.length > 0 && (
                       <div className="space-y-3">
-                        <p className="text-xs text-slate-500 px-1">Candidates suggested by AI:</p>
+                        <p className="text-xs text-slate-500 px-1">
+                          Candidates suggested by AI:
+                        </p>
                         {candidates.map((c, i) => (
-                          <div key={i} className="bg-emerald-50 dark:bg-emerald-900/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/30">
+                          <div
+                            key={i}
+                            className="bg-emerald-50 dark:bg-emerald-900/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/30"
+                          >
                             <div className="flex items-start justify-between">
                               <div>
-                                <div className="text-emerald-700 dark:text-emerald-400 font-semibold">{c.item_code}</div>
+                                <div className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                                  {c.item_code}
+                                </div>
                                 <div className="text-sm text-emerald-600/80 dark:text-emerald-300/80 mt-1">
                                   {c.item_name}
                                 </div>
@@ -677,16 +1170,18 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                                 <strong>Why:</strong> {c.match_reasons}
                               </div>
                             )}
-                            <button 
-                              onClick={() => handleUpdateLine(
-                                selectedLineForReview.id, 
-                                c.inventory_item_id, 
-                                'verify', 
-                                c.confidence_score, 
-                                c.match_method, 
-                                c.match_reasons, 
-                                c.normalized_description
-                              )}
+                            <button
+                              onClick={() =>
+                                handleUpdateLine(
+                                  selectedLineForReview.id,
+                                  c.inventory_item_id,
+                                  "verify",
+                                  c.confidence_score,
+                                  c.match_method,
+                                  c.match_reasons,
+                                  c.normalized_description,
+                                )
+                              }
                               className="mt-3 w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded transition-colors"
                             >
                               Confirm Match
@@ -696,31 +1191,44 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                       </div>
                     )}
 
-                    {!isIdentifying && candidates.length === 0 && selectedLineForReview.inventoryItemId && (
-                      <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Mapped: {selectedLineForReview.masterItemCode}</div>
-                        <div className="text-xs text-slate-500 mt-2">Method: {selectedLineForReview.matchMethod}</div>
-                        <div className="text-xs text-slate-500">Status: {selectedLineForReview.matchStatus}</div>
-                      </div>
-                    )}
+                    {!isIdentifying &&
+                      candidates.length === 0 &&
+                      selectedLineForReview.inventoryItemId && (
+                        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            Mapped: {selectedLineForReview.masterItemCode}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-2">
+                            Method: {selectedLineForReview.matchMethod}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Status: {selectedLineForReview.matchStatus}
+                          </div>
+                        </div>
+                      )}
                   </div>
 
                   {/* Actions */}
-                  {masterBoqStatus !== 'APPROVED' && (
+                  {masterBoqStatus !== "APPROVED" && (
                     <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-                      
                       {!showChangeItem ? (
                         <>
-                          <button 
+                          <button
                             onClick={() => setShowChangeItem(true)}
                             className="w-full py-2 px-4 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors shadow-sm"
                           >
                             Change Master Item (Manual)
                           </button>
-                          
+
                           <div className="flex gap-3">
-                            <button 
-                              onClick={() => handleUpdateLine(selectedLineForReview.id, null, 'reject')}
+                            <button
+                              onClick={() =>
+                                handleUpdateLine(
+                                  selectedLineForReview.id,
+                                  null,
+                                  "reject",
+                                )
+                              }
                               className="flex-1 py-2 px-4 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg transition-colors shadow-sm"
                             >
                               Reject
@@ -732,26 +1240,40 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                         </>
                       ) : (
                         <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 space-y-3">
-                          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Select Canonical Master Item</label>
-                          <select 
+                          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
+                            Select Canonical Master Item
+                          </label>
+                          <select
                             value={manualSelectedItemId}
-                            onChange={(e) => setManualSelectedItemId(e.target.value)}
+                            onChange={(e) =>
+                              setManualSelectedItemId(e.target.value)
+                            }
                             className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md text-sm"
                           >
                             <option value="">-- Choose Item --</option>
-                            {items.map(i => (
-                              <option key={i.id} value={i.id}>{i.item_code} - {i.item_name}</option>
+                            {items.map((i) => (
+                              <option key={i.id} value={i.id}>
+                                {i.item_code} - {i.item_name}
+                              </option>
                             ))}
                           </select>
                           <div className="flex gap-2">
-                            <button 
-                              onClick={() => handleUpdateLine(selectedLineForReview.id, manualSelectedItemId, 'verify', 100, 'Manual')}
+                            <button
+                              onClick={() =>
+                                handleUpdateLine(
+                                  selectedLineForReview.id,
+                                  manualSelectedItemId,
+                                  "verify",
+                                  100,
+                                  "Manual",
+                                )
+                              }
                               disabled={!manualSelectedItemId || isProcessing}
                               className="flex-1 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50"
                             >
                               Verify Selection
                             </button>
-                            <button 
+                            <button
                               onClick={() => setShowChangeItem(false)}
                               className="py-1.5 px-3 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded hover:bg-slate-50"
                             >
