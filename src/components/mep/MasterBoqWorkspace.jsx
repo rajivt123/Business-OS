@@ -292,7 +292,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
         specification: l.parsed_attributes,
         line_no: l.line_no,
         source_line_ref: l.source_line_ref,
-        parent_line_ref: l.parent_line_ref,
+        parent_line_ref: l.parent_line_no || l.parent_line_ref || "",
         line_type: l.line_type,
         procurement_scope: l.procurement_scope,
         supply_quantity: l.supply_quantity,
@@ -452,7 +452,8 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
         sourcePoNumber: l.source_po_number || "",
         sourceWoNumber: l.source_wo_number || "",
         lineType: l.line_type || "item",
-        parentLineRef: l.parent_line_ref || "",
+        parentLineRef: l.parent_line_no || l.parent_line_ref || "",
+        sourceLineRef: l.source_line_ref || "",
         procurementScope: l.procurement_scope || "",
       }));
       setBoqLines(mappedLines);
@@ -474,13 +475,16 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     setCandidates([]);
     setErrorMsg(null);
     try {
+      const parentDesc = getParentDescription(line);
+      const combinedDesc = parentDesc ? `${parentDesc} + ${line.originalDescription}` : line.originalDescription;
+
       const { data, error } = await supabase.functions.invoke(
         "mep-item-identification",
         {
           body: {
             action: "identify",
             tenant_company_id: activeOperatingCompanyId,
-            raw_description: line.originalDescription,
+            raw_description: combinedDesc,
             parsed_attributes: { make: line.make, model: line.model },
             domain_code: "MEP",
             source_type: "master_boq",
@@ -575,7 +579,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
   const getParentDescription = (line) => {
     if (!line.parentLineRef) return null;
-    const parent = boqLines.find(l => l.lineNo === line.parentLineRef || l.id === line.parentLineRef);
+    const parent = boqLines.find(l => (l.lineNo && l.lineNo === line.parentLineRef) || (l.sourceLineRef && l.sourceLineRef === line.parentLineRef));
     return parent ? parent.originalDescription : null;
   };
 
@@ -588,7 +592,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
     billableLines.forEach(l => {
       const parentDesc = getParentDescription(l);
-      const fullDesc = parentDesc ? `${parentDesc} > ${l.originalDescription}` : l.originalDescription;
+      const fullDesc = parentDesc ? `${parentDesc}\n${l.originalDescription}` : l.originalDescription;
       
       const row = {
         "Line No": l.lineNo,
@@ -1035,7 +1039,14 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             {line.lineTotalAmount || "-"}
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {line.sourcePoNumber || line.sourceWoNumber ? `${line.sourcePoNumber || ''} ${line.sourceWoNumber || ''}`.trim() : "-"}
+                            {(line.sourcePoNumber || line.sourceWoNumber) ? (
+                              <div className="flex flex-col gap-0.5">
+                                {line.sourcePoNumber && <span className="text-xs text-slate-500 font-mono">PO: {line.sourcePoNumber}</span>}
+                                {line.sourceWoNumber && <span className="text-xs text-slate-500 font-mono">WO: {line.sourceWoNumber}</span>}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">
                             {line.masterItemCode || "-"}
