@@ -180,24 +180,50 @@ export function uploadFileToR2(uploadUrl, file, mimeType, onProgress) {
       };
     }
 
+    const createDiagnosticError = (baseMessage) => {
+      let host = 'unknown';
+      try {
+        host = new URL(uploadUrl).hostname;
+      } catch (e) {}
+
+      let statusMessage = '';
+      if (xhr.status === 0) {
+        statusMessage = "Browser blocked the R2 request or the network connection failed (commonly CORS/DNS/TLS).";
+      }
+
+      const diagnosticText = `R2 upload failed.
+Status: ${xhr.status}
+StatusText: ${xhr.statusText}
+Host: ${host}
+File: ${file.name}
+Size: ${file.size}
+Content-Type: ${contentType}
+Response: ${xhr.responseText || "(empty - likely CORS/network/browser blocked)"}
+${statusMessage}`;
+
+      console.error(diagnosticText);
+      return new Error(diagnosticText);
+    };
+
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         console.log('[R2 Upload] direct PUT succeeded with HTTP status:', xhr.status);
         resolve({ success: true, status: xhr.status });
       } else {
-        console.error('[R2 Upload] direct PUT failed with HTTP status:', xhr.status);
-        reject(new Error(`Cloudflare R2 upload failed with HTTP status ${xhr.status} (${xhr.statusText || 'Upload rejected'})`));
+        reject(createDiagnosticError('Cloudflare R2 upload rejected.'));
       }
     };
 
     xhr.onerror = () => {
-      console.error('[R2 Upload] direct PUT encountered network error.');
-      reject(new Error('Network error occurred during direct upload to Cloudflare R2. Please check your internet connection.'));
+      reject(createDiagnosticError('Network error occurred during direct upload to Cloudflare R2.'));
     };
 
     xhr.ontimeout = () => {
-      console.error('[R2 Upload] direct PUT timed out after 180 seconds.');
-      reject(new Error('Direct upload to Cloudflare R2 timed out after 3 minutes. Please check your connection and try again.'));
+      reject(createDiagnosticError('Direct upload to Cloudflare R2 timed out after 3 minutes.'));
+    };
+
+    xhr.onabort = () => {
+      reject(createDiagnosticError('Direct upload to Cloudflare R2 was aborted by the browser.'));
     };
 
     // 3 minutes (180,000 ms) timeout to prevent infinite hanging while accommodating large files up to 150 MB
@@ -650,53 +676,83 @@ export async function uploadBusinessAttachment({
     throw new Error(validation.error);
   }
 
-  // 1. Create upload URL
-  console.log('[R2 Upload] create-upload-url starting for entity:', entityType, `(field: ${fieldKey})`);
-  const uploadData = await createBusinessAttachmentUploadUrl({
-    tenantCompanyId,
-    entityType,
-    entityId,
-    fieldKey,
-    fileName: file.name,
-    mimeType: file.type || 'application/octet-stream',
-    fileSizeBytes: file.size
-  });
-
-  const attachmentId = uploadData.attachment_id || uploadData.id || uploadData.document_id;
-  const storageKey = uploadData.storage_key;
-  const uploadUrl = uploadData.upload_url;
-
-  if (!uploadUrl || !attachmentId) {
-    console.error('[R2 Upload] create-upload-url failed to return upload URL or attachment ID.');
-    throw new Error('Failed to obtain a valid upload URL or attachment ID from storage backend.');
+  const resolvedTenantId = await resolveTenantCompanyId(tenantCompanyId, entityType, entityId);
+  if (!resolvedTenantId) {
+    throw new Error('Please select an Operating Company from the top-left dropdown to upload documents.');
   }
-  console.log('[R2 Upload] create-upload-url succeeded for attachment ID:', attachmentId);
 
-  // 2. Direct HTTP PUT to Cloudflare R2
-  await uploadFileToR2(uploadUrl, file, file.type, onProgress);
+  console.log('[R2 Upload] Server-side upload-file action starting for entity:', entityType, `(field: ${fieldKey})`);
 
-  // 3. Finalize upload
-  console.log('[R2 Upload] finalize-upload starting for attachment ID:', attachmentId);
-  const finalized = await finalizeBusinessAttachment({
-    tenantCompanyId,
-    attachmentId,
-    entityType,
-    entityId,
-    fieldKey,
-    storageKey,
-    fileName: file.name,
-    mimeType: file.type || 'application/octet-stream',
-    fileSizeBytes: file.size,
-    version,
-    metadata
+  const formData = new FormData();
+  formData.append('action', 'upload-file');
+  formData.append('tenant_company_id', resolvedTenantId);
+  formData.append('entity_type', entityType);
+  formData.append('entity_id', String(entityId));
+  formData.append('field_key', fieldKey || 'file');
+  formData.append('file_name', file.name);
+  formData.append('mime_type', file.type || 'application/octet-stream');
+  formData.append('version', version);
+  formData.append('metadata', JSON.stringify(metadata || {}));
+  formData.append('file', file);
+
+  const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+  if (sessionErr || !sessionData?.session?.access_token) {
+    throw new Error('Your session has expired or you are not signed in. Please log in again.');
+  }
+
+  // We can't provide reliable progress via simple fetch, so report indeterminate start
+  if (typeof onProgress === 'function') {
+    onProgress(10, 0, file.size); // Indeterminate progress indication
+  }
+
+  const { data, error } = await supabase.functions.invoke('business-file-storage', {
+    body: formData,
+    headers: {
+      Authorization: `Bearer ${sessionData.session.access_token}`
+      // IMPORTANT: Do not set Content-Type! The browser sets it automatically with the boundary for FormData.
+    }
   });
-  console.log('[R2 Upload] finalize-upload succeeded for attachment ID:', attachmentId);
 
+  if (error) {
+    console.error('[R2 Upload] Server-side upload-file failed:', error);
+    
+    let errorDetail = error.message;
+    if (error.name === 'FunctionsHttpError') {
+      try {
+        if (error.context && typeof error.context.json === 'function') {
+          const body = await error.context.json();
+          errorDetail = body?.error || body?.message || 'Server returned HTTP error';
+        } else if (error.context && typeof error.context.text === 'function') {
+          const text = await error.context.text();
+          try {
+            const parsed = JSON.parse(text);
+            errorDetail = parsed.error || parsed.message || text;
+          } catch {
+            errorDetail = text;
+          }
+        }
+      } catch (e) {
+        // keep default message
+      }
+    } else if (error.name === 'FunctionsRelayError' || error.name === 'FunctionsFetchError') {
+      errorDetail = 'Network error or backend is unreachable. Please check your connection.';
+    }
+
+    throw new Error(`Upload failed: ${errorDetail}`);
+  }
+
+  if (typeof onProgress === 'function') {
+    onProgress(100, file.size, file.size);
+  }
+
+  console.log('[R2 Upload] Server-side upload-file succeeded:', data);
+
+  // Return the attachment object so the UI continues working
   return {
-    ...finalized,
-    id: attachmentId,
-    attachment_id: attachmentId,
-    storage_key: storageKey,
+    ...data.attachment,
+    id: data.attachment_id || data.attachment?.id,
+    attachment_id: data.attachment_id || data.attachment?.id,
+    storage_key: data.storage_key || data.attachment?.storage_key,
     file_name: file.name,
     file_size_bytes: file.size,
     mime_type: file.type || 'application/octet-stream',

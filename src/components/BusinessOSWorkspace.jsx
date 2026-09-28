@@ -27,6 +27,7 @@ import SalesWorkspace from './sales/SalesWorkspace';
 import ProcurementWorkspace from './procurement/ProcurementWorkspace';
 import InventoryWorkspace from './inventory/InventoryWorkspace';
 import MepKnowledgeWorkspace from './mep/MepKnowledgeWorkspace';
+import MasterBoqWorkspace from './mep/MasterBoqWorkspace';
 import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
 import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
@@ -89,6 +90,7 @@ const navSections = [
       ['reports', 'Reports', BarChart3],
       ['ai', 'RAJIV AI', Sparkles],
       ['mep-knowledge', 'MEP Knowledge', Brain],
+      ['mep-master-boq', 'Master BOQ', ClipboardList],
     ],
   },
   {
@@ -116,6 +118,7 @@ const pageMeta = {
   reports: ['Reports & Analytics', 'Operational, financial, project and people intelligence.'],
   ai: ['RAJIV AI', 'Permission-aware business intelligence and assisted workflows.'],
   'mep-knowledge': ['MEP Knowledge', 'Inspect MEP document examples, extractions, lines, and AI correction corpus.'],
+  'mep-master-boq': ['Master BOQ', 'Select work/project, upload BOQ, and process AI item identification.'],
   admin: ['Administration', 'Organization, users, permissions, workflows and system controls.'],
   'company-settings': ['Company Settings', 'Owner workspace for managing company profiles, registrations, addresses, contacts, bank details, tax settings, branding, documents and audit history.'],
   profile: ['My Profile', 'Manage personal information, work preferences, organization membership and account security.'],
@@ -2001,6 +2004,7 @@ export default function BusinessOSWorkspace() {
         {page === 'reports' && <ReportsPage />}
         {page === 'ai' && <AIPage onOpenAiChat={() => setIsAiChatOpen?.(true)} />}
         {page === 'mep-knowledge' && <MepKnowledgeWorkspace isDarkMode={isDarkMode} />}
+        {page === 'mep-master-boq' && <MasterBoqWorkspace isDarkMode={isDarkMode} />}
         {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
