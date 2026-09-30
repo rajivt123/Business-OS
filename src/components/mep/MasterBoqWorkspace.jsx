@@ -536,16 +536,24 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             tenant_company_id: activeOperatingCompanyId,
             raw_description: combinedDescription,
             parsed_attributes: {
-              make: line.make,
-              model: line.model,
-              specification: line.specification,
-              parent_context: parentDesc,
+              make: line.make || null,
+              model: line.model || null,
+              specification: line.specification || null,
+              parent_description: parentDesc || null,
+              parent_context: {
+                description: parentDesc || null
+              },
+              source_child_description: line.originalDescription || line.raw_description || null,
+              source_uom: line.uom || line.uom_code || null,
+              source_quantity: line.quantity ?? line.qty ?? null,
+              source_line_no: line.lineNo ?? null,
             },
             domain_code: "FIRE_FIGHTING",
             source_type: "master_boq",
             source_id: currentMasterBoqId,
             source_line_id: line.source_extraction_line_id,
             include_drafts: true,
+            uom_code: line.uom || line.uom_code || null
           },
         },
       );
