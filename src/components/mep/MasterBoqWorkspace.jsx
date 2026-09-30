@@ -56,7 +56,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
   const { activeOperatingCompanyId, works = [] } = crmContext;
 
   const invContext = useInventory() || {};
-  const { items = [] } = invContext;
+  const { items = [], refreshAllInventory } = invContext;
 
   // View steps: 'SELECT_PROJECT' -> 'UPLOAD_SOURCE' -> 'MASTER_BOQ'
   const [currentView, setCurrentView] = useState("SELECT_PROJECT");
@@ -79,6 +79,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
   // Review panel
   const [selectedLineForReview, setSelectedLineForReview] = useState(null);
   const [isIdentifying, setIsIdentifying] = useState(false);
+  const [identificationSearched, setIdentificationSearched] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [manualSelectedItemId, setManualSelectedItemId] = useState("");
   const [showChangeItem, setShowChangeItem] = useState(false);
@@ -96,6 +97,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
       setMasterBoqStatus(null);
       setSelectedLineForReview(null);
       setCandidates([]);
+      setIdentificationSearched(false);
       setErrorMsg(null);
     }
   }, [currentView]);
@@ -261,6 +263,22 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
       const extractionId = aiData.extraction_id;
       const documentId = aiData.document_id;
       
+      // Prepare inactive Draft Master Items from the extracted BOQ (do not activate automatically)
+      setAiStatusMsg("Preparing Draft Master Items…");
+      const { data: prepData, error: prepError } = await supabase.functions.invoke(
+        "mep-item-identification",
+        {
+          body: {
+            action: "prepare-master-items",
+            tenant_company_id: activeOperatingCompanyId,
+            extraction_id: extractionId,
+          },
+        },
+      );
+
+      if (prepError) throw new Error(await parseSupabaseError(prepError));
+      if (prepData?.error) throw new Error(prepData.error);
+
       setAiStatusMsg("Extracting BOQ rows…");
 
       // 2. Fetch extracted lines from mep_extraction_lines
@@ -412,50 +430,71 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
       setMasterBoqStatus(data?.boq?.status || "draft");
 
-      const mappedLines = rawLines.map((l) => ({
-        id: l.id,
-        lineNo: l.line_no || "",
-        originalDescription: l.original_description || "",
-        normalizedDescription: l.normalized_description || "",
-        quantity: l.quantity || 0,
-        uom: l.uom_code || "",
-        make: l.make || "",
-        model: l.model || "",
-        specification:
-          typeof l.specification === "object" && l.specification !== null
-            ? l.specification.raw_specification ||
-              JSON.stringify(l.specification)
-            : l.specification || "",
-        masterItemCode: l.inventory_item_id
-          ? items.find((i) => i.id === l.inventory_item_id)?.item_code ||
-            "Unknown Item"
-          : "",
-        itemType: l.inventory_item_id
-          ? items.find((i) => i.id === l.inventory_item_id)?.item_type || ""
-          : "",
-        domain: l.inventory_item_id
-          ? items.find((i) => i.id === l.inventory_item_id)?.domain_code || ""
-          : "",
-        hsn: l.inventory_item_id
-          ? items.find((i) => i.id === l.inventory_item_id)?.hsn_code || ""
-          : "",
-        inventoryItemId: l.inventory_item_id,
-        matchStatus: l.match_status || "unmatched",
-        confidence: l.match_confidence || 0,
-        matchMethod: l.match_method || "",
-        matchReasons: l.match_explanation || "",
-        supplyRate: l.supply_rate || 0,
-        supplyAmount: l.supply_amount || 0,
-        installationRate: l.installation_rate || 0,
-        installationAmount: l.installation_amount || 0,
-        lineTotalAmount: l.line_total_amount || 0,
-        sourcePoNumber: l.source_po_number || "",
-        sourceWoNumber: l.source_wo_number || "",
-        lineType: l.line_type || "item",
-        parentLineRef: l.parent_line_no || l.parent_line_ref || "",
-        sourceLineRef: l.source_line_ref || "",
-        procurementScope: l.procurement_scope || "",
-      }));
+      // Query any inventory items not yet in memory so code resolution never fails
+      const invIds = rawLines.map((l) => l.inventory_item_id).filter(Boolean);
+      let loadedItems = [...(items || [])];
+      const missingIds = invIds.filter((mId) => !loadedItems.some((i) => i.id === mId));
+      if (missingIds.length > 0) {
+        const { data: dbItems } = await supabase
+          .from("inventory_items")
+          .select("id, item_code, name, item_type, domain_code, hsn_code, base_uom_code, category")
+          .in("id", missingIds);
+        if (dbItems && dbItems.length > 0) {
+          loadedItems = [...loadedItems, ...dbItems];
+        }
+      }
+
+      const mappedLines = rawLines.map((l) => {
+        const matchedItem = loadedItems.find((i) => i.id === l.inventory_item_id);
+        const resolvedItemCode =
+          matchedItem?.item_code ||
+          l.master_item_code ||
+          l.item_code ||
+          (l.inventory_item && l.inventory_item.item_code) ||
+          "";
+
+        const isVerifiedOrMatched =
+          (l.match_status && (l.match_status.toLowerCase() === "matched" || l.match_status.toLowerCase() === "verified")) ||
+          (l.inventory_item_id && l.match_status !== "rejected" && l.match_status !== "unmatched");
+
+        return {
+          id: l.id,
+          lineNo: l.line_no || "",
+          originalDescription: l.original_description || "",
+          normalizedDescription: l.normalized_description || "",
+          quantity: l.quantity || 0,
+          uom: l.uom_code || "",
+          make: l.make || "",
+          model: l.model || "",
+          specification:
+            typeof l.specification === "object" && l.specification !== null
+              ? l.specification.raw_specification ||
+                JSON.stringify(l.specification)
+              : l.specification || "",
+          masterItemCode: resolvedItemCode,
+          itemType: matchedItem?.item_type || (l.inventory_item_id ? items.find((i) => i.id === l.inventory_item_id)?.item_type || "" : ""),
+          domain: matchedItem?.domain_code || (l.inventory_item_id ? items.find((i) => i.id === l.inventory_item_id)?.domain_code || "" : ""),
+          hsn: matchedItem?.hsn_code || (l.inventory_item_id ? items.find((i) => i.id === l.inventory_item_id)?.hsn_code || "" : ""),
+          inventoryItemId: l.inventory_item_id,
+          matchStatus: isVerifiedOrMatched ? "matched" : (l.match_status || "unmatched"),
+          confidence: l.match_confidence || 0,
+          matchMethod: l.match_method || "",
+          matchReasons: l.match_explanation || "",
+          supplyRate: l.supply_rate || 0,
+          supplyAmount: l.supply_amount || 0,
+          installationRate: l.installation_rate || 0,
+          installationAmount: l.installation_amount || 0,
+          lineTotalAmount: l.line_total_amount || 0,
+          sourcePoNumber: l.source_po_number || "",
+          sourceWoNumber: l.source_wo_number || "",
+          lineType: l.line_type || "item",
+          parentLineRef: l.parent_line_no || l.parent_line_ref || "",
+          sourceLineRef: l.source_line_ref || "",
+          procurementScope: l.procurement_scope || "",
+          source_extraction_line_id: l.source_extraction_line_id || l.source_line_id || l.extraction_line_id || "",
+        };
+      });
+
       setBoqLines(mappedLines);
 
       // Refresh selected line if open
@@ -471,12 +510,16 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
   };
 
   const handleStartIdentification = async (line) => {
+    if (!line) return;
     setIsIdentifying(true);
     setCandidates([]);
+    setIdentificationSearched(false);
     setErrorMsg(null);
     try {
       const parentDesc = getParentDescription(line);
-      const combinedDesc = parentDesc ? `${parentDesc} + ${line.originalDescription}` : line.originalDescription;
+      const combinedDescription = parentDesc
+        ? `${parentDesc} + ${line.originalDescription}`
+        : line.originalDescription;
 
       const { data, error } = await supabase.functions.invoke(
         "mep-item-identification",
@@ -484,23 +527,176 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           body: {
             action: "identify",
             tenant_company_id: activeOperatingCompanyId,
-            raw_description: combinedDesc,
-            parsed_attributes: { make: line.make, model: line.model },
-            domain_code: "MEP",
+            raw_description: combinedDescription,
+            parsed_attributes: {
+              make: line.make,
+              model: line.model,
+              specification: line.specification,
+              parent_context: parentDesc,
+            },
+            domain_code: "FIRE_FIGHTING",
             source_type: "master_boq",
             source_id: currentMasterBoqId,
-            source_line_id: line.id,
+            source_line_id: line.source_extraction_line_id,
+            include_drafts: true,
           },
         },
       );
-      if (error) throw error;
+      if (error) throw new Error(await parseSupabaseError(error));
       if (data?.error) throw new Error(data.error);
 
       setCandidates(data.candidates || []);
+      setIdentificationSearched(true);
     } catch (e) {
       setErrorMsg("Identification failed: " + e.message);
+      setIdentificationSearched(true);
     } finally {
       setIsIdentifying(false);
+    }
+  };
+
+  const handleAcceptCandidate = async (selectedCandidate) => {
+    if (!selectedLineForReview || !selectedCandidate) return;
+    const line = selectedLineForReview;
+    const selectedInventoryItemId =
+      selectedCandidate.inventory_item_id || selectedCandidate.id;
+    const confScore =
+      selectedCandidate.confidence_score ?? selectedCandidate.confidence ?? 0;
+    const matchMethod =
+      selectedCandidate.match_method ||
+      selectedCandidate.method ||
+      "Deterministic / Semantic";
+    const matchReasons =
+      selectedCandidate.match_reasons ||
+      selectedCandidate.match_explanation ||
+      selectedCandidate.reasons ||
+      "";
+    const normDesc =
+      selectedCandidate.normalized_description ||
+      selectedCandidate.item_name ||
+      line.normalizedDescription;
+
+    setIsProcessing(true);
+    setErrorMsg(null);
+    try {
+      // 1. First: mep-item-identification -> review -> accepted
+      const { data: reviewData, error: reviewError } =
+        await supabase.functions.invoke("mep-item-identification", {
+          body: {
+            action: "review",
+            decision: "accepted",
+            inventory_item_id: selectedInventoryItemId,
+            source_line_id: line.source_extraction_line_id,
+            tenant_company_id: activeOperatingCompanyId,
+            confidence_score: confScore,
+          },
+        });
+      if (reviewError) throw new Error(await parseSupabaseError(reviewError));
+      if (reviewData?.error) throw new Error(reviewData.error);
+
+      const resolvedInventoryItemId =
+        reviewData?.inventory_item_id || selectedInventoryItemId;
+
+      // 2. Second: master-boq-service update-line operation
+      const { data: updateData, error: updateError } =
+        await supabase.functions.invoke("master-boq-service", {
+          body: {
+            action: "update-line",
+            master_boq_line_id: line.id,
+            inventory_item_id: resolvedInventoryItemId,
+            normalized_description: normDesc,
+            specification: line.specification,
+            make: line.make,
+            model: line.model,
+            quantity: line.quantity,
+            uom_code: line.uom,
+            remarks: "",
+            match_method: matchMethod,
+            match_confidence: confScore,
+            match_explanation: matchReasons,
+            decision: "verify",
+          },
+        });
+      if (updateError) throw new Error(await parseSupabaseError(updateError));
+      if (updateData?.error) throw new Error(updateData.error);
+
+      if (refreshAllInventory) {
+        refreshAllInventory(activeOperatingCompanyId);
+      }
+      await fetchMasterBoq(currentMasterBoqId);
+      setCandidates([]);
+      setIdentificationSearched(false);
+      setShowChangeItem(false);
+      setManualSelectedItemId("");
+    } catch (e) {
+      setErrorMsg("Candidate verification failed: " + e.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleManualChangeItem = async () => {
+    if (!selectedLineForReview || !manualSelectedItemId) return;
+    const line = selectedLineForReview;
+    const selectedItem = items.find((i) => i.id === manualSelectedItemId);
+
+    setIsProcessing(true);
+    setErrorMsg(null);
+    try {
+      // 1. First: mep-item-identification -> review -> corrected
+      const { data: reviewData, error: reviewError } =
+        await supabase.functions.invoke("mep-item-identification", {
+          body: {
+            action: "review",
+            decision: "corrected",
+            inventory_item_id: manualSelectedItemId,
+            source_line_id: line.source_extraction_line_id,
+            tenant_company_id: activeOperatingCompanyId,
+            confidence_score: 100,
+          },
+        });
+      if (reviewError) throw new Error(await parseSupabaseError(reviewError));
+      if (reviewData?.error) throw new Error(reviewData.error);
+
+      const resolvedInventoryItemId =
+        reviewData?.inventory_item_id || manualSelectedItemId;
+
+      // 2. Second: master-boq-service update-line operation
+      const { data: updateData, error: updateError } =
+        await supabase.functions.invoke("master-boq-service", {
+          body: {
+            action: "update-line",
+            master_boq_line_id: line.id,
+            inventory_item_id: resolvedInventoryItemId,
+            normalized_description:
+              selectedItem?.name || line.normalizedDescription,
+            specification: line.specification,
+            make: line.make,
+            model: line.model,
+            quantity: line.quantity,
+            uom_code: line.uom,
+            remarks: "Manual override",
+            match_method: "Manual",
+            match_confidence: 100,
+            match_explanation: "User selected item manually",
+            decision: "verify",
+          },
+        });
+      if (updateError) throw new Error(await parseSupabaseError(updateError));
+      if (updateData?.error) throw new Error(updateData.error);
+
+      if (refreshAllInventory) {
+        refreshAllInventory(activeOperatingCompanyId);
+      }
+      await fetchMasterBoq(currentMasterBoqId);
+      setCandidates([]);
+      setIdentificationSearched(false);
+      setShowChangeItem(false);
+      setManualSelectedItemId("");
+    } catch (e) {
+      setErrorMsg("Manual item update failed: " + e.message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -547,6 +743,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
       await fetchMasterBoq(currentMasterBoqId);
       setCandidates([]);
+      setIdentificationSearched(false);
       setShowChangeItem(false);
       setManualSelectedItemId("");
     } catch (e) {
@@ -684,20 +881,36 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     });
   }, [boqLines, statusFilter, searchQuery]);
 
-  const StatusBadge = ({ status }) => {
+  const StatusBadge = ({ status, confidence }) => {
+    const s = (status || "unmatched").toLowerCase();
+    const isMatched = s === "matched" || s === "verified";
+
+    if (isMatched) {
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border uppercase bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20">
+            MATCHED
+          </span>
+          {confidence !== undefined &&
+            confidence !== null &&
+            Number(confidence) > 0 && (
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 font-mono">
+                {Number(confidence)}%
+              </span>
+            )}
+        </div>
+      );
+    }
+
     const config = {
       unmatched:
         "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
       candidate:
         "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
-      matched:
-        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-      verified:
-        "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/20",
       rejected:
         "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20",
     };
-    const c = config[status?.toLowerCase()] || config.unmatched;
+    const c = config[s] || config.unmatched;
     return (
       <span
         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border uppercase ${c}`}
@@ -1062,18 +1275,20 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                               <span className="text-slate-400">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400">
+                          <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 font-mono">
                             {line.masterItemCode || "-"}
                           </td>
                           <td className="px-4 py-3 text-sm">
-                            <StatusBadge status={line.matchStatus} />
+                            <StatusBadge status={line.matchStatus} confidence={line.confidence} />
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <button
                               onClick={() => {
                                 setSelectedLineForReview(line);
                                 setCandidates([]);
+                                setIdentificationSearched(false);
                                 setShowChangeItem(false);
+                                setManualSelectedItemId("");
                               }}
                               className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
                             >
@@ -1100,7 +1315,9 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                     onClick={() => {
                       setSelectedLineForReview(null);
                       setCandidates([]);
+                      setIdentificationSearched(false);
                       setShowChangeItem(false);
+                      setManualSelectedItemId("");
                     }}
                     className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
                   >
@@ -1144,16 +1361,17 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                       <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                         Document AI Identification
                       </h4>
-                      {selectedLineForReview.matchStatus === "unmatched" &&
-                        !isIdentifying &&
-                        candidates.length === 0 && (
+                      {selectedLineForReview.matchStatus !== "matched" &&
+                        selectedLineForReview.matchStatus !== "verified" &&
+                        !isIdentifying && (
                           <button
                             onClick={() =>
                               handleStartIdentification(selectedLineForReview)
                             }
                             className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium flex items-center gap-1"
                           >
-                            <HardDrive className="w-3 h-3" /> Start AI Match
+                            <HardDrive className="w-3 h-3" />
+                            {identificationSearched ? "Re-run AI Match" : "Start AI Match"}
                           </button>
                         )}
                     </div>
@@ -1172,62 +1390,143 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                         <p className="text-xs text-slate-500 px-1">
                           Candidates suggested by AI:
                         </p>
-                        {candidates.map((c, i) => (
-                          <div
-                            key={i}
-                            className="bg-emerald-50 dark:bg-emerald-900/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/30"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                                  {c.item_code}
-                                </div>
-                                <div className="text-sm text-emerald-600/80 dark:text-emerald-300/80 mt-1">
-                                  {c.item_name}
-                                </div>
-                              </div>
-                              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-800/50 px-2 py-1 rounded">
-                                {c.confidence_score}%
-                              </span>
-                            </div>
-                            {c.match_reasons && (
-                              <div className="mt-3 text-xs text-emerald-600/70 dark:text-emerald-300/70 bg-emerald-100/50 dark:bg-emerald-800/20 p-2 rounded">
-                                <strong>Why:</strong> {c.match_reasons}
-                              </div>
-                            )}
-                            <button
-                              onClick={() =>
-                                handleUpdateLine(
-                                  selectedLineForReview.id,
-                                  c.inventory_item_id,
-                                  "verify",
-                                  c.confidence_score,
-                                  c.match_method,
-                                  c.match_reasons,
-                                  c.normalized_description,
-                                )
-                              }
-                              className="mt-3 w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded transition-colors"
+                        {candidates.map((c, i) => {
+                          const isDraft =
+                            c.is_draft === true ||
+                            c.status?.toLowerCase() === "draft" ||
+                            c.item_status?.toLowerCase() === "draft";
+                          const statusLabel = isDraft
+                            ? "Draft"
+                            : c.status
+                              ? c.status.charAt(0).toUpperCase() + c.status.slice(1)
+                              : "Verified";
+                          const itemCode = c.item_code || c.master_item_code || "Unknown Code";
+                          const itemName = c.item_name || c.master_item_name || c.name || "Unknown Item";
+                          const category = c.category || c.item_category || c.domain_code || c.domain || "—";
+                          const uom = c.uom || c.uom_code || c.base_uom_code || "—";
+                          const confidence = c.confidence_score ?? c.confidence ?? 0;
+                          const matchMethod = c.match_method || c.method || "—";
+                          const matchReasons = c.match_reasons || c.match_explanation || c.reasons || "";
+
+                          return (
+                            <div
+                              key={c.inventory_item_id || c.id || i}
+                              className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm space-y-3"
                             >
-                              Confirm Match
-                            </button>
-                          </div>
-                        ))}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono">
+                                      {itemCode}
+                                    </span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${
+                                        isDraft
+                                          ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800"
+                                          : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+                                      }`}
+                                    >
+                                      {statusLabel}
+                                    </span>
+                                  </div>
+                                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    {itemName}
+                                  </div>
+                                </div>
+                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded font-mono flex-none">
+                                  {confidence}%
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-100 dark:border-slate-700/60">
+                                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Category</div>
+                                  <div className="font-medium text-slate-800 dark:text-slate-200 truncate mt-0.5" title={category}>
+                                    {category}
+                                  </div>
+                                </div>
+                                <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-100 dark:border-slate-700/60">
+                                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">UOM</div>
+                                  <div className="font-medium text-slate-800 dark:text-slate-200 truncate mt-0.5">
+                                    {uom}
+                                  </div>
+                                </div>
+                                <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded border border-slate-100 dark:border-slate-700/60">
+                                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Match Method</div>
+                                  <div className="font-medium text-slate-800 dark:text-slate-200 truncate mt-0.5" title={matchMethod}>
+                                    {matchMethod}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {matchReasons && (
+                                <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded border border-slate-100 dark:border-slate-700/60 leading-relaxed">
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">Match Reasons: </span>
+                                  {matchReasons}
+                                </div>
+                              )}
+
+                              <button
+                                onClick={() => handleAcceptCandidate(c)}
+                                disabled={isProcessing}
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                Accept Master Item
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
                     {!isIdentifying &&
+                      identificationSearched &&
+                      candidates.length === 0 && (
+                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4 text-center space-y-3">
+                          <div className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                            No existing Master Item found — Create Master Item
+                          </div>
+                          <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+                            No matching master item candidates were found. Human action is required to select or create a master item.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowChangeItem(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Create Master Item
+                          </button>
+                        </div>
+                      )}
+
+                    {!isIdentifying &&
+                      !identificationSearched &&
                       candidates.length === 0 &&
-                      selectedLineForReview.inventoryItemId && (
-                        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                            Mapped: {selectedLineForReview.masterItemCode}
+                      (selectedLineForReview.matchStatus === "matched" ||
+                        selectedLineForReview.matchStatus === "verified" ||
+                        selectedLineForReview.inventoryItemId) && (
+                        <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-4 border border-emerald-200 dark:border-emerald-800/40">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                              Matched Master Item
+                            </span>
+                            {selectedLineForReview.confidence > 0 && (
+                              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded font-mono">
+                                {selectedLineForReview.confidence}%
+                              </span>
+                            )}
                           </div>
-                          <div className="text-xs text-slate-500 mt-2">
-                            Method: {selectedLineForReview.matchMethod}
+                          <div className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono mt-2">
+                            {selectedLineForReview.masterItemCode}
                           </div>
-                          <div className="text-xs text-slate-500">
-                            Status: {selectedLineForReview.matchStatus}
+                          <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                            {selectedLineForReview.normalizedDescription}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-between text-xs text-slate-500">
+                            <span>Method: {selectedLineForReview.matchMethod || "Verified"}</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">MATCHED</span>
                           </div>
                         </div>
                       )}
@@ -1273,26 +1572,18 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             onChange={(e) =>
                               setManualSelectedItemId(e.target.value)
                             }
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md text-sm"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md text-sm text-slate-900 dark:text-slate-100"
                           >
                             <option value="">-- Choose Item --</option>
                             {items.map((i) => (
                               <option key={i.id} value={i.id}>
-                                {i.item_code} - {i.item_name}
+                                {i.item_code} - {i.item_name || i.name}
                               </option>
                             ))}
                           </select>
                           <div className="flex gap-2">
                             <button
-                              onClick={() =>
-                                handleUpdateLine(
-                                  selectedLineForReview.id,
-                                  manualSelectedItemId,
-                                  "verify",
-                                  100,
-                                  "Manual",
-                                )
-                              }
+                              onClick={handleManualChangeItem}
                               disabled={!manualSelectedItemId || isProcessing}
                               className="flex-1 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50"
                             >
@@ -1300,7 +1591,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             </button>
                             <button
                               onClick={() => setShowChangeItem(false)}
-                              className="py-1.5 px-3 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded hover:bg-slate-50"
+                              className="py-1.5 px-3 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-xs font-medium rounded hover:bg-slate-50 dark:hover:bg-slate-600"
                             >
                               Cancel
                             </button>
