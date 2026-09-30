@@ -51,6 +51,13 @@ const parseSupabaseError = async (err) => {
   return err?.error || err?.message || "Unknown error";
 };
 
+const formatConfidence = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0%";
+  const pct = n <= 1 ? n * 100 : n;
+  return `${Math.round(pct)}%`;
+};
+
 export default function MasterBoqWorkspace({ isDarkMode = false }) {
   const crmContext = useCrm() || {};
   const { activeOperatingCompanyId, works = [] } = crmContext;
@@ -652,7 +659,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             inventory_item_id: manualSelectedItemId,
             source_line_id: line.source_extraction_line_id,
             tenant_company_id: activeOperatingCompanyId,
-            confidence_score: 100,
+            confidence_score: 1.0,
           },
         });
       if (reviewError) throw new Error(await parseSupabaseError(reviewError));
@@ -677,7 +684,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             uom_code: line.uom,
             remarks: "Manual override",
             match_method: "Manual",
-            match_confidence: 100,
+            match_confidence: 1.0,
             match_explanation: "User selected item manually",
             decision: "verify",
           },
@@ -895,7 +902,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             confidence !== null &&
             Number(confidence) > 0 && (
               <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 font-mono">
-                {Number(confidence)}%
+                {formatConfidence(confidence)}
               </span>
             )}
         </div>
@@ -1434,7 +1441,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                                   </div>
                                 </div>
                                 <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded font-mono flex-none">
-                                  {confidence}%
+                                  {formatConfidence(confidence)}
                                 </span>
                               </div>
 
@@ -1485,18 +1492,18 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                       candidates.length === 0 && (
                         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4 text-center space-y-3">
                           <div className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                            No existing Master Item found — Create Master Item
+                            No matching Master Item found — manual selection required.
                           </div>
                           <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
-                            No matching master item candidates were found. Human action is required to select or create a master item.
+                            No matching master item candidates were returned by Document AI.
                           </p>
                           <button
                             type="button"
                             onClick={() => setShowChangeItem(true)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            Create Master Item
+                            <ListChecks className="w-3.5 h-3.5" />
+                            Select Existing Master Item
                           </button>
                         </div>
                       )}
@@ -1514,7 +1521,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             </span>
                             {selectedLineForReview.confidence > 0 && (
                               <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded font-mono">
-                                {selectedLineForReview.confidence}%
+                                {formatConfidence(selectedLineForReview.confidence)}
                               </span>
                             )}
                           </div>
