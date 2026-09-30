@@ -934,10 +934,10 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     "Legacy BOQ";
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans overflow-hidden">
       {/* Header */}
       <div className="flex-none px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
               Master BOQ
@@ -1142,8 +1142,8 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           <div className="flex-1 min-h-0 flex overflow-hidden relative">
             {/* BOQ Grid */}
             <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-slate-900">
-              <div className="flex-none p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4">
-                <div className="relative flex-1 max-w-md">
+              <div className="flex-none p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-4">
+                <div className="relative flex-1 min-w-[200px] max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
