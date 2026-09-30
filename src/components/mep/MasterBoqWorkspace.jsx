@@ -460,9 +460,38 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           (l.inventory_item && l.inventory_item.item_code) ||
           "";
 
-        const isVerifiedOrMatched =
-          (l.match_status && (l.match_status.toLowerCase() === "matched" || l.match_status.toLowerCase() === "verified")) ||
-          (l.inventory_item_id && l.match_status !== "rejected" && l.match_status !== "unmatched");
+        // Retain specificationObject as raw object
+        const rawSpec = l.specification;
+        const specObj =
+          typeof rawSpec === "object" && rawSpec !== null
+            ? rawSpec
+            : typeof rawSpec === "string" && rawSpec.trim().startsWith("{")
+              ? (() => {
+                  try {
+                    return JSON.parse(rawSpec);
+                  } catch (_) {
+                    return {};
+                  }
+                })()
+              : {};
+
+        const specText =
+          typeof rawSpec === "object" && rawSpec !== null
+            ? (rawSpec.raw_specification || JSON.stringify(rawSpec))
+            : (rawSpec || "");
+
+        // Protect human decisions: verified and rejected lines must not be overwritten
+        const rawStatus = (l.match_status || "").toLowerCase();
+        let resolvedStatus = "unmatched";
+        if (rawStatus === "verified") {
+          resolvedStatus = "verified";
+        } else if (rawStatus === "rejected") {
+          resolvedStatus = "rejected";
+        } else if (rawStatus === "candidate") {
+          resolvedStatus = "candidate";
+        } else if (rawStatus === "matched" || (l.inventory_item_id && rawStatus !== "rejected" && rawStatus !== "unmatched")) {
+          resolvedStatus = "matched";
+        }
 
         return {
           id: l.id,
@@ -473,17 +502,15 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           uom: l.uom_code || "",
           make: l.make || "",
           model: l.model || "",
-          specification:
-            typeof l.specification === "object" && l.specification !== null
-              ? l.specification.raw_specification ||
-                JSON.stringify(l.specification)
-              : l.specification || "",
+          specificationObject: specObj,
+          specification: specText,
+          specificationText: specText,
           masterItemCode: resolvedItemCode,
           itemType: matchedItem?.item_type || (l.inventory_item_id ? items.find((i) => i.id === l.inventory_item_id)?.item_type || "" : ""),
           domain: matchedItem?.domain_code || (l.inventory_item_id ? items.find((i) => i.id === l.inventory_item_id)?.domain_code || "" : ""),
           hsn: matchedItem?.hsn_code || (l.inventory_item_id ? items.find((i) => i.id === l.inventory_item_id)?.hsn_code || "" : ""),
           inventoryItemId: l.inventory_item_id,
-          matchStatus: isVerifiedOrMatched ? "matched" : (l.match_status || "unmatched"),
+          matchStatus: resolvedStatus,
           confidence: l.match_confidence || 0,
           matchMethod: l.match_method || "",
           matchReasons: l.match_explanation || "",
@@ -516,6 +543,104 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     }
   };
 
+  const resolveParentDescription = (line) => {
+    if (!line) return "";
+
+    const cleanStr = (val) => (typeof val === "string" ? val.trim() : "");
+
+    // Priority B: line.specification.parent_description / line.specificationObject.parent_description
+    const specObj =
+      line.specificationObject && typeof line.specificationObject === "object"
+        ? line.specificationObject
+        : typeof line.specification === "object" && line.specification !== null
+          ? line.specification
+          : typeof line.specification === "string" && line.specification.trim().startsWith("{")
+            ? (() => {
+                try {
+                  return JSON.parse(line.specification);
+                } catch (_) {
+                  return {};
+                }
+              })()
+            : {};
+
+    const parentDescFromSpec = cleanStr(specObj.parent_description);
+    if (parentDescFromSpec) {
+      return parentDescFromSpec;
+    }
+
+    // Priority C: line.specification.parent_context.description
+    const parentContextDesc = cleanStr(
+      typeof specObj.parent_context === "object" && specObj.parent_context !== null
+        ? specObj.parent_context.description
+        : specObj.parent_context
+    );
+    if (parentContextDesc) {
+      return parentContextDesc;
+    }
+
+    // Priority D: find parent using line.parentLineRef against line.lineNo, line.sourceLineRef, parent line reference
+    const ref = cleanStr(line.parentLineRef || line.parent_line_ref || line.parent_line_no);
+    if (ref && Array.isArray(boqLines) && boqLines.length > 0) {
+      const parent = boqLines.find((l) => {
+        if (l.id === line.id) return false;
+        const lLineNo = cleanStr(l.lineNo || l.line_no);
+        const lSourceRef = cleanStr(l.sourceLineRef || l.source_line_ref);
+        const lParentRef = cleanStr(l.parentLineRef || l.parent_line_ref);
+        const lExtractionId = cleanStr(l.source_extraction_line_id);
+        const lId = cleanStr(l.id);
+
+        return (
+          (lLineNo && lLineNo === ref) ||
+          (lSourceRef && lSourceRef === ref) ||
+          (lParentRef && lParentRef === ref) ||
+          (lExtractionId && lExtractionId === ref) ||
+          (lId && lId === ref)
+        );
+      });
+
+      if (parent) {
+        const parentOrig = cleanStr(parent.originalDescription || parent.original_description);
+        if (parentOrig) {
+          return parentOrig;
+        }
+      }
+    }
+
+    return "";
+  };
+
+  const resolveTechnicalContext = (line) => {
+    if (!line) return "";
+    const orig = (line.originalDescription || line.original_description || line.raw_description || "").trim();
+    const parentDesc = resolveParentDescription(line);
+
+    // Priority E: If no parent exists, use line.originalDescription only.
+    if (!parentDesc) {
+      return orig;
+    }
+
+    if (!orig) {
+      return parentDesc;
+    }
+
+    // Priority A: If line.originalDescription already contains the full parent technical description, use it directly.
+    const normOrig = orig.toLowerCase().replace(/\s+/g, " ");
+    const normParent = parentDesc.toLowerCase().replace(/\s+/g, " ");
+
+    if (normOrig.includes(normParent)) {
+      return orig;
+    }
+
+    // Never duplicate the parent description: "Parent — Child"
+    return `${parentDesc} — ${orig}`;
+  };
+
+  const getParentDescription = (line) => {
+    const p = resolveParentDescription(line);
+    return p || null;
+  };
+
   const handleStartIdentification = async (line) => {
     if (!line) return;
     setIsIdentifying(true);
@@ -523,10 +648,8 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     setIdentificationSearched(false);
     setErrorMsg(null);
     try {
-      const parentDesc = getParentDescription(line);
-      const combinedDescription = parentDesc
-        ? `${parentDesc} + ${line.originalDescription}`
-        : line.originalDescription;
+      const technicalContext = resolveTechnicalContext(line);
+      const parentDesc = resolveParentDescription(line);
 
       const { data, error } = await supabase.functions.invoke(
         "mep-item-identification",
@@ -534,26 +657,24 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
           body: {
             action: "identify",
             tenant_company_id: activeOperatingCompanyId,
-            raw_description: combinedDescription,
+            raw_description: technicalContext,
             parsed_attributes: {
-              make: line.make || null,
-              model: line.model || null,
-              specification: line.specification || null,
+              ...(line.specificationObject || {}),
               parent_description: parentDesc || null,
               parent_context: {
-                description: parentDesc || null
+                description: parentDesc || null,
               },
-              source_child_description: line.originalDescription || line.raw_description || null,
-              source_uom: line.uom || line.uom_code || null,
-              source_quantity: line.quantity ?? line.qty ?? null,
-              source_line_no: line.lineNo ?? null,
+              source_child_description: line.originalDescription,
+              source_uom: line.uom,
+              source_quantity: line.quantity,
+              source_line_no: line.lineNo,
             },
             domain_code: "FIRE_FIGHTING",
             source_type: "master_boq",
             source_id: currentMasterBoqId,
-            source_line_id: line.source_extraction_line_id,
+            source_line_id: line.source_extraction_line_id || line.id,
             include_drafts: true,
-            uom_code: line.uom || line.uom_code || null
+            uom_code: line.uom,
           },
         },
       );
@@ -601,7 +722,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             action: "review",
             decision: "accepted",
             inventory_item_id: selectedInventoryItemId,
-            source_line_id: line.source_extraction_line_id,
+            source_line_id: line.source_extraction_line_id || line.id,
             tenant_company_id: activeOperatingCompanyId,
             confidence_score: confScore,
           },
@@ -665,7 +786,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             action: "review",
             decision: "corrected",
             inventory_item_id: manualSelectedItemId,
-            source_line_id: line.source_extraction_line_id,
+            source_line_id: line.source_extraction_line_id || line.id,
             tenant_company_id: activeOperatingCompanyId,
             confidence_score: 1.0,
           },
@@ -789,10 +910,63 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
     }
   };
 
-  const getParentDescription = (line) => {
-    if (!line.parentLineRef) return null;
-    const parent = boqLines.find(l => (l.lineNo && l.lineNo === line.parentLineRef) || (l.sourceLineRef && l.sourceLineRef === line.parentLineRef));
-    return parent ? parent.originalDescription : null;
+  const handleReprocessUnmatched = async () => {
+    if (!currentMasterBoqId) return;
+    setIsProcessing(true);
+    setErrorMsg(null);
+
+    try {
+      // Preferred architecture (Part 7): Filter only unresolved lines (unmatched, candidate)
+      // Strictly protect VERIFIED and REJECTED lines from being sent or reprocessed.
+      const unresolvedLines = lines.filter(l => {
+        const type = String(l.lineType || "item").toLowerCase();
+        if (type === "section" || type === "header") return false;
+        const status = String(l.matchStatus || "unmatched").toLowerCase();
+        return status !== "verified" && status !== "rejected";
+      });
+
+      if (unresolvedLines.length === 0) {
+        setAiStatusMsg("All items are already verified or rejected. Nothing to reprocess.");
+        setTimeout(() => setAiStatusMsg(null), 3000);
+        setIsProcessing(false);
+        return;
+      }
+
+      setAiStatusMsg(`Identified ${unresolvedLines.length} unresolved items to process (verified/rejected lines protected)...`);
+
+      const batchSize = 50;
+
+      for (let i = 0; i < unresolvedLines.length; i += batchSize) {
+        const chunk = unresolvedLines.slice(i, i + batchSize).map(l => l.id);
+        const from = i + 1;
+        const to = Math.min(i + batchSize, unresolvedLines.length);
+        setAiStatusMsg(`Matching BOQ items ${from}–${to} of ${unresolvedLines.length}...`);
+
+        const { data, error } = await supabase.functions.invoke(
+          "mep-item-identification",
+          {
+            body: {
+              action: "reprocess-master-boq",
+              tenant_company_id: activeOperatingCompanyId,
+              master_boq_id: currentMasterBoqId,
+              line_ids: chunk,
+              include_drafts: true,
+            },
+          },
+        );
+
+        if (error) throw new Error(await parseSupabaseError(error));
+        if (data?.error) throw new Error(data.error);
+      }
+
+      setAiStatusMsg("Refreshing Master BOQ…");
+      await fetchMasterBoq(currentMasterBoqId);
+    } catch (e) {
+      setErrorMsg("Reprocessing failed: " + e.message);
+    } finally {
+      setIsProcessing(false);
+      setAiStatusMsg(null);
+    }
   };
 
   const isBillableItem = (line) => {
@@ -994,6 +1168,12 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
             )}
           </div>
         </div>
+        {aiStatusMsg && currentView === "MASTER_BOQ" && (
+          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg text-sm flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin flex-none" />
+            <span className="flex-1 font-medium">{aiStatusMsg}</span>
+          </div>
+        )}
         {errorMsg && (
           <div className="mt-3 p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg text-sm flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-none" />
@@ -1176,9 +1356,20 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
                 <div className="flex-1" />
                 {masterBoqStatus !== "APPROVED" && (
-                  <button className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add Line
-                  </button>
+                  <>
+                    <button
+                      onClick={handleReprocessUnmatched}
+                      disabled={isProcessing}
+                      className="px-3 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 shadow-sm flex items-center gap-2 transition-colors disabled:opacity-50"
+                      title="Reprocess Unmatched Items via mep-item-identification"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isProcessing ? "animate-spin" : ""}`} />
+                      Reprocess Unmatched Items
+                    </button>
+                    <button className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> Add Line
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -1256,7 +1447,11 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-sm"
                             title={line.originalDescription}
                           >
-                            {getParentDescription(line) && <div className="text-xs text-slate-400 mb-1 truncate font-medium" title={getParentDescription(line)}>{getParentDescription(line)}</div>}
+                            {resolveParentDescription(line) && !line.originalDescription?.toLowerCase().includes(resolveParentDescription(line).toLowerCase()) && (
+                              <div className="text-xs text-slate-400 mb-1 truncate font-medium" title={resolveParentDescription(line)}>
+                                {resolveParentDescription(line)}
+                              </div>
+                            )}
                             <div className="truncate">{line.originalDescription}</div>
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
@@ -1300,10 +1495,14 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                             <button
                               onClick={() => {
                                 setSelectedLineForReview(line);
-                                setCandidates([]);
-                                setIdentificationSearched(false);
                                 setShowChangeItem(false);
                                 setManualSelectedItemId("");
+                                if (line.matchStatus !== "matched" && line.matchStatus !== "verified") {
+                                  handleStartIdentification(line);
+                                } else {
+                                  setCandidates([]);
+                                  setIdentificationSearched(false);
+                                }
                               }}
                               className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
                               title="Review Match"
@@ -1355,8 +1554,8 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                     <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
                       Original BOQ Text
                     </h4>
-                    <p className="text-sm text-slate-900 dark:text-slate-100 leading-relaxed">
-                      {selectedLineForReview.originalDescription}
+                    <p className="text-sm text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-line">
+                      {resolveTechnicalContext(selectedLineForReview)}
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                       <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
@@ -1417,15 +1616,42 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                         {candidates.map((c, i) => {
                           const isDraft =
                             c.is_draft === true ||
-                            c.status?.toLowerCase() === "draft" ||
-                            c.item_status?.toLowerCase() === "draft";
+                            String(c.item_code || "").startsWith("DRAFT-") ||
+                            String(c.item_status || "").toUpperCase() === "DRAFT" ||
+                            String(c.status || "").toUpperCase() === "DRAFT";
+
                           const statusLabel = isDraft
                             ? "Draft"
-                            : c.status
-                              ? c.status.charAt(0).toUpperCase() + c.status.slice(1)
-                              : "Verified";
+                            : String(c.item_status || c.status || "").toUpperCase() === "VERIFIED"
+                              ? "Verified"
+                              : "Active";
+
                           const itemCode = c.item_code || c.master_item_code || "Unknown Code";
-                          const itemName = c.item_name || c.master_item_name || c.name || "Unknown Item";
+                          const itemName =
+                            c.identity_attributes?.technical_identity_text ||
+                            c.technical_identity_text ||
+                            c.name ||
+                            c.item_name ||
+                            c.master_item_name ||
+                            "Unknown Item";
+
+                          const technicalQualifiers =
+                            c.identity_attributes?.technical_qualifiers ||
+                            c.technical_qualifiers;
+
+                          let qualifiersDisplay = "";
+                          if (technicalQualifiers) {
+                            if (typeof technicalQualifiers === "string") {
+                              qualifiersDisplay = technicalQualifiers;
+                            } else if (Array.isArray(technicalQualifiers)) {
+                              qualifiersDisplay = technicalQualifiers.filter(Boolean).join(", ");
+                            } else if (typeof technicalQualifiers === "object" && technicalQualifiers !== null) {
+                              qualifiersDisplay = Object.entries(technicalQualifiers)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join(", ");
+                            }
+                          }
+
                           const category = c.category || c.item_category || c.domain_code || c.domain || "—";
                           const uom = c.uom || c.uom_code || c.base_uom_code || "—";
                           const confidence = c.confidence_score ?? c.confidence ?? 0;
@@ -1447,7 +1673,9 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                                       className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${
                                         isDraft
                                           ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800"
-                                          : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+                                          : statusLabel === "Verified"
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+                                            : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"
                                       }`}
                                     >
                                       {statusLabel}
@@ -1456,6 +1684,11 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                                   <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                     {itemName}
                                   </div>
+                                  {qualifiersDisplay && (
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                                      {qualifiersDisplay}
+                                    </div>
+                                  )}
                                 </div>
                                 <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded font-mono flex-none">
                                   {formatConfidence(confidence)}
