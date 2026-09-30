@@ -1139,9 +1139,9 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
         )}
 
         {currentView === "MASTER_BOQ" && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 min-h-0 flex overflow-hidden relative">
             {/* BOQ Grid */}
-            <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+            <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-slate-900">
               <div className="flex-none p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -1174,47 +1174,47 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                 )}
               </div>
 
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 min-h-0 overflow-auto">
                 <table className="w-full text-left border-collapse min-w-max">
                   <thead className="bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-700 shadow-sm">
                     <tr>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Line No
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider min-w-[240px]">
                         Description
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Qty
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         UOM
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Supply Rate
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Supply Amount
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Installation Rate
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Installation Amount
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Total
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         PO/WO Reference
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Master Item
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Match Status
                       </th>
-                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">
                         Actions
                       </th>
                     </tr>
@@ -1241,38 +1241,38 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                           key={line.id}
                           className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${selectedLineForReview?.id === line.id ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
                         >
-                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-slate-100 font-medium">
+                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-slate-100 font-medium whitespace-nowrap">
                             {line.lineNo}
                           </td>
                           <td
-                            className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs"
+                            className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-sm"
                             title={line.originalDescription}
                           >
                             {getParentDescription(line) && <div className="text-xs text-slate-400 mb-1 truncate font-medium" title={getParentDescription(line)}>{getParentDescription(line)}</div>}
                             <div className="truncate">{line.originalDescription}</div>
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
                             {line.quantity}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
                             {line.uom}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono">
                             {line.supplyRate || "-"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono">
                             {line.supplyAmount || "-"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono">
                             {line.installationRate || "-"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap font-mono">
                             {line.installationAmount || "-"}
                           </td>
-                          <td className="px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                          <td className="px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap font-mono">
                             {line.lineTotalAmount || "-"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
                             {(line.sourcePoNumber || line.sourceWoNumber) ? (
                               <div className="flex flex-col gap-0.5">
                                 {line.sourcePoNumber && <span className="text-xs text-slate-500 font-mono">PO: {line.sourcePoNumber}</span>}
@@ -1282,13 +1282,13 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                               <span className="text-slate-400">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 font-mono">
+                          <td className="px-4 py-3 text-sm font-semibold text-blue-600 dark:text-blue-400 font-mono whitespace-nowrap">
                             {line.masterItemCode || "-"}
                           </td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
                             <StatusBadge status={line.matchStatus} confidence={line.confidence} />
                           </td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
                             <button
                               onClick={() => {
                                 setSelectedLineForReview(line);
@@ -1298,6 +1298,7 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                                 setManualSelectedItemId("");
                               }}
                               className="p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+                              title="Review Match"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -1310,14 +1311,21 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
               </div>
             </div>
 
-            {/* Review Panel */}
+            {/* Review Match Drawer (Right-side overlay/drawer, does not shrink main table) */}
             {selectedLineForReview && (
-              <div className="w-96 flex-none flex flex-col bg-slate-50 dark:bg-slate-800/50 border-l border-slate-200 dark:border-slate-800">
-                <div className="flex-none px-4 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <ListChecks className="w-4 h-4 text-blue-500" />
-                    Review Match
-                  </h3>
+              <div className="absolute top-0 right-0 bottom-0 w-[400px] max-w-[90vw] z-30 flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl">
+                <div className="flex-none px-4 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <div>
+                      <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100 leading-tight">
+                        Review Match
+                      </h3>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        Line #{selectedLineForReview.lineNo}
+                      </div>
+                    </div>
+                  </div>
                   <button
                     onClick={() => {
                       setSelectedLineForReview(null);
@@ -1326,13 +1334,14 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
                       setShowChangeItem(false);
                       setManualSelectedItemId("");
                     }}
-                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700"
+                    className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700 transition-colors"
+                    title="Close drawer"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-auto p-4 space-y-6">
+                <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 overscroll-contain">
                   {/* Original Content */}
                   <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
                     <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
