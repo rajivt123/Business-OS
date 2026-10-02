@@ -247,10 +247,9 @@ async function createBoq(body: any, userId: string) {
       const parentDescription = String(
         mergedSpec.parent_description || mergedSpec.parent_context?.description || ""
       ).trim();
-      const normalizedRaw = rawDescription.normalize("NFKC").toUpperCase().replace(/\s+/g," ").trim();
-      const dimensionOnly = /^\d{1,4}\s*MM(?:\s*NOMINAL)?(?:\s*(?:DIA|DIAMETER))?$/.test(normalizedRaw);
-      const persistedDescription = dimensionOnly && parentDescription &&
-        !normalizeText(rawDescription).includes(normalizeText(parentDescription))
+      const normalizeText = (t: string) => t.normalize("NFKC").toUpperCase().replace(/\s+/g," ").trim();
+      
+      const persistedDescription = parentDescription && !normalizeText(rawDescription).includes(normalizeText(parentDescription))
         ? parentDescription + " — " + rawDescription
         : rawDescription;
 
@@ -261,7 +260,7 @@ async function createBoq(body: any, userId: string) {
       master_boq_id: boq.id,
       line_no: Number.parseInt(String(line.line_no ?? index + 1), 10) || index + 1,
       original_description: persistedDescription || `Line ${index + 1}`,
-      normalized_description: line.normalized_description || (dimensionOnly && parentDescription ? persistedDescription : null),
+      normalized_description: line.normalized_description || null,
       inventory_item_id: uuidLike(line.inventory_item_id) ? line.inventory_item_id : null,
       specification: mergedSpec,
       make: line.make || null,
@@ -515,6 +514,105 @@ async function approveBoq(body: any, userId: string) {
   };
 }
 
+async function rebuildBoq(body: any, userId: string) {
+  const { boq, access } = await getBoqContext(body.master_boq_id, userId, "edit");
+  if (boq.status === "approved" || boq.status === "archived") throw new Error("Cannot rebuild an approved or archived BOQ.");
+
+  const newExtractionId = body.source_extraction_id;
+  if (!uuidLike(newExtractionId)) throw new Error("source_extraction_id is required for rebuild");
+
+  const lines = Array.isArray(body.lines) ? body.lines : [];
+  if (!lines.length) throw new Error("No lines provided for rebuild");
+
+  const { data: existingLines, error: existingError } = await admin
+    .from("master_boq_lines")
+    .select("id,line_no,match_status,inventory_item_id,match_method,match_confidence,match_explanation")
+    .eq("master_boq_id", boq.id);
+
+  if (existingError) throw new Error(`Unable to load existing Master BOQ lines: ${existingError.message}`);
+
+  const existingMap = new Map();
+  for (const el of existingLines || []) {
+    existingMap.set(String(el.line_no), el);
+  }
+
+  const normalizeText = (t: string) => t.normalize("NFKC").toUpperCase().replace(/\s+/g," ").trim();
+
+  const lineRows = lines.map((line: any, index: number) => {
+    const lineNo = Number.parseInt(String(line.line_no ?? index + 1), 10) || index + 1;
+    const existing = existingMap.get(String(lineNo));
+
+    const lineSpec = line.specification && typeof line.specification === "object"
+      ? line.specification
+      : (line.parsed_attributes && typeof line.parsed_attributes === "object" ? line.parsed_attributes : {});
+    const mergedSpec = lineSpec;
+    const rawDescription = String(line.original_description ?? line.raw_description ?? "").trim();
+    const parentDescription = String(
+      mergedSpec.parent_description || mergedSpec.parent_context?.description || ""
+    ).trim();
+    
+    const persistedDescription = parentDescription && !normalizeText(rawDescription).includes(normalizeText(parentDescription))
+      ? parentDescription + " — " + rawDescription
+      : rawDescription;
+
+    const rowId = existing ? existing.id : crypto.randomUUID();
+    const isVerified = existing && (existing.match_status === "verified" || existing.match_status === "rejected");
+
+    return {
+      id: rowId,
+      tenant_id: access.tenantId,
+      tenant_company_id: boq.tenant_company_id,
+      work_id: boq.work_id,
+      master_boq_id: boq.id,
+      line_no: lineNo,
+      original_description: persistedDescription || `Line ${lineNo}`,
+      normalized_description: line.normalized_description || null,
+      inventory_item_id: isVerified ? existing.inventory_item_id : (uuidLike(line.inventory_item_id) ? line.inventory_item_id : null),
+      specification: mergedSpec,
+      make: line.make || null,
+      model: line.model || null,
+      quantity: Number(line.quantity ?? 0) || 0,
+      uom_code: line.uom_code || null,
+      remarks: line.remarks || null,
+      match_status: isVerified ? existing.match_status : (line.inventory_item_id ? "matched" : "unmatched"),
+      match_method: isVerified ? existing.match_method : (line.match_method || null),
+      match_confidence: isVerified ? existing.match_confidence : (line.match_confidence == null ? null : Number(line.match_confidence)),
+      match_explanation: isVerified ? existing.match_explanation : (line.match_explanation && typeof line.match_explanation === "object" ? line.match_explanation : {}),
+      source_extraction_line_id: uuidLike(line.source_extraction_line_id) ? line.source_extraction_line_id : null,
+      parent_line_no: line.parent_line_no || line.parent_line_ref || null,
+      line_type: ["SECTION","ITEM","NOTE"].includes(String(line.line_type || "").toUpperCase()) ? String(line.line_type).toUpperCase() : "ITEM",
+      procurement_scope: ["SUPPLY","INSTALLATION","BOTH"].includes(String(line.procurement_scope || "").toUpperCase()) ? String(line.procurement_scope).toUpperCase() : "BOTH",
+      supply_quantity: line.supply_quantity == null ? null : Number(line.supply_quantity),
+      supply_uom_code: line.supply_uom_code || null,
+      supply_rate: line.supply_rate == null ? null : Number(line.supply_rate),
+      supply_amount: line.supply_amount == null ? null : Number(line.supply_amount),
+      installation_quantity: line.installation_quantity == null ? null : Number(line.installation_quantity),
+      installation_uom_code: line.installation_uom_code || null,
+      installation_rate: line.installation_rate == null ? null : Number(line.installation_rate),
+      installation_amount: line.installation_amount == null ? null : Number(line.installation_amount),
+      line_total_amount: line.line_total_amount == null ? null : Number(line.line_total_amount),
+      source_line_ref: line.source_line_ref || null,
+      source_po_number: line.source_po_number || null,
+      source_wo_number: line.source_wo_number || null,
+      source_raw_data: line.source_raw_data && typeof line.source_raw_data === "object" ? line.source_raw_data : {},
+      source_document_id: boq.source_document_id,
+      source_page_number: Number.isFinite(Number(line.source_page)) ? Number(line.source_page) : null,
+      source_row_number: Number.isFinite(Number(line.row_number)) ? Number(line.row_number) : null,
+      created_by: userId,
+    };
+  });
+
+  const { error: upsertError } = await admin
+    .from("master_boq_lines")
+    .upsert(lineRows, { onConflict: "id" });
+
+  if (upsertError) throw new Error(`Unable to rebuild Master BOQ lines: ${upsertError.message}`);
+
+  await admin.from("master_boqs").update({ source_extraction_id: newExtractionId }).eq("id", boq.id);
+
+  return { master_boq_id: boq.id, line_count: lineRows.length, status: boq.status };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -540,7 +638,9 @@ Deno.serve(async (req: Request) => {
 
     if (action === "approve") return response(await approveBoq(body, user.id));
 
-    return response({ error: "Supported actions: create, get, update-line, approve" }, 400);
+    if (action === "rebuild") return response(await rebuildBoq(body, user.id));
+
+    return response({ error: "Supported actions: create, get, update-line, approve, rebuild" }, 400);
   } catch (err: any) {
     return response({ error: err?.message || "Internal server error" }, 500);
   }

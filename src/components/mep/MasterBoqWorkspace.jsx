@@ -245,10 +245,10 @@ export default function MasterBoqWorkspace({ isDarkMode = false }) {
 
       // Call extraction service
       const { data: aiData, error: aiError } = await supabase.functions.invoke(
-        "mep-document-local",
+        "mep-document-ai",
         {
           body: {
-            action: "extract-master-boq-local",
+            action: "extract-master-boq",
             tenant_company_id: activeOperatingCompanyId,
             work_id: selectedProject,
             source_url: resolvedBoqUrl,

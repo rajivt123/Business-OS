@@ -122,12 +122,103 @@ async function callGemini(parts: any[]) {
 
 async function extractSpreadsheet(bytes: Uint8Array, fileName: string) {
   const workbook = XLSX.read(bytes, { type: "array", cellDates: true });
-  const sheets = workbook.SheetNames.map((name: string) => ({
-    sheet: name,
-    rows: XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: null, raw: false })
-  }));
-  const prompt = "You are the Document AI extraction engine for a construction/fire-protection ERP. Extract every real BOQ/material line from every relevant sheet. Ignore titles, headings, subtotal/total rows, page headers, notes and empty rows. Preserve original descriptions. Do not invent missing values. Parse technical specifications into specification. File: " + fileName + "\\nWORKBOOK DATA:\\n" + JSON.stringify(sheets);
-  return callGemini([{ text: prompt }]);
+  
+  const extractedLines = [];
+  let currentParentDesc = null;
+  let lineCounter = 1;
+
+  for (const sheetName of workbook.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: null, raw: false });
+    
+    // Find header row index
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(20, rows.length); i++) {
+      const rowStr = (rows[i] || []).map(String).join("").toLowerCase();
+      if (rowStr.includes("description") && (rowStr.includes("qty") || rowStr.includes("quantity") || rowStr.includes("unit"))) {
+        headerIdx = i;
+        break;
+      }
+    }
+    
+    const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
+    
+    for (let i = startIdx; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || !Array.isArray(row) || row.length === 0) continue;
+      
+      let descIdx = 1;
+      let unitIdx = 2;
+      let qtyIdx = 3;
+      
+      if (headerIdx >= 0) {
+        const headerRow = rows[headerIdx] || [];
+        const hDesc = headerRow.findIndex(c => String(c).toLowerCase().includes("description"));
+        const hUnit = headerRow.findIndex(c => {
+          const lower = String(c).toLowerCase();
+          return lower.includes("unit") || lower === "uom";
+        });
+        const hQty = headerRow.findIndex(c => {
+          const lower = String(c).toLowerCase();
+          return lower.includes("qty") || lower.includes("quantity");
+        });
+        
+        if (hDesc >= 0) descIdx = hDesc;
+        if (hUnit >= 0) unitIdx = hUnit;
+        if (hQty >= 0) qtyIdx = hQty;
+      }
+      
+      const desc = String(row[descIdx] || "").trim();
+      const unit = String(row[unitIdx] || "").trim();
+      const qtyStr = String(row[qtyIdx] || "").trim();
+      const qty = parseFloat(qtyStr);
+      
+      if (!desc || desc.toLowerCase() === "description") continue;
+      
+      // Check if row is a Parent row (no unit, no valid qty, and usually descriptive)
+      if (!unit && isNaN(qty)) {
+        if (desc.length > 5 && !desc.toLowerCase().startsWith("total") && !desc.toLowerCase().startsWith("sub-total")) {
+            currentParentDesc = desc;
+        }
+        continue;
+      }
+      
+      // Is a child/billable item
+      let finalDesc = desc;
+      let parentDescToSave = null;
+      let sourceDescToSave = desc;
+
+      if (currentParentDesc) {
+         // Prevent redundant prefixing if child somehow already contains parent text
+         if (!desc.toLowerCase().includes(currentParentDesc.substring(0, 15).toLowerCase())) {
+           finalDesc = currentParentDesc + " — " + desc;
+           parentDescToSave = currentParentDesc;
+         }
+      }
+      
+      extractedLines.push({
+        line_no: lineCounter++,
+        description: finalDesc,
+        quantity: isNaN(qty) ? null : qty,
+        uom: unit || null,
+        parent_description: parentDescToSave,
+        source_description: sourceDescToSave,
+        specification: null, // Deterministic doesn't extract complex tech specs yet
+        item_type: null,
+        domain_code: null,
+        material_code: null,
+        make: null,
+        model: null,
+        hsn_code: null,
+        source_section: sheetName
+      });
+    }
+  }
+
+  return {
+    document_title: fileName,
+    document_number: null,
+    lines: extractedLines
+  };
 }
 
 async function extractBinary(bytes: Uint8Array, mimeType: string, fileName: string) {
@@ -177,15 +268,15 @@ Deno.serve(async (req: Request) => {
       title: result.document_title || fileName, document_type: "BOQ",
       document_number: result.document_number || null, source_file_name: fileName,
       ingestion_status: "completed", is_authoritative: false,
-      metadata: { source_url: sourceUrl, work_id: workId, mime_type: mimeType, file_size: bytes.byteLength, provider: "gemini", model: "gemini-3.1-pro" },
+      metadata: { source_url: sourceUrl, work_id: workId, mime_type: mimeType, file_size: bytes.byteLength, provider: ["xlsx","xls","csv"].includes(ext) ? "local-deterministic" : "gemini", model: ["xlsx","xls","csv"].includes(ext) ? "v1" : "gemini-3.1-pro" },
       created_by: user.id
     }).select().single();
     if (documentError) throw new Error("Unable to register extracted document: " + documentError.message);
 
     const { data: extraction, error: extractionError } = await admin.from("mep_document_extractions").insert({
       tenant_id: access.tenantId, tenant_company_id: tenantCompanyId, document_example_id: documentId,
-      extraction_type: "DOCUMENT_EXTRACTION", provider: "gemini", model_name: "gemini-3.1-pro",
-      model_version: "3.1", status: "completed", raw_output: result, confidence_score: 0.8,
+      extraction_type: "DOCUMENT_EXTRACTION", provider: ["xlsx","xls","csv"].includes(ext) ? "local-deterministic" : "gemini", model_name: ["xlsx","xls","csv"].includes(ext) ? "v1" : "gemini-3.1-pro",
+      model_version: ["xlsx","xls","csv"].includes(ext) ? "1.0" : "3.1", status: "completed", raw_output: result, confidence_score: 1.0,
       completed_at: new Date().toISOString(), created_by: user.id
     }).select().single();
     if (extractionError) throw new Error("Unable to save extraction: " + extractionError.message);
@@ -200,7 +291,12 @@ Deno.serve(async (req: Request) => {
       item_type: line.item_type || null, domain_code: line.domain_code || null, category_id: null,
       quantity: numberOrNull(line.quantity), uom_code: line.uom || null, unit_rate: null,
       discount_percent: null, tax_percent: null, hsn_code: line.hsn_code || null,
-      tax_profile: {}, parsed_attributes: line.specification ? { raw_specification: line.specification } : {},
+      tax_profile: {}, 
+      parsed_attributes: {
+        ...(line.specification ? { raw_specification: line.specification } : {}),
+        ...(line.parent_description ? { parent_description: line.parent_description } : {}),
+        ...(line.source_description ? { source_description: line.source_description } : {}),
+      },
       normalized_description: null, candidate_inventory_item_id: null, match_confidence: null,
       match_method: null, match_reasons: [], review_status: "pending"
     }));
@@ -210,7 +306,7 @@ Deno.serve(async (req: Request) => {
       if (lineError) throw new Error("Unable to save extraction lines: " + lineError.message);
     }
 
-    return response({ success: true, document_id: documentId, extraction_id: extraction.id, line_count: rows.length, provider: "gemini", model: "gemini-3.1-pro" });
+    return response({ success: true, document_id: documentId, extraction_id: extraction.id, line_count: rows.length, provider: ["xlsx","xls","csv"].includes(ext) ? "local-deterministic" : "gemini" });
   } catch (err: any) {
     return response({ error: err?.message || "Document AI extraction failed" }, 500);
   }

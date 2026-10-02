@@ -572,7 +572,6 @@ function technicalMatchKey(rawDescription: unknown, parsedAttributes: any, uomCo
 
   if (make) keyParts.push(`MAKE:${normalizeText(make)}`);
   if (model) keyParts.push(`MODEL:${normalizeText(model)}`);
-  if (uom) keyParts.push(`UOM:${uom}`);
 
   return keyParts.join("|");
 }
@@ -683,7 +682,6 @@ function evaluateThreeStateCompatibility(
   compareAttr("category", input.category, master.category);
   compareAttr("dimension", input.dimension, master.dimension);
   compareAttr("material", input.material, master.material);
-  compareAttr("uom", input.uom, master.uom);
 
   // Compare every dynamic technical attribute present in either input or master
   const dynamicKeys = new Set<string>([
@@ -1183,46 +1181,8 @@ Deno.serve(async (req: Request) => {
         seen.add(identity.signature);
 
         let item = existingBySignature.get(identity.signature);
-        if (!item) {
-          // Technical slug format: DRAFT-[CATEGORY]-[MATERIAL]-[DIMENSION]-[SPEC] (Part 4)
-          const cat = identity.category?.code || "ITEM";
-          const mat = identity.attrs.material || "";
-          const dim = identity.attrs.dimension_mm ? `${identity.attrs.dimension_mm}NB` : "";
-          const slugParts = [cat, mat, dim].filter(Boolean);
-          const baseSlug = slugParts.length ? slugParts.join("-") : normalizeText(identity.name).slice(0, 30);
-          let itemCode = "DRAFT-" + baseSlug.replace(/[^A-Z0-9-]+/g, "-").replace(/-+/g, "-");
-          if ((existing.data || []).some((x: any) => x.item_code === itemCode)) {
-            itemCode += "-" + simpleHash(identity.signature);
-          }
-
-          const { data: inserted, error: insertError } = await admin.from("inventory_items").insert({
-            id: crypto.randomUUID(),
-            tenant_id: tenantId,
-            tenant_company_id: tenantCompanyId,
-            item_code: itemCode,
-            name: identity.name,
-            description: identity.description,
-            category: identity.category?.name || null,
-            item_type: identity.itemType,
-            base_uom_code: sourceUom,
-            hsn_sac_code: null,
-            reorder_level: 0,
-            reorder_quantity: 0,
-            is_active: false,
-            created_by: currentUser.id,
-            normalized_name: normalizeText(identity.name),
-            domain_code: "FIRE_FIGHTING",
-            identity_attributes: identity.attrs,
-            identity_version: 1,
-            identity_source: "mep_extraction_draft",
-            mep_category_id: identity.category?.id || null,
-          }).select("id,item_code,name,identity_attributes").single();
-
-          if (insertError) throw new Error("Unable to create draft Master Item: " + insertError.message);
-          item = inserted;
-          existingBySignature.set(identity.signature, item);
-          created.push(item);
-        }
+          skipped.push({ source_line_id: line.id, line_no: line.line_no, reason: "No existing Master Item matched the canonical signature" });
+          continue;
         prepared.push({ source_line_id: line.id, inventory_item_id: item.id, signature: identity.signature, name: item.name });
       }
 
