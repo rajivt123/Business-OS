@@ -1,0 +1,64 @@
+{
+  "functions": {
+    "catalog": 114,
+    "generated": 114,
+    "exact_match": 114,
+    "missing": 0,
+    "modified": 0
+  },
+  "rls": {
+    "rls_tables_catalog": 163,
+    "rls_tables_generated": 163,
+    "policies_catalog": 307,
+    "policies_generated": 307,
+    "policies_exact_match": 307,
+    "policies_missing": 0,
+    "policies_modified": 0
+  },
+  "constraints": {
+    "pk_exact": 164,
+    "pk_miss": 0,
+    "fk_exact": 491,
+    "fk_miss": 0,
+    "unique_exact": 90,
+    "unique_miss": 0,
+    "check_exact": 236,
+    "check_miss": 0
+  },
+  "indexes": {
+    "exact": 513,
+    "miss": 0
+  },
+  "columns": {
+    "catalog": 2568,
+    "generated": 2568,
+    "exact_match": 2568,
+    "missing": 0,
+    "modified": 0
+  },
+  "tables": {
+    "exact": 165,
+    "miss": 0
+  },
+  "types": {
+    "exact": 168,
+    "miss": 0
+  },
+  "sequences": {
+    "exact": 0,
+    "miss": 0
+  },
+  "views": {
+    "exact": 3,
+    "miss": 0
+  },
+  "triggers": {
+    "exact": 35,
+    "miss": 0
+  },
+  "security_definer": {
+    "catalog": 110,
+    "exact_match": 110,
+    "mismatch": 0
+  }
+}

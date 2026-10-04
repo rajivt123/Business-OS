@@ -36,6 +36,7 @@ export function ProcurementProvider({ children }) {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseOrderItems, setPurchaseOrderItems] = useState([]);
   const [goodsReceivedNotes, setGoodsReceivedNotes] = useState([]);
+  const [goodsReceivedNoteItems, setGoodsReceivedNoteItems] = useState([]);
   const [purchaseBills, setPurchaseBills] = useState([]);
   const [purchaseBillItems, setPurchaseBillItems] = useState([]);
   const [purchasePayments, setPurchasePayments] = useState([]);
@@ -135,6 +136,14 @@ export function ProcurementProvider({ children }) {
       const { data, error } = await q;
       if (error) throw error;
       setGoodsReceivedNotes(data || []);
+
+      if (data && data.length > 0) {
+        const ids = data.map(g => g.id);
+        const { data: items } = await supabase.from('goods_received_note_items').select('*').in('grn_id', ids);
+        setGoodsReceivedNoteItems(items || []);
+      } else {
+        setGoodsReceivedNoteItems([]);
+      }
     } catch (err) {
       console.error('Error fetching GRNs:', err);
     }
@@ -308,7 +317,8 @@ export function ProcurementProvider({ children }) {
       tenant_company_id: activeOperatingCompanyId,
       created_by: authUserId,
       status: 'draft',
-      ...headerPayload
+      ...headerPayload,
+      company_id: headerPayload.customer_company_id || activeOperatingCompanyId
     };
 
     const items = (itemsPayload || []).map(item => ({
@@ -376,6 +386,7 @@ export function ProcurementProvider({ children }) {
       });
 
       if (rpcError) throw rpcError;
+      if (data && data.success === false) throw new Error(data.message || 'GRN creation failed on server');
 
       await fetchGoodsReceivedNotes(activeOperatingCompanyId);
       return { success: true, data };
@@ -416,7 +427,9 @@ export function ProcurementProvider({ children }) {
         item_code: item.item_code || item.code || '',
         quantity: Number(item.quantity) || 1,
         unit_price: Number(item.unit_price) || 0,
-        line_total: Number(item.line_total) || (Number(item.quantity) * Number(item.unit_price))
+        line_total: Number(item.line_total) || (Number(item.quantity) * Number(item.unit_price)),
+        purchase_order_item_id: item.purchase_order_item_id || null,
+        goods_received_note_item_id: item.goods_received_note_item_id || null
       }));
 
       const { data, error: rpcError } = await supabase.rpc('create_purchase_bill_with_accounting_atomic', {
@@ -425,6 +438,7 @@ export function ProcurementProvider({ children }) {
       });
 
       if (rpcError) throw rpcError;
+      if (data && data.success === false) throw new Error(data.message || 'Purchase Bill creation failed on server');
 
       await fetchPurchaseBills(activeOperatingCompanyId);
       return { success: true, data };
@@ -459,6 +473,7 @@ export function ProcurementProvider({ children }) {
       });
 
       if (rpcError) throw rpcError;
+      if (data && data.success === false) throw new Error(data.message || 'Payment recording failed on server');
 
       await Promise.all([
         fetchPurchaseBills(activeOperatingCompanyId),
@@ -483,6 +498,7 @@ export function ProcurementProvider({ children }) {
     purchaseOrders,
     purchaseOrderItems,
     goodsReceivedNotes,
+    goodsReceivedNoteItems,
     purchaseBills,
     purchaseBillItems,
     purchasePayments,
