@@ -417,3 +417,7 @@ enabled = true
 # Phase 00: keep the admin invitation endpoint behind Supabase JWT verification.
 [functions.admin-invite-user]
 verify_jwt = true
+
+# Phase 00: require Supabase JWT verification for the tenant-scoped CRM AI endpoint.
+[functions.crm-ai]
+verify_jwt = true
