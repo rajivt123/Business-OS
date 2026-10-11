@@ -8,6 +8,9 @@
 5. Added an admin invitation endpoint with tenant-scoped admin authorization and a role allowlist. It has not been runtime-tested or deployed.
 6. Added crm-ai Edge Function source. Contract: action is chat or summarize_project; tenant_id is required; tenant_company_id is optional; work_id is required for summaries; message is required for chat. The endpoint verifies the caller token, active tenant membership, company ownership within the tenant, and builds its context server-side with explicit tenant/company filters before calling GEMINI_API_KEY. It has not been runtime-tested or deployed. Frontend integration remains assigned to Antigravity.
 7. Added a migration removing observed legacy permissive policies on companies, issues, logs, and global profile reading. This is a high-impact security change: do not apply to production until isolated regression tests prove authorized tenant users retain required CRUD access and cross-tenant/anonymous reads are denied.
+8. Added a read-only company-access preflight at supabase/audits/phase00_company_access_preflight.sql. Live audit showed 68 active TEAM memberships but only 2 memberships with any can_view company grant (OWNER memberships are handled separately). Removing broad policies before reconciling access grants is likely to disrupt existing TEAM users; access mapping/backfill and testing are a prerequisite, not optional cleanup.
+9. Hardened crm-ai company scoping: non-OWNER/ADMIN callers must provide an active operating company and have an explicit user_company_access can_view grant for it. Tenant-wide AI access is restricted to OWNER/ADMIN.
+10. Hardened invitation setup to require a tenant-owned active operating company and create a matching user_company_access grant for the new membership.
 
 ## Required Edge Function secrets
 - GEMINI_API_KEY — server-side only, never VITE-prefixed.
@@ -45,3 +48,7 @@
 
 ## Release gate
 Do not merge, deploy Edge Functions, or apply migrations to production based on source review alone. Run CI/build/lint and the isolated access matrix first. Confirm credential rotation and Git-history remediation for any previously exposed password separately; removing it from the current file does not erase Git history.
+
+
+## Company access rollout gate
+The current production state has a substantial company-access coverage gap. Run the read-only preflight and reconcile intended company grants before applying the legacy-policy removal migration. Do not auto-grant every active user access to every company; use an authoritative user-to-company mapping.
