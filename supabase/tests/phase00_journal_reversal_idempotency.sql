@@ -43,11 +43,11 @@ BEGIN
  BEGIN
   PERFORM public.reverse_journal_entry_atomic(jsonb_build_object('tenant_id',t,'tenant_company_id',c,'journal_entry_id',o,'reversal_date','2026-10-03','reversal_reason','Reason A','idempotency_key','idem-exact'));
   RAISE EXCEPTION 'Expected changed date to be rejected';
- EXCEPTION WHEN raise_exception THEN IF SQLERRM='Expected changed date to be rejected' THEN RAISE; END IF; END;
+ EXCEPTION WHEN SQLSTATE '22023' THEN IF SQLERRM NOT LIKE 'IDEMPOTENCY_KEY_REUSED:%' THEN RAISE; END IF; END;
  BEGIN
   PERFORM public.reverse_journal_entry_atomic(jsonb_build_object('tenant_id',t,'tenant_company_id',c,'journal_entry_id',o,'reversal_date','2026-10-02','reversal_reason','Reason B','idempotency_key','idem-exact'));
   RAISE EXCEPTION 'Expected changed reason to be rejected';
- EXCEPTION WHEN raise_exception THEN IF SQLERRM='Expected changed reason to be rejected' THEN RAISE; END IF; END;
+ EXCEPTION WHEN SQLSTATE '22023' THEN IF SQLERRM NOT LIKE 'IDEMPOTENCY_KEY_REUSED:%' THEN RAISE; END IF; END;
 END;
 $test$;
 DROP FUNCTION public.reverse_journal_entry_atomic(jsonb);
