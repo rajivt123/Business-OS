@@ -41,17 +41,17 @@ Before applying the policy-removal migration:
 - Verify all affected UI flows and related tables, including companies, units, works, issues, logs, reminders, and profile peer visibility.
 - Confirm the intended meaning of `TEAM` membership vs legacy profile roles and role permissions.
 
-## 5. Git/release status (rechecked 2026-10-11, latest validation batch)
+## 5. Git/release status (rechecked 2026-10-11)
 
 - Security work stays on `security/phase00-remove-hardcoded-qa-credential` and draft PR #1: https://github.com/rajivt123/Business-OS/pull/1
-- Latest compare: 72 commits ahead and 0 behind `main`; no rebase/reset/force-push is indicated.
-- Vercel reported **success** for commit `d4770e95faebfe34aad04002c7d1674f39be7a28`.
-- GitHub Actions run 44 passed: Deno type-checks for `crm-ai` and `admin-invite-user`; tests for the bounded streaming body reader and invitation JSON parser; and the rate-limit migration regression against disposable PostgreSQL 17.
-- The bounded request reader now stops at 16 KiB while reading the stream, rather than buffering an arbitrarily large body first. Both AI and invitation functions use it.
-- Invitation rollback now checks cleanup results; it does not claim cleanup succeeded if membership/profile/Auth-user cleanup returns an error.
-- The rate-limit counter is capped at limit + 1 to avoid unbounded growth under repeated rejected requests. Regression test now repeats rejected requests and verifies the counter stays bounded.
+- Latest Vercel deployment for the current reviewed head is **READY**. An earlier deployment at commit `0d35e9fa7d9cbb150267efeac28f9f20bb8b329c` failed with `git_info_fail` (Vercel source metadata retrieval), while subsequent commits deployed successfully.
+- GitHub Actions run 72: Deno type-checks for `crm-ai` and `admin-invite-user`, bounded request-body tests, invite parser tests, purchase-bill integrity SQL regression, inventory adjustment maker-checker SQL regression, Form 16 access-control regression, and CRM AI rate-limit regression. Run 72 passed after correcting the Form 16 test to catch the function's explicit SQLSTATE 42501 authorization error.
+- New source-only procurement guard validates purchase-bill item tenant/company linkage, PO/GRN linkage, quantity × unit price, tax total and line total.
+- New source-only inventory adjustment guard prevents the request maker from approving their own pending adjustment. Independent approver path is covered by isolated PostgreSQL regression.
+- New source-only Form 16 access guard permits payroll managers with company access or the employee linked to the authenticated user; ordinary company members cannot generate another employee's tax preparation output. The negative authorization path is covered by isolated PostgreSQL regression.
+- The bounded request reader stops at 16 KiB while reading the stream; both AI and invitation functions use it. Invitation cleanup reports incomplete rollback honestly. The rate-limit counter is capped at limit + 1.
 - Supabase's only listed development branch is `main`, status `MIGRATIONS_FAILED`; it is not a valid isolated Supabase environment.
-- Read-only production verification confirms `public.consume_crm_ai_rate_limit(uuid,integer,integer)` and `private.crm_ai_rate_limits` do **not** exist in production. The rate-limit migration is source-only.
+- Read-only production verification confirms `public.consume_crm_ai_rate_limit(uuid,integer,integer)` and `private.crm_ai_rate_limits` do **not** exist in production. All new migrations remain source-only.
 - No paid development branch, production migration, production Edge Function deployment, membership/grant change, or PR merge was made.
 
 ## Release guardrails
