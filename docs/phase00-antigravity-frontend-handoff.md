@@ -5,11 +5,12 @@ Use this as one cohesive frontend task after the backend branch is available in 
 ## A. Replace insecure default-password user creation
 Current implementation is in src/context/CrmContext.jsx (handleAdminCreateUser) and src/components/crm/Modals.jsx (the admin user modal). It currently calls supabase.auth.signUp with a hard-coded default password and displays that password in the UI. Remove this entire flow.
 - Keep existing role selector but only permit TEAM, MANAGER, VIEWER for this invite endpoint. Do not offer ADMIN/OWNER creation here.
-- Call supabase.functions.invoke('admin-invite-user', { body: { email, role, tenant_id: activeTenantId } }) using the current authenticated Supabase client.
+- Call supabase.functions.invoke('admin-invite-user', { body: { email, role, tenant_id: activeTenantId, tenant_company_id: activeOperatingCompanyId } }) using the current authenticated Supabase client.
 - Show a clear success state saying an invitation was requested/sent; never display or generate a shared password.
 - Surface safe server error messages and preserve loading/disabled states.
 - Refresh tenant members/profiles after success. Do not create profiles or tenant_memberships directly from the browser as part of this flow.
-- Handle missing tenant_id and expired sessions gracefully.
+- Send tenant_company_id from the selected operating company; the endpoint requires it and creates a scoped user_company_access grant.
+- Handle missing tenant_id/company and expired sessions gracefully.
 
 ## B. Move both AI features to crm-ai
 Current code in src/context/CrmContext.jsx calls Gemini directly via VITE_GEMINI_API_KEY, fetches Google model lists from the browser, and sends browser-built portfolio context. Remove all direct Google Gemini calls and the VITE_GEMINI_API_KEY reference.
