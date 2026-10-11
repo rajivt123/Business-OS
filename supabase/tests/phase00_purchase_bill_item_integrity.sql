@@ -1,6 +1,5 @@
 -- Isolated regression tests for the purchase-bill line integrity trigger.
 -- Run only against disposable PostgreSQL; no production data is needed.
-BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -127,4 +126,10 @@ BEGIN
 END;
 $test$;
 
-ROLLBACK;
+DROP TABLE public.purchase_bill_items CASCADE;
+DROP TABLE public.purchase_bills CASCADE;
+DROP TABLE public.inventory_items CASCADE;
+DROP TABLE public.purchase_order_items CASCADE;
+DROP TABLE public.goods_received_note_items CASCADE;
+DROP TABLE public.goods_received_notes CASCADE;
+DROP FUNCTION public.validate_purchase_bill_item_integrity();
