@@ -183,3 +183,18 @@ These versions are recorded as applied remotely but have no matching `supabase/m
 - Several representative missing migration paths were queried through GitHub commit history and returned no historical file revisions. This does not prove no copies exist in another workspace or artifact store.
 - The new CRM AI rate-limit migration `20261011190000_phase00_crm_ai_durable_rate_limit.sql` is a new source migration and is not applied remotely.
 - No production migration, user grant, account, or business record was modified during this audit.
+
+
+## Repository recovery sweep (2026-10-11)
+
+A follow-up read-only sweep checked the repository's available refs and Git history for authentic copies of missing migrations:
+
+- Available branches are `main`, `backup/ui-experiment-before-recovery-2026-09-20`, and the current security branch.
+- The backup branch contains only five migration SQL files: versions `20260914113414`, `20260914113537`, and three files named `20260914113600`, `20260914113700`, and `20260914113800`. The last three are not the matching names for the corresponding production migration versions in the remote ledger, so they must not be renamed or treated as exact historical replacements.
+- A path-specific commit-history query for `20260913163539_add_payroll_foundation_p0.sql` returned no commits.
+- GitHub code searches for `add_payroll_foundation_p0` and `20260913110307` returned no results in the default-branch index.
+- The initial commit-history sweep is evidence that the checked repository refs do not contain an obvious recoverable copy, **not proof that no developer workspace, artifact, or other repository contains the SQL**.
+
+### Result and next safe action
+
+This sweep did not recover the missing 129 migration files. Do not infer migration bodies from names or rebuild historical migrations from the current schema alone. Continue checking user-controlled workspaces/artifacts and the repository's Git object history. In parallel, build a read-only inventory of current schema objects and dependencies, then design a reviewed baseline strategy that does not replay historical transformations or modify production migration records. Keep all database mutation and deployment blocked.
