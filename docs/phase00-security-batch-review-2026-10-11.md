@@ -54,8 +54,8 @@ Do not create empty placeholder migration files, run migration repair against pr
 - The request parser now reads the actual request bytes and rejects bodies above 16 KiB even when Content-Length is missing.
 - Added migration `20261011190000_phase00_crm_ai_durable_rate_limit.sql` with a private per-user counter and a service-role-only atomic RPC; the Edge Function enforces 10 requests per 60 seconds per authenticated user.
 - A read-only production catalog check confirmed the RPC and private table are absent from production. Do not deploy `crm-ai` before the migration is validated and applied in a disposable environment.
-- Added `supabase/tests/phase00_crm_ai_rate_limit.sql` to check grants, first ten calls, eleventh-call denial, window reset, and invalid arguments inside a rollback-only transaction. It is not yet executed; never run it against production.
-- These changes have not been tested against PostgreSQL or Deno. Verify function/table owner privileges, RPC return decoding, concurrency, window reset, and rate-limit behavior in isolation.
+- Added `supabase/tests/phase00_crm_ai_rate_limit.sql` to check grants, first ten calls, eleventh-call denial, window reset, and invalid arguments inside a rollback-only transaction. It passed in the disposable PostgreSQL 17 GitHub Actions job; never run it against production.
+- Deno type-check and disposable PostgreSQL tests have passed. Production Edge Runtime integration, RPC return decoding against Supabase, and concurrency testing with authenticated requests remain pending.
 
 ## Required next batch gates
 
@@ -79,7 +79,7 @@ Done in this batch:
 Not done:
 - No production database writes, migrations, or function deployments.
 - No user/company grants changed and no accounts deleted.
-- No isolated test passed; tests remain pending.
+- Disposable PostgreSQL migration/regression tests and Deno parser/type-check tests now pass in GitHub Actions. Supabase-specific runtime and RLS integration tests remain pending.
 - No PR merge and no frontend changes.
 
 
@@ -91,3 +91,15 @@ Not done:
 - The only Supabase development branch still reports `MIGRATIONS_FAILED`. No isolated database is currently available at zero cost through the connected Supabase branch workflow.
 - The rate-limit regression script and both Edge Function type-checks passed in GitHub Actions on commit `d777d4a5877617292758aacedc0f08bf9c458016`. No production writes, migrations, Edge Function deployments, access grants, or account changes were made.
 - The current source remains unmerged in draft PR #1. Recheck Vercel/CI for the newest head; the prior success is not evidence for commits made afterward.
+
+
+## Latest completed validation batch (2026-10-11)
+
+- Latest verified commit: `d4770e95faebfe34aad04002c7d1674f39be7a28`; Vercel status **success**; GitHub Actions run 44 passed both jobs.
+- `crm-ai` and `admin-invite-user` pass Deno type-check.
+- Unit tests pass for the 16 KiB streaming body reader and invitation JSON shape parser.
+- The request body cap now reads bounded stream chunks and cancels as soon as the payload exceeds 16 KiB; it is used by both endpoints.
+- Invitation rollback checks deletion errors and reports incomplete cleanup for administrator review instead of falsely claiming rollback succeeded.
+- Rate-limit SQL regression passes against throwaway PostgreSQL 17. The counter now caps at limit + 1, including repeated rejected requests, and tests cover that bounded behavior.
+- Production remains untouched: no migration or Edge Function deployed, no access grants or accounts changed, and no PR merge.
+- Remaining hard blockers: missing historical migration source-of-truth, failed Supabase development branch, unresolved authoritative user-to-company roster (64 active TEAM memberships lack view grants), and lack of Supabase-specific isolated Auth/Edge Function/RLS runtime tests.
