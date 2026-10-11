@@ -41,15 +41,18 @@ Before applying the policy-removal migration:
 - Verify all affected UI flows and related tables, including companies, units, works, issues, logs, reminders, and profile peer visibility.
 - Confirm the intended meaning of `TEAM` membership vs legacy profile roles and role permissions.
 
-## 5. Git/release status (rechecked 2026-10-11, latest batch)
+## 5. Git/release status (rechecked 2026-10-11, latest validation batch)
 
 - Security work stays on `security/phase00-remove-hardcoded-qa-credential` and draft PR #1: https://github.com/rajivt123/Business-OS/pull/1
-- GitHub compare before this batch's test/documentation commits reported 47 commits ahead and 0 behind `main`. No rebase/reset/force-push is indicated by that comparison.
-- Vercel reported **success** for commit `d777d4a5877617292758aacedc0f08bf9c458016`. GitHub Actions also passed Deno type-checks for `crm-ai` and `admin-invite-user`, plus the disposable PostgreSQL rate-limit regression. These checks do not validate production RLS or the entire live schema.
-- Supabase's only listed development branch is `main`, status `MIGRATIONS_FAILED`; it is not a valid isolated test environment.
-- Read-only production verification confirms `public.consume_crm_ai_rate_limit(uuid,integer,integer)` and `private.crm_ai_rate_limits` do **not** exist in production. The rate-limit migration is source-only and must be applied only in an isolated disposable database after recovery.
-- A disposable PostgreSQL regression script at `supabase/tests/phase00_crm_ai_rate_limit.sql` passed in GitHub Actions on commit `d777d4a5877617292758aacedc0f08bf9c458016`. The workflow applied the migration to a throwaway PostgreSQL 17 service and passed the rollback-only grants, 10/11 request, window-reset, and invalid-argument checks. Never run it against production.
-- No paid development branch, production migration, production Edge Function deployment, membership/grant change, or PR merge is authorized.
+- Latest compare: 72 commits ahead and 0 behind `main`; no rebase/reset/force-push is indicated.
+- Vercel reported **success** for commit `d4770e95faebfe34aad04002c7d1674f39be7a28`.
+- GitHub Actions run 44 passed: Deno type-checks for `crm-ai` and `admin-invite-user`; tests for the bounded streaming body reader and invitation JSON parser; and the rate-limit migration regression against disposable PostgreSQL 17.
+- The bounded request reader now stops at 16 KiB while reading the stream, rather than buffering an arbitrarily large body first. Both AI and invitation functions use it.
+- Invitation rollback now checks cleanup results; it does not claim cleanup succeeded if membership/profile/Auth-user cleanup returns an error.
+- The rate-limit counter is capped at limit + 1 to avoid unbounded growth under repeated rejected requests. Regression test now repeats rejected requests and verifies the counter stays bounded.
+- Supabase's only listed development branch is `main`, status `MIGRATIONS_FAILED`; it is not a valid isolated Supabase environment.
+- Read-only production verification confirms `public.consume_crm_ai_rate_limit(uuid,integer,integer)` and `private.crm_ai_rate_limits` do **not** exist in production. The rate-limit migration is source-only.
+- No paid development branch, production migration, production Edge Function deployment, membership/grant change, or PR merge was made.
 
 ## Release guardrails
 
