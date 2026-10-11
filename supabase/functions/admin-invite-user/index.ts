@@ -44,6 +44,9 @@ Deno.serve(async (req: Request) => {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedTenantId)) {
     return json({ error: "A valid tenant_id is required" }, 400);
   }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedCompanyId)) {
+    return json({ error: "A valid tenant_company_id is required" }, 400);
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     return json({ error: "Enter a valid email address" }, 400);
   }
