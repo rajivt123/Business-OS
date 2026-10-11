@@ -58,10 +58,10 @@ Read-only inspection found six active assignment rows for rajivk@metrixengineers
 | project_assignments | `4ce6136f-f063-4ed1-8c26-fecd98e172e8` | Hydrant System_Phase 2 | member | 2026-09-20 15:43:05 |
 | stage_assignments | `79ff656a-bbc3-4501-8de8-386e42575032` | Hydrant System_Phase 2 | responsible | 2026-09-20 15:43:20 |
 | project_assignments | `1f208a11-2e51-42eb-9b19-96490f84a21d` | Test_PO_1 | member | 2026-09-25 19:25:51 |
-| task_assignees | `9df4e3c6-3249-4aac-9548-18e9d31bf6db` | Task row (no work_id column) | assignee | 2026-09-25 17:33:40 |
-| task_assignees | `fb7f805a-99a1-48d1-b961-d2a99554419b` | Task row (no work_id column) | assignee | 2026-09-25 19:26:21 |
+| task_assignees | `9df4e3c6-3249-4aac-9548-18e9d31bf6db` | **Test** — Hydrant System_Phase 2 | assignee | 2026-09-25 17:33:40 |
+| task_assignees | `fb7f805a-99a1-48d1-b961-d2a99554419b` | **Test 10** — Test_PO_1 | assignee | 2026-09-25 19:26:21 |
 
-The work names include `Test_PO_1`, which is a signal to inspect data provenance, but the two other named works and the active assignment statuses mean these records cannot safely be dismissed as test data from naming alone. Task assignee rows do not carry a work_id in this schema, so their parent task relationship needs a separate read-only join before concluding which work they relate to. No grant or assignment was changed.
+The work names include `Test_PO_1`, which is a signal to inspect data provenance, but the two other named works and the active assignment statuses mean these records cannot safely be dismissed as test data from naming alone. Task assignee rows carry task_id; a read-only join to `tasks` confirmed the first is task `Test` on `Hydrant System_Phase 2`, and the second is task `Test 10` on `Test_PO_1`. The test-like names strengthen the case for provenance review, but do not prove these rows are safe to delete or that the other assignment rows are invalid. No grant or assignment was changed.
 
 ## Likely test-account contamination
 
@@ -83,7 +83,7 @@ The branch migration 20261011180000_phase00_remove_legacy_permissive_crm_policie
 ## Safe next steps
 
 1. Use the active operating-company assignments UI/records and the business owner’s roster to reconcile the seven unresolved real-looking accounts.
-2. Review the six assignment rows associated with Rajiv Fire Systems Pvt Ltd; inspect task parent relationships and confirm whether they are valid assignments or legacy/default records.
+2. Review the six assignment rows associated with Rajiv Fire Systems Pvt Ltd, including tasks `Test` and `Test 10`; confirm whether they are valid assignments or legacy/default records.
 3. Inspect project_assignments, stage_assignments, and task_assignees by exact company UUID for the three assigned users; compare to user_company_access UUIDs.
 4. Review probable test users for retirement in a separate cleanup plan; do not bundle account deletion with RLS hardening.
 5. Build isolated test fixtures for the access matrix; do not create fake business transactions in production.
