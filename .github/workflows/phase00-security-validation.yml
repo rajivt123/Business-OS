@@ -2,10 +2,13 @@ name: Phase 00 Security Validation
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - security/phase00-remove-hardcoded-qa-credential
   push:
     branches:
       - security/phase00-remove-hardcoded-qa-credential
+      - fix/approval-snapshot-conflict
 
 permissions:
   contents: read
