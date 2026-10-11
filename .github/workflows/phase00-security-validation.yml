@@ -67,6 +67,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_purchase_bill_item_integrity.sql
       - name: Run inventory adjustment maker-checker regression on disposable PostgreSQL
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_inventory_adjustment_maker_checker.sql
+      - name: Run Form 16 access-control regression on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_payroll_form16_access_guard.sql
       - name: Apply CRM AI rate-limit migration to disposable PostgreSQL
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011190000_phase00_crm_ai_durable_rate_limit.sql
       - name: Run CRM AI rate-limit regression checks
