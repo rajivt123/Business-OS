@@ -146,6 +146,15 @@ export default function ApprovalCenter() {
       if (selectedRequest?.id === request.id) {
         setSelectedRequest(res.request || null);
       }
+    } else if (res.conflict) {
+      const fields = Array.isArray(res.conflicts) && res.conflicts.length
+        ? ` Conflicting fields: ${res.conflicts.join(', ')}.`
+        : '';
+      setActionError(`${res.error || 'Employee data changed after this request was submitted.'}${fields}`);
+      setActionModal(null);
+      setSelectedRequest(current => current?.id === request.id
+        ? { ...current, status: res.status || 'failed' }
+        : current);
     } else {
       setActionError(res.error || `Failed to ${type} request.`);
     }
@@ -173,6 +182,14 @@ export default function ApprovalCenter() {
             <span>{actionSuccess}</span>
           </div>
           <button onClick={() => setActionSuccess(null)}><X size={14} /></button>
+        </div>
+      )}
+
+      {!actionModal && actionError && (
+        <div className="p-3.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-800 text-xs font-bold flex items-center gap-2">
+          <AlertTriangle size={16} />
+          <span>{actionError}</span>
+          <button className="ml-auto" onClick={() => setActionError(null)} aria-label="Dismiss error"><X size={14} /></button>
         </div>
       )}
 
