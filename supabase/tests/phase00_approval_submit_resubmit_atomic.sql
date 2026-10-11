@@ -49,7 +49,9 @@ BEGIN
  INSERT INTO public.tenant_companies VALUES(c,t,'active');
  result:=public.submit_approval_request_atomic(jsonb_build_object(
    'tenant_id',t,'tenant_company_id',c,'request_type','general','title','Test request',
-   'payload',jsonb_build_object('version',1),'priority','normal'
+   'payload',jsonb_build_object('version',1),
+   'current_snapshot',jsonb_build_object('mobile','111'),
+   'priority','normal'
  ));
  req:=(result->>'request_id')::uuid;
  IF result->>'status'<>'pending_approval' OR req IS NULL THEN RAISE EXCEPTION 'Submit failed: %',result; END IF;
@@ -63,6 +65,7 @@ BEGIN
  SELECT status INTO step_status FROM public.approval_request_steps WHERE request_id=req;
  IF req_status<>'pending_approval' OR step_status<>'pending' THEN RAISE EXCEPTION 'Resubmit did not reset state'; END IF;
  IF (SELECT payload->>'version' FROM public.approval_requests WHERE id=req)<>'2' THEN RAISE EXCEPTION 'Resubmit payload not updated'; END IF;
+ IF (SELECT current_snapshot FROM public.approval_requests WHERE id=req)<>jsonb_build_object('mobile','111') THEN RAISE EXCEPTION 'Resubmit unexpectedly replaced original Employee Master snapshot'; END IF;
  IF (SELECT count(*) FROM public.approval_request_actions WHERE request_id=req AND action='resubmitted')<>1 THEN RAISE EXCEPTION 'Resubmission action missing'; END IF;
 END;
 $test$;
