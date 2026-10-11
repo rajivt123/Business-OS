@@ -13,6 +13,11 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 function cleanText(value: unknown, max = 12000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+function relatedName(value: unknown) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate || typeof candidate !== "object" || !("name" in candidate)) return "";
+  return cleanText((candidate as { name?: unknown }).name, 180);
+}
 function boundedJsonText(value: unknown, max = 1200) {
   if (value == null) return "";
   let text: string;
@@ -121,7 +126,7 @@ Deno.serve(async (req: Request) => {
     const { data: logs, error: logsError } = await logsQuery;
     if (logsError) return respond({ error: "Unable to load project updates" }, 500);
     if (!logs?.length) return respond({ error: "No project updates are available to summarize" }, 422);
-    context = JSON.stringify({ project: { title: cleanText(work.title, 180), client: cleanText(work.companies?.name, 180), unit: cleanText(work.units?.name, 180), po_number: cleanText(work.po_number, 100), wo_number: cleanText(work.wo_number, 100), stages: boundedJsonText(work.stages, 1500), boq_attached: Boolean(work.boq_url) },
+    context = JSON.stringify({ project: { title: cleanText(work.title, 180), client: relatedName(work.companies), unit: relatedName(work.units), po_number: cleanText(work.po_number, 100), wo_number: cleanText(work.wo_number, 100), stages: boundedJsonText(work.stages, 1500), boq_attached: Boolean(work.boq_url) },
       updates: logs.map((l) => ({ stage: cleanText(l.stage_name, 120), content: cleanText(l.content, 900), date: l.created_at })) });
   } else {
     let worksQuery = admin.from("works").select("id,title,po_number,wo_number,stages,boq_url,tenant_company_id,companies(name),units(name)").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(100);
