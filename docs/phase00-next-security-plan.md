@@ -41,14 +41,15 @@ Before applying the policy-removal migration:
 - Verify all affected UI flows and related tables, including companies, units, works, issues, logs, reminders, and profile peer visibility.
 - Confirm the intended meaning of `TEAM` membership vs legacy profile roles and role permissions.
 
-## 5. Git/release status (rechecked 2026-10-11)
+## 5. Git/release status (rechecked 2026-10-11, latest batch)
 
 - Security work stays on `security/phase00-remove-hardcoded-qa-credential` and draft PR #1: https://github.com/rajivt123/Business-OS/pull/1
-- GitHub compare currently reports the security branch **45 commits ahead and 0 behind** `main`; no rebase/reset/force-push is needed to resolve divergence based on this current compare.
-- PR #1 is open, draft, unmerged, with 21 changed files. Its current head is `730e1b644076fbe8c400d5904419ceaad14aa23c`.
-- The Vercel check for that exact head reports **success**. This is a deployment/build signal only; it does not establish that SQL, RLS behavior, Edge Functions, or tenant isolation passed runtime tests.
-- Supabase has one listed branch, named `main`, with status `MIGRATIONS_FAILED`; no paid development branch will be created under the current no-cost constraint.
-- No production migration or Edge Function deployment is authorized by this plan. Keep PR #1 in draft.
+- GitHub compare before this batch's test/documentation commits reported 47 commits ahead and 0 behind `main`. No rebase/reset/force-push is indicated by that comparison.
+- The previously successful Vercel build was for the prior code head `253a10d89ef6f020dadc233680189c75c58c7de8`; it does not validate this batch's later commits, SQL, RLS, or Edge Functions. Recheck CI after the new commits.
+- Supabase's only listed development branch is `main`, status `MIGRATIONS_FAILED`; it is not a valid isolated test environment.
+- Read-only production verification confirms `public.consume_crm_ai_rate_limit(uuid,integer,integer)` and `private.crm_ai_rate_limits` do **not** exist in production. The rate-limit migration is source-only and must be applied only in an isolated disposable database after recovery.
+- A disposable-database regression script was added at `supabase/tests/phase00_crm_ai_rate_limit.sql`. It has not been run. It explicitly warns against production execution and rolls back test writes.
+- No paid development branch, production migration, production Edge Function deployment, membership/grant change, or PR merge is authorized.
 
 ## Release guardrails
 
