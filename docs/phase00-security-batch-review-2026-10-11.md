@@ -4,8 +4,8 @@
 
 - GitHub PR: https://github.com/rajivt123/Business-OS/pull/1
 - Branch: `security/phase00-remove-hardcoded-qa-credential`
-- Reviewed head before this batch: `b7ff8713d3e7345fa4e8247b045d8d2f9dd62107`
-- Latest Vercel status on that head: **success**. This is a frontend/Vercel check only; it does not type-check or execute Supabase Edge Functions.
+- The last previously verified code head was `253a10d89ef6f020dadc233680189c75c58c7de8`; a regression-test file and documentation updates were committed after that verification.
+- Vercel reported **success** for the prior code head only. The newly added test/documentation commits have not been independently rechecked by Vercel. A Vercel build does not type-check or execute Supabase Edge Functions.
 - PR is still **draft** and was reported mergeable after the branch-history reconciliation.
 - Production Supabase project is healthy, but its only listed development branch reports `MIGRATIONS_FAILED`. Do not treat that branch as a valid isolated test environment until the failure is diagnosed.
 - Production Edge Function inventory does **not** contain `admin-invite-user` or `crm-ai`. Their checked-in code is not deployed or runtime-tested.
@@ -23,7 +23,7 @@ This batch added:
 - A 15-second timeout on the outbound Gemini request.
 - A limit of eight open issue titles per project and 60 pending reminders in the final AI context.
 
-These are source-level changes only. They have **not** been Deno type-checked or runtime-tested. The Content-Length check is not a complete streamed-body limit when clients omit the header. Server-side rate limiting is still missing and remains a release blocker for broad use. The current service-role query strategy and company/tenant isolation still require tests with real JWTs in an isolated project.
+These are source-level changes only. They have **not** been Deno type-checked or runtime-tested. The implementation now reads `req.arrayBuffer()` and rejects bodies over 16 KiB even when Content-Length is absent. Runtime/memory behavior still needs validation in the Edge Runtime. A durable server-side rate limiter has now been added in source, but its SQL migration and RPC are not deployed or runtime-tested. The RPC/table must exist before `crm-ai` can succeed; fail-closed behavior currently returns 503 if the RPC is missing. The current service-role query strategy and company/tenant isolation still require tests with real JWTs in an isolated project.
 
 ### `admin-invite-user`
 
@@ -53,7 +53,9 @@ Do not create empty placeholder migration files, run migration repair against pr
 
 - The request parser now reads the actual request bytes and rejects bodies above 16 KiB even when Content-Length is missing.
 - Added migration `20261011190000_phase00_crm_ai_durable_rate_limit.sql` with a private per-user counter and a service-role-only atomic RPC; the Edge Function enforces 10 requests per 60 seconds per authenticated user.
-- These changes are not deployed and have not been tested against PostgreSQL or Deno. Verify function/table owner privileges, RPC return decoding, concurrency, window reset, and rate-limit behavior in isolation.
+- A read-only production catalog check confirmed the RPC and private table are absent from production. Do not deploy `crm-ai` before the migration is validated and applied in a disposable environment.
+- Added `supabase/tests/phase00_crm_ai_rate_limit.sql` to check grants, first ten calls, eleventh-call denial, window reset, and invalid arguments inside a rollback-only transaction. It is not yet executed; never run it against production.
+- These changes have not been tested against PostgreSQL or Deno. Verify function/table owner privileges, RPC return decoding, concurrency, window reset, and rate-limit behavior in isolation.
 
 ## Required next batch gates
 
@@ -79,3 +81,13 @@ Not done:
 - No user/company grants changed and no accounts deleted.
 - No isolated test passed; tests remain pending.
 - No PR merge and no frontend changes.
+
+
+## Latest read-only verification addendum (2026-10-11)
+
+- Production migration ledger currently ends at `20261004120141`; the new CRM AI rate-limit migration is not applied.
+- Production catalog confirms no `public.consume_crm_ai_rate_limit(uuid,integer,integer)` function and no `private.crm_ai_rate_limits` table.
+- Active TEAM company-access coverage remains unchanged: 66 active TEAM memberships, 2 with a view grant, 64 without one. This remains a blocker to removing broad CRM policies.
+- The only Supabase development branch still reports `MIGRATIONS_FAILED`. No isolated database is currently available at zero cost through the connected Supabase branch workflow.
+- The rate-limit regression script is committed but not executed. No production writes, migrations, Edge Function deployments, access grants, or account changes were made.
+- The current source remains unmerged in draft PR #1. Recheck Vercel/CI for the newest head; the prior success is not evidence for commits made afterward.
