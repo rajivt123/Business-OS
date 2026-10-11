@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { parseInviteRequestBody } from "../_shared/invite-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,25 +32,16 @@ Deno.serve(async (req: Request) => {
   const callerId = claimsData?.claims?.sub;
   if (claimsError || typeof callerId !== "string") return json({ error: "Invalid or expired session" }, 401);
 
-  // Enforce a real byte limit rather than trusting Content-Length, which clients can omit.
+  // Enforce the body limit and reject non-object JSON before reading any fields.
   let rawBody: ArrayBuffer;
   try {
     rawBody = await req.arrayBuffer();
   } catch {
     return json({ error: "Unable to read request body" }, 400);
   }
-  if (rawBody.byteLength > 16_384) return json({ error: "Request body exceeds 16 KiB" }, 413);
-
-  let parsedBody: unknown;
-  try {
-    parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
-  } catch {
-    return json({ error: "Invalid JSON body" }, 400);
-  }
-  if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
-    return json({ error: "Request body must be a JSON object" }, 400);
-  }
-  const body = parsedBody as { email?: unknown; role?: unknown; tenant_id?: unknown; tenant_company_id?: unknown };
+  const parsed = parseInviteRequestBody(rawBody);
+  if (!parsed.ok) return json({ error: parsed.error }, parsed.status);
+  const body = parsed.body;
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const requestedTenantId = typeof body.tenant_id === "string" ? body.tenant_id.trim() : "";
