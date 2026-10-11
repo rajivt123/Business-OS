@@ -31,17 +31,28 @@ These operations can partially succeed and can be bypassed by direct API request
 5. Preserve `apply_employee_change_request_atomic(uuid)` as the controlled final application path, but ensure only the final approved transition can invoke it and avoid a gap between approval and application.
 6. Update `ApprovalContext.jsx` only after RPC signatures and response shapes are fixed and tested. Keep fetching reads, move all writes to RPC calls.
 
-## Journal reversal: confirmed idempotency defect
+## Journal reversal: source-only hardening implemented; broader tests still required
 
-Live `public.reverse_journal_entry_atomic(jsonb)` looks up an existing journal entry by `tenant_company_id` and `idempotency_key` and immediately returns its ID with `idempotent: true`. It does not compare the existing row's `request_hash` with the requested original journal entry, reversal date, narration, or voucher number. The unique-violation retry path has the same behavior. Reusing a key for a different reversal can therefore return an unrelated existing reversal as if it matched.
+The live `public.reverse_journal_entry_atomic(jsonb)` previously returned any existing row matching company and idempotency key without validating the request. The source-only replacement now compares the original entry, source type, date and supplied narration/reason; it serializes requests for the same original entry before looking up the key and checks the unique-conflict path. It retains the existing authenticated/service-role execution model.
 
-The current request hash includes a generated voucher number when the caller omits one, so retries need a canonical hash design that does not change because a server-generated default changes. Before replacing the function:
-- inspect the exact unique index/constraint and current caller payload;
-- define canonical request fields and stable defaults;
-- reject a key collision when the stored request hash does not match;
-- make the normal and unique-violation paths perform the same hash comparison;
-- preserve legacy rows safely (do not assume their hash format matches a new format);
-- add disposable-PostgreSQL tests for exact retry, changed original ID, changed date, changed narration, concurrent same-key requests, and legacy rows.
+Regression file: `supabase/tests/phase00_journal_reversal_idempotency.sql`. It covers an exact retry and rejects changed date/reason using disposable PostgreSQL. It does **not** yet prove simultaneous multi-session concurrency or every legacy-row case. Because older production reversals may have ignored the caller's `reversal_reason`, ambiguous legacy retries should fail closed rather than be assumed equivalent.
+
+## Approval RPC batch: source-only implementation
+
+Added:
+- `public.process_approval_request_action_atomic(uuid,text,text)`: row-locks the request and current step; checks tenant/company scope, manager or explicit assignment, maker-checker, comments for reject/return, valid status, multi-step advancement and action-history insertion in one transaction. Final employee-change application is invoked inside the same transaction and failure rolls back the approval transition.
+- `public.submit_approval_request_atomic(jsonb)`: checks caller tenant/company scope, selects an active company/request-type workflow, snapshots its ordered steps or creates a fallback manager step, and writes the submission history atomically.
+- `public.resubmit_approval_request_atomic(uuid,jsonb)`: permits only the original requester to resubmit a returned request, resets steps and records the action atomically.
+
+Disposable PostgreSQL regressions:
+- `supabase/tests/phase00_approval_action_atomic.sql`: maker-checker denial, unassigned-actor denial, valid multi-step advancement and action-history write.
+- `supabase/tests/phase00_approval_submit_resubmit_atomic.sql`: fallback submission, request/step state, history and resubmission reset.
+
+**Important rollout gap:** `src/context/ApprovalContext.jsx` still performs direct table writes. These RPCs are not yet integrated into the UI, and direct table-write privileges/policies have intentionally not been revoked. Do not treat approval writes as secured end-to-end until Antigravity switches all submit/action/resubmit/withdraw paths to these RPCs, UI integration tests pass, and direct DML is restricted afterward.
+
+## Current validation state
+
+The isolated PostgreSQL CI suite includes the journal reversal and approval RPC regressions. See the current GitHub Actions run for the exact commit status. These tests are useful contract/regression checks, not a substitute for an isolated Supabase Auth/RLS integration environment or the complete frontend workflow.
 
 ## Release and safety constraints
 
