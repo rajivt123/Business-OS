@@ -5,7 +5,7 @@
 - GitHub PR: https://github.com/rajivt123/Business-OS/pull/1
 - Branch: `security/phase00-remove-hardcoded-qa-credential`
 - The last previously verified code head was `253a10d89ef6f020dadc233680189c75c58c7de8`; a regression-test file and documentation updates were committed after that verification.
-- Vercel reported **success** for the prior code head only. The newly added test/documentation commits have not been independently rechecked by Vercel. A Vercel build does not type-check or execute Supabase Edge Functions.
+- Vercel reported **success** for commit `d777d4a5877617292758aacedc0f08bf9c458016`. GitHub Actions also passed Deno type-checks for `crm-ai` and `admin-invite-user`, plus the disposable PostgreSQL rate-limit regression. These checks do not validate production RLS or the entire live schema.
 - PR is still **draft** and was reported mergeable after the branch-history reconciliation.
 - Production Supabase project is healthy, but its only listed development branch reports `MIGRATIONS_FAILED`. Do not treat that branch as a valid isolated test environment until the failure is diagnosed.
 - Production Edge Function inventory does **not** contain `admin-invite-user` or `crm-ai`. Their checked-in code is not deployed or runtime-tested.
@@ -89,5 +89,5 @@ Not done:
 - Production catalog confirms no `public.consume_crm_ai_rate_limit(uuid,integer,integer)` function and no `private.crm_ai_rate_limits` table.
 - Active TEAM company-access coverage remains unchanged: 66 active TEAM memberships, 2 with a view grant, 64 without one. This remains a blocker to removing broad CRM policies.
 - The only Supabase development branch still reports `MIGRATIONS_FAILED`. No isolated database is currently available at zero cost through the connected Supabase branch workflow.
-- The rate-limit regression script is committed but not executed. No production writes, migrations, Edge Function deployments, access grants, or account changes were made.
+- The rate-limit regression script and both Edge Function type-checks passed in GitHub Actions on commit `d777d4a5877617292758aacedc0f08bf9c458016`. No production writes, migrations, Edge Function deployments, access grants, or account changes were made.
 - The current source remains unmerged in draft PR #1. Recheck Vercel/CI for the newest head; the prior success is not evidence for commits made afterward.
