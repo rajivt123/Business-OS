@@ -63,6 +63,8 @@ jobs:
           CREATE ROLE authenticated NOLOGIN;
           CREATE ROLE service_role NOLOGIN;
           SQL
+      - name: Run purchase-bill inner RPC privilege regression on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_purchase_bill_inner_rpc_lockdown.sql
       - name: Run purchase-bill integrity regression on disposable PostgreSQL
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_purchase_bill_item_integrity.sql
       - name: Run inventory adjustment maker-checker regression on disposable PostgreSQL
