@@ -1,6 +1,6 @@
 # Phase 00 — Isolated Security Validation Matrix
 
-Status: TEST SPECIFICATION ONLY; no production changes authorized. No isolated tests have passed yet.
+Status: TEST SPECIFICATION ONLY; no production changes authorized. No isolated tests have passed yet. Production has 131 recorded migration versions but GitHub main contains only 7 matching SQL files; 124 versions are missing locally. Supabase branch automation reports `Remote migration versions not found in local migrations directory`.
 
 ## Safety boundary
 - Run only against a disposable Supabase branch/project with synthetic users and records.
@@ -57,6 +57,9 @@ Use a fake Gemini endpoint or disposable key with strict cost limits.
 10. Gemini 429/5xx/timeout/empty response returns bounded safe errors; no secrets/raw provider payloads.
 11. Add and test server-side rate limiting and request/output limits before broad use; these are current release gaps.
 12. Audit every service-role query for explicit tenant/company scope and safe joins.
+
+13. crm-ai actual-body-size guard rejects a body larger than 16 KiB even without Content-Length; malformed JSON returns 400.
+14. crm-ai durable limiter allows 10 calls in a 60-second window, rejects the 11th with 429, resets after the window, handles concurrent calls atomically, and fails closed with 503 if the limiter RPC is unavailable.
 
 ## D. Migration checks
 
