@@ -1,6 +1,6 @@
 # Phase 00 — Isolated Security Validation Matrix
 
-Status: TEST SPECIFICATION ONLY; no production changes authorized.
+Status: TEST SPECIFICATION ONLY; no production changes authorized. No isolated tests have passed yet.
 
 ## Safety boundary
 - Run only against a disposable Supabase branch/project with synthetic users and records.
@@ -78,8 +78,11 @@ Use a fake Gemini endpoint or disposable key with strict cost limits.
 
 ## E. Git/release gates
 - PR #1 remains draft.
-- PR currently reports mergeable=false and branch divergence from main. Inspect the main-only commit and reconcile without force-push/reset or losing work.
-- Re-run Vercel after the latest documentation commit; earlier green status does not validate this head.
+- PR branch history was reconciled without force-push/reset; PR #1 currently reports mergeable=true and remains draft.
+- Vercel succeeded for commit b7ff8713d3e7345fa4e8247b045d8d2f9dd62107. A later CRM AI source-hardening commit and this matrix/doc update require fresh checks on the newest head.
+- The only listed Supabase development branch currently reports MIGRATIONS_FAILED; it is not a valid isolated test environment until diagnosed.
+- Production Edge Function inventory does not include admin-invite-user or crm-ai; source-only functions are not deployed/runtime-tested.
+- crm-ai source now has field/context bounds, a Content-Length guard, and a 15-second Gemini timeout, but lacks durable server-side rate limiting and a complete streamed-body cap. Deno type-check and runtime tests remain required.
 - Run formatting/type checks and Deno type checks for both Edge Functions in a reproducible environment.
 - Do not report tests passed without execution evidence.
 - Resolve authoritative user/company roster and rajivk assignment mismatch before policy removal.
