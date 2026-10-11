@@ -22,9 +22,9 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check CRM AI
-        run: deno check --no-lock supabase/functions/crm-ai/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/crm-ai/index.ts
       - name: Type-check invitation function
-        run: deno check --no-lock supabase/functions/admin-invite-user/index.ts
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/admin-invite-user/index.ts
 
   crm-ai-rate-limit-sql:
     name: CRM AI rate-limit migration regression
