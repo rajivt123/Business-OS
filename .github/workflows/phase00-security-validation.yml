@@ -1,0 +1,83 @@
+name: Phase 00 Security Validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - security/phase00-remove-hardcoded-qa-credential
+
+permissions:
+  contents: read
+
+jobs:
+  edge-function-typecheck:
+    name: Edge Function type-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check CRM AI
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/crm-ai/index.ts
+      - name: Type-check invitation function
+        run: deno check --node-modules-dir=auto --no-lock supabase/functions/admin-invite-user/index.ts
+      - name: Test bounded request body reader
+        run: deno test --node-modules-dir=auto --no-lock supabase/functions/_shared/bounded-request-body_test.ts
+      - name: Test invitation request parser
+        run: deno test --node-modules-dir=auto --no-lock supabase/functions/_shared/invite-request_test.ts
+
+  database-security-regressions:
+    name: Database security regression tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: business_os_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d business_os_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: business_os_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Create Supabase API roles for local SQL validation
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          SQL
+      - name: Run purchase-bill inner RPC privilege regression on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_purchase_bill_inner_rpc_lockdown.sql
+      - name: Run purchase-bill integrity regression on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_purchase_bill_item_integrity.sql
+      - name: Run inventory adjustment maker-checker regression on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_inventory_adjustment_maker_checker.sql
+      - name: Run Form 16 access-control regression on disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_payroll_form16_access_guard.sql
+      - name: Run journal reversal idempotency regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_journal_reversal_idempotency.sql
+      - name: Run atomic approval action regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_approval_action_atomic.sql
+      - name: Run approval submit/resubmit regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_approval_submit_resubmit_atomic.sql
+      - name: Apply CRM AI rate-limit migration to disposable PostgreSQL
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011190000_phase00_crm_ai_durable_rate_limit.sql
+      - name: Run CRM AI rate-limit regression checks
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_crm_ai_rate_limit.sql

@@ -18,7 +18,7 @@ export function ApprovalProvider({ children }) {
   } = crmContext;
 
   const employeeContext = useEmployee() || {};
-  const { employees = [], fetchEmployees } = employeeContext;
+  const { fetchEmployees } = employeeContext;
 
   const authUserId = session?.user?.id || currentUser?.id;
 
@@ -103,28 +103,7 @@ export function ApprovalProvider({ children }) {
     }
   }, [authUserId, activeOperatingCompanyId, fetchWorkflows, fetchRequests]);
 
-  // Helper: Record an immutable action in approval_request_actions
-  const recordAction = async ({ requestId, action, fromStatus, toStatus, comments = null, metadata = null }) => {
-    try {
-      const payload = {
-        tenant_id: tenantId || null,
-        tenant_company_id: activeOperatingCompanyId || null,
-        request_id: requestId,
-        action,
-        from_status: fromStatus,
-        to_status: toStatus,
-        actor_id: authUserId,
-        comments,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        created_at: new Date().toISOString()
-      };
-      await supabase.from('approval_request_actions').insert([payload]);
-    } catch (err) {
-      console.error('Error recording approval action:', err);
-    }
-  };
-
-  // 3. Create & Submit Request (Supports Employee Change and future request types)
+  // 3. Create & Submit Request via Backend Atomic RPC: submit_approval_request_atomic(jsonb)
   const createAndSubmitRequest = async ({
     request_type,
     subject_employee_id,
@@ -134,258 +113,314 @@ export function ApprovalProvider({ children }) {
     description = '',
     payload,
     current_snapshot,
-    priority = 'normal'
+    priority = 'normal',
+    workflow_id = null,
+    request_number = null
   }) => {
     if (!authUserId) return { success: false, error: 'Authentication required to submit request.' };
+    if (!request_type) return { success: false, error: 'request_type is required.' };
 
     try {
-      // Generate safe request number: e.g. EMP-CHG-100293
-      const prefix = request_type === 'employee_change' ? 'EMP-CHG' : 'REQ';
-      const randomPart = Math.floor(100000 + Math.random() * 900000);
-      const requestNumber = `${prefix}-${randomPart}`;
+      setIsLoading(true);
 
-      // Resolve matching workflow
-      const matchedWf = workflows.find(w => w.request_type === request_type && (w.tenant_company_id === activeOperatingCompanyId || !w.tenant_company_id));
-      const matchedSteps = matchedWf ? workflowSteps.filter(s => s.approval_workflow_id === matchedWf.id).sort((a, b) => a.step_order - b.step_order) : [];
+      // Parse payload to JSON object
+      let parsedPayload = {};
+      if (payload) {
+        if (typeof payload === 'string') {
+          try {
+            parsedPayload = JSON.parse(payload);
+          } catch {
+            parsedPayload = {};
+          }
+        } else if (typeof payload === 'object') {
+          parsedPayload = payload;
+        }
+      }
 
-      const requestPayload = {
+      // Parse current snapshot to JSON object/null
+      let parsedSnapshot = null;
+      if (current_snapshot) {
+        if (typeof current_snapshot === 'string') {
+          try {
+            parsedSnapshot = JSON.parse(current_snapshot);
+          } catch {
+            parsedSnapshot = null;
+          }
+        } else if (typeof current_snapshot === 'object') {
+          parsedSnapshot = current_snapshot;
+        }
+      }
+
+      // Request number generation matching existing UI convention if not supplied
+      let generatedReqNum = request_number;
+      if (!generatedReqNum) {
+        const prefix = request_type === 'employee_change' ? 'EMP-CHG' : 'REQ';
+        const randomPart = Math.floor(100000 + Math.random() * 900000);
+        generatedReqNum = `${prefix}-${randomPart}`;
+      }
+
+      // Resolve matching workflow if not explicitly provided
+      let resolvedWorkflowId = workflow_id || null;
+      if (!resolvedWorkflowId && workflows.length > 0) {
+        const matchedWf = workflows.find(
+          w => w.request_type === request_type &&
+               (w.tenant_company_id === activeOperatingCompanyId || !w.tenant_company_id)
+        );
+        if (matchedWf) {
+          resolvedWorkflowId = matchedWf.id;
+        }
+      }
+
+      const submissionPayload = {
         tenant_id: tenantId || null,
         tenant_company_id: activeOperatingCompanyId || null,
         request_type,
-        request_number: requestNumber,
-        requested_by: authUserId,
+        title: title || `Request ${generatedReqNum}`,
+        description: description || null,
+        payload: parsedPayload,
+        current_snapshot: parsedSnapshot,
         subject_employee_id: subject_employee_id || null,
-        entity_type,
+        entity_type: entity_type || (request_type === 'employee_change' ? 'employee' : null),
         entity_id: entity_id || subject_employee_id || null,
-        title: title || `Request ${requestNumber}`,
-        description,
-        payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
-        current_snapshot: typeof current_snapshot === 'string' ? current_snapshot : JSON.stringify(current_snapshot),
-        status: 'pending_approval',
-        priority,
-        workflow_id: matchedWf?.id || null,
-        current_step_order: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        priority: priority || 'normal',
+        workflow_id: resolvedWorkflowId,
+        request_number: generatedReqNum
       };
 
-      const { data: newReq, error: reqErr } = await supabase.from('approval_requests').insert([requestPayload]).select('*').single();
-      if (reqErr) throw reqErr;
+      const { data, error: rpcErr } = await supabase.rpc('submit_approval_request_atomic', {
+        p_payload: submissionPayload
+      });
 
-      // Snapshot workflow steps into approval_request_steps
-      if (matchedSteps.length > 0) {
-        const stepsToInsert = matchedSteps.map((s, idx) => ({
-          tenant_id: tenantId || null,
-          tenant_company_id: activeOperatingCompanyId || null,
-          request_id: newReq.id,
-          step_order: idx + 1,
-          approver_type: s.approver_type || 'Role',
-          approver_role: s.approver_role || 'Manager',
-          workflow_step_id: s.id,
-          status: idx === 0 ? 'pending' : 'queued',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }));
-        await supabase.from('approval_request_steps').insert(stepsToInsert);
-      } else {
-        // Fallback 1-step Manager approval
-        const fallbackStep = {
-          tenant_id: tenantId || null,
-          tenant_company_id: activeOperatingCompanyId || null,
-          request_id: newReq.id,
-          step_order: 1,
-          approver_type: 'Role',
-          approver_role: 'Manager',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        await supabase.from('approval_request_steps').insert([fallbackStep]);
+      if (rpcErr) {
+        console.error('Error invoking submit_approval_request_atomic RPC:', rpcErr);
+        return { success: false, error: rpcErr.message };
       }
 
-      // Record actions
-      await recordAction({ requestId: newReq.id, action: 'submitted', fromStatus: 'draft', toStatus: 'pending_approval' });
+      if (!data || !data.success) {
+        const errorMsg = data?.error || 'Failed to submit approval request.';
+        return { success: false, error: errorMsg };
+      }
 
       // Notify approvers/managers
       if (createNotification) {
         createNotification({
-          title: `New Request Submitted: ${requestNumber}`,
-          message: `${title} submitted and awaiting review.`,
+          title: `New Request Submitted: ${data.request_number || generatedReqNum}`,
+          message: `${submissionPayload.title} submitted and awaiting review.`,
           entity_type: 'approval_request',
-          entity_id: newReq.id,
+          entity_id: data.request_id,
           tenant_company_id: activeOperatingCompanyId
         });
       }
 
       await fetchRequests(activeOperatingCompanyId);
-      return { success: true, request: newReq };
+
+      const createdRequest = {
+        id: data.request_id,
+        request_number: data.request_number || generatedReqNum,
+        status: data.status || 'pending_approval',
+        request_type,
+        title: submissionPayload.title,
+        description: submissionPayload.description,
+        payload: parsedPayload,
+        current_snapshot: parsedSnapshot,
+        subject_employee_id: submissionPayload.subject_employee_id,
+        entity_type: submissionPayload.entity_type,
+        entity_id: submissionPayload.entity_id,
+        priority: submissionPayload.priority,
+        workflow_id: submissionPayload.workflow_id,
+        tenant_id: submissionPayload.tenant_id,
+        tenant_company_id: submissionPayload.tenant_company_id
+      };
+
+      return {
+        success: true,
+        request_id: data.request_id,
+        request_number: data.request_number || generatedReqNum,
+        status: data.status,
+        request: createdRequest,
+        data
+      };
     } catch (err) {
       console.error('Error submitting request:', err);
       return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // 4. Process Approval Action (Approve / Return / Reject) with Maker-Checker & Conflict Protection
+  // 4. Process Approval Action (Approve / Return / Reject / Withdraw) via Backend Atomic RPC
   const processApprovalAction = async ({ requestId, action, comments = '' }) => {
     if (!authUserId) return { success: false, error: 'Authentication required.' };
+    if (!requestId) return { success: false, error: 'Approval request ID is required.' };
+
+    const normalizedAction = (action || '').toLowerCase().trim();
+    const trimmedComments = (comments || '').trim();
+
+    if (!['approve', 'reject', 'return', 'withdraw'].includes(normalizedAction)) {
+      return { success: false, error: `Invalid action '${action}'. Must be approve, reject, return, or withdraw.` };
+    }
+
+    if (['reject', 'return'].includes(normalizedAction) && !trimmedComments) {
+      return {
+        success: false,
+        error: normalizedAction === 'reject'
+          ? 'Rejection comments are required.'
+          : 'Return comments are required for corrections.'
+      };
+    }
 
     try {
+      setIsLoading(true);
+
+      const { data, error: rpcErr } = await supabase.rpc('process_approval_request_action_atomic', {
+        p_request_id: requestId,
+        p_action: normalizedAction,
+        p_comments: trimmedComments || null
+      });
+
+      if (rpcErr) {
+        console.error('Error in process_approval_request_action_atomic RPC:', rpcErr);
+        const errMsg = rpcErr.message || 'Error processing approval action.';
+        const isConflict = errMsg.includes('Snapshot conflict') ||
+                           errMsg.includes('Employee Master changed') ||
+                           errMsg.includes('SNAPSHOT_CONFLICT');
+        return {
+          success: false,
+          error: errMsg,
+          conflict: isConflict
+        };
+      }
+
+      if (!data || !data.success) {
+        const errorMsg = data?.error || `Failed to process ${normalizedAction} action.`;
+        return { success: false, error: errorMsg };
+      }
+
       const targetReq = requests.find(r => r.id === requestId);
-      if (!targetReq) return { success: false, error: 'Approval request not found.' };
 
-      // Verification: Company Scope
-      if (activeOperatingCompanyId && targetReq.tenant_company_id && targetReq.tenant_company_id !== activeOperatingCompanyId) {
-        return { success: false, error: 'Unauthorized: Request belongs to another operating company.' };
-      }
-
-      // Verification: Current Status
-      if (!['pending_approval', 'submitted'].includes(targetReq.status)) {
-        return { success: false, error: `Cannot process request in '${targetReq.status}' status.` };
-      }
-
-      // Maker-Checker Rule Enforcement
-      if (targetReq.requested_by === authUserId) {
-        return { success: false, error: 'Maker-Checker Violation: Requester cannot approve their own request.' };
-      }
-
-      const subjectEmp = employees.find(e => e.id === targetReq.subject_employee_id);
-      const subjectUserId = subjectEmp?.linked_user_id || subjectEmp?.user_id;
-      if (subjectEmp && subjectUserId && subjectUserId === authUserId) {
-        return { success: false, error: 'Maker-Checker Violation: You cannot approve a request concerning yourself.' };
-      }
-
-      const steps = requestSteps.filter(s => s.request_id === requestId).sort((a, b) => a.step_order - b.step_order);
-      const currentStep = steps.find(s => s.step_order === targetReq.current_step_order) || steps[0];
-
-      if (action === 'reject') {
-        if (!comments || !comments.trim()) {
-          return { success: false, error: 'Rejection comments are required.' };
+      // If employee change reached final approval/applied, refresh Employee Master
+      if (
+        (data.final_approved || data.status === 'applied' || data.status === 'approved') &&
+        targetReq?.request_type === 'employee_change' &&
+        fetchEmployees
+      ) {
+        try {
+          await fetchEmployees(activeOperatingCompanyId);
+        } catch (empErr) {
+          console.error('Error refreshing employees after approval:', empErr);
         }
-        await supabase.from('approval_requests').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', requestId);
-        if (currentStep) {
-          await supabase.from('approval_request_steps').update({ status: 'rejected', comments, updated_at: new Date().toISOString() }).eq('id', currentStep.id);
-        }
-        await recordAction({ requestId, action: 'rejected', fromStatus: targetReq.status, toStatus: 'rejected', comments });
+      }
 
-        if (createNotification) {
+      // Refresh requests list
+      await fetchRequests(activeOperatingCompanyId);
+
+      // Send UI Notifications
+      if (createNotification && targetReq) {
+        if (normalizedAction === 'reject') {
           createNotification({
             title: `Request Rejected: ${targetReq.request_number}`,
-            message: `Your request '${targetReq.title}' was rejected. Reason: ${comments}`,
+            message: `Your request '${targetReq.title}' was rejected. Reason: ${trimmedComments}`,
             entity_type: 'approval_request',
             entity_id: requestId,
             tenant_company_id: activeOperatingCompanyId
           });
-        }
-
-        await fetchRequests(activeOperatingCompanyId);
-        return { success: true };
-      }
-
-      if (action === 'return') {
-        if (!comments || !comments.trim()) {
-          return { success: false, error: 'Return comments are required for corrections.' };
-        }
-        await supabase.from('approval_requests').update({ status: 'returned', updated_at: new Date().toISOString() }).eq('id', requestId);
-        if (currentStep) {
-          await supabase.from('approval_request_steps').update({ status: 'returned', comments, updated_at: new Date().toISOString() }).eq('id', currentStep.id);
-        }
-        await recordAction({ requestId, action: 'returned', fromStatus: targetReq.status, toStatus: 'returned', comments });
-
-        if (createNotification) {
+        } else if (normalizedAction === 'return') {
           createNotification({
             title: `Request Returned for Correction: ${targetReq.request_number}`,
-            message: `Your request '${targetReq.title}' was returned. Reason: ${comments}`,
+            message: `Your request '${targetReq.title}' was returned. Reason: ${trimmedComments}`,
+            entity_type: 'approval_request',
+            entity_id: requestId,
+            tenant_company_id: activeOperatingCompanyId
+          });
+        } else if (normalizedAction === 'approve') {
+          if (data.final_approved || data.status === 'approved' || data.status === 'applied') {
+            createNotification({
+              title: `Request Approved: ${targetReq.request_number}`,
+              message: `Request '${targetReq.title}' has received final approval and changes were applied.`,
+              entity_type: 'approval_request',
+              entity_id: requestId,
+              tenant_company_id: activeOperatingCompanyId
+            });
+          }
+        } else if (normalizedAction === 'withdraw') {
+          createNotification({
+            title: `Request Withdrawn: ${targetReq.request_number}`,
+            message: `Request '${targetReq.title}' was withdrawn.`,
             entity_type: 'approval_request',
             entity_id: requestId,
             tenant_company_id: activeOperatingCompanyId
           });
         }
-
-        await fetchRequests(activeOperatingCompanyId);
-        return { success: true };
       }
 
-      if (action === 'approve') {
-        // Mark current step approved
-        if (currentStep) {
-          await supabase.from('approval_request_steps').update({ status: 'approved', comments, updated_at: new Date().toISOString() }).eq('id', currentStep.id);
-        }
+      const updatedRequest = targetReq ? {
+        ...targetReq,
+        status: data.status,
+        current_step_order: data.advanced ? (targetReq.current_step_order || 1) + 1 : targetReq.current_step_order
+      } : null;
 
-        const isLastStep = !steps.some(s => s.step_order > targetReq.current_step_order);
-
-        if (!isLastStep) {
-          // Advance to next step
-          const nextStepOrder = targetReq.current_step_order + 1;
-          await supabase.from('approval_requests').update({ current_step_order: nextStepOrder, updated_at: new Date().toISOString() }).eq('id', requestId);
-          const nextStep = steps.find(s => s.step_order === nextStepOrder);
-          if (nextStep) {
-            await supabase.from('approval_request_steps').update({ status: 'pending', updated_at: new Date().toISOString() }).eq('id', nextStep.id);
-          }
-          await recordAction({ requestId, action: 'approved_step', fromStatus: targetReq.status, toStatus: 'pending_approval', comments });
-
-          await fetchRequests(activeOperatingCompanyId);
-          return { success: true, advanced: true };
-        }
-
-        // Final Approval reached! Apply change or detect snapshot conflict
-        await supabase.from('approval_requests').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', requestId);
-        await recordAction({ requestId, action: 'approved', fromStatus: targetReq.status, toStatus: 'approved', comments });
-
-        // Execute application logic for Employee Change Request
-        if (targetReq.request_type === 'employee_change') {
-          const applyRes = await applyEmployeeChange(targetReq);
-          if (!applyRes.success) {
-            await fetchRequests(activeOperatingCompanyId);
-            return { success: false, conflict: true, error: applyRes.error };
-          }
-        }
-
-        await fetchRequests(activeOperatingCompanyId);
-        return { success: true, finalApproved: true };
-      }
-
-      return { success: false, error: `Invalid action '${action}'.` };
+      return {
+        success: true,
+        status: data.status,
+        advanced: Boolean(data.advanced),
+        finalApproved: Boolean(data.final_approved),
+        request: updatedRequest,
+        data
+      };
     } catch (err) {
-      console.error('Error processing approval action:', err);
+      console.error('Error in processApprovalAction:', err);
       return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Action convenience wrappers for ApprovalCenter consumers
+  const approveStep = async (requestId, comments = '') => {
+    return await processApprovalAction({ requestId, action: 'approve', comments });
+  };
+
+  const returnStep = async (requestId, comments = '') => {
+    return await processApprovalAction({ requestId, action: 'return', comments });
+  };
+
+  const rejectStep = async (requestId, comments = '') => {
+    return await processApprovalAction({ requestId, action: 'reject', comments });
   };
 
   // 5. Apply Employee Change Payload via Atomic RPC
   const applyEmployeeChange = async (targetReq) => {
+    const requestId = targetReq?.id || targetReq;
+    if (!requestId) return { success: false, error: 'Approval request ID is required.' };
+
     try {
-      const requestId = targetReq.id || targetReq;
-      const { data, error } = await supabase.rpc('apply_employee_change_request_atomic', {
+      const { data, error: rpcErr } = await supabase.rpc('apply_employee_change_request_atomic', {
         p_approval_request_id: requestId
       });
 
-      if (error) {
-        console.error('Error invoking apply_employee_change_request_atomic RPC:', error);
-        return { success: false, error: error.message };
+      if (rpcErr) {
+        console.error('Error invoking apply_employee_change_request_atomic RPC:', rpcErr);
+        const errMsg = rpcErr.message || 'Failed to apply employee change.';
+        return {
+          success: false,
+          conflict: errMsg.includes('Snapshot conflict') || errMsg.includes('Employee Master changed') || errMsg.includes('SNAPSHOT_CONFLICT'),
+          error: errMsg
+        };
       }
 
       if (!data || !data.success) {
         const errorMsg = data?.error || 'Failed to apply employee change via atomic RPC.';
-        return { success: false, conflict: data?.code === 'SNAPSHOT_CONFLICT', error: errorMsg };
+        return {
+          success: false,
+          conflict: data?.code === 'SNAPSHOT_CONFLICT',
+          error: errorMsg
+        };
       }
 
-      // Refresh Employee Master and Approval Center state after successful RPC application
       if (fetchEmployees) {
         await fetchEmployees(activeOperatingCompanyId);
       }
       await fetchRequests(activeOperatingCompanyId);
-
-      // Send UI notification
-      const subjectEmp = employees.find(e => e.id === targetReq.subject_employee_id);
-      if (createNotification) {
-        createNotification({
-          title: `Request Applied: ${targetReq.request_number || 'Profile Change'}`,
-          message: `Change request for ${subjectEmp ? (subjectEmp.first_name || '') + ' ' + (subjectEmp.last_name || '') : 'employee'} applied to Employee Master.`,
-          entity_type: 'approval_request',
-          entity_id: requestId,
-          tenant_company_id: activeOperatingCompanyId
-        });
-      }
 
       return { success: true, data };
     } catch (err) {
@@ -394,61 +429,76 @@ export function ApprovalProvider({ children }) {
     }
   };
 
-  // 6. Resubmit Returned Request
+  // 6. Resubmit Returned Request via Backend Atomic RPC: resubmit_approval_request_atomic(uuid, jsonb)
   const resubmitRequest = async (requestId, updatedPayload) => {
     if (!authUserId) return { success: false, error: 'Authentication required.' };
+    if (!requestId) return { success: false, error: 'Request ID is required.' };
+
+    let payloadObj = {};
+    if (updatedPayload) {
+      if (typeof updatedPayload === 'string') {
+        try {
+          payloadObj = JSON.parse(updatedPayload);
+        } catch {
+          payloadObj = {};
+        }
+      } else if (typeof updatedPayload === 'object') {
+        payloadObj = updatedPayload;
+      }
+    }
+
     try {
-      const targetReq = requests.find(r => r.id === requestId);
-      if (!targetReq) return { success: false, error: 'Request not found.' };
-      if (targetReq.requested_by !== authUserId) return { success: false, error: 'Only original requester can resubmit request.' };
-      if (targetReq.status !== 'returned') return { success: false, error: 'Only returned requests can be resubmitted.' };
+      setIsLoading(true);
 
-      const payloadStr = typeof updatedPayload === 'string' ? updatedPayload : JSON.stringify(updatedPayload);
-      await supabase.from('approval_requests').update({
-        payload: payloadStr,
-        status: 'pending_approval',
-        current_step_order: 1,
-        updated_at: new Date().toISOString()
-      }).eq('id', requestId);
+      const { data, error: rpcErr } = await supabase.rpc('resubmit_approval_request_atomic', {
+        p_request_id: requestId,
+        p_updated_payload: payloadObj
+      });
 
-      // Reset steps
-      const steps = requestSteps.filter(s => s.request_id === requestId);
-      for (const s of steps) {
-        const nextStatus = s.step_order === 1 ? 'pending' : 'queued';
-        await supabase.from('approval_request_steps').update({ status: nextStatus, comments: null, updated_at: new Date().toISOString() }).eq('id', s.id);
+      if (rpcErr) {
+        console.error('Error in resubmit_approval_request_atomic RPC:', rpcErr);
+        return { success: false, error: rpcErr.message };
       }
 
-      await recordAction({ requestId, action: 'resubmitted', fromStatus: 'returned', toStatus: 'pending_approval', comments: 'Resubmitted with updated values.' });
+      if (!data || !data.success) {
+        const errorMsg = data?.error || 'Failed to resubmit request.';
+        return { success: false, error: errorMsg };
+      }
+
       await fetchRequests(activeOperatingCompanyId);
-      return { success: true };
+
+      const targetReq = requests.find(r => r.id === requestId);
+      if (createNotification && targetReq) {
+        createNotification({
+          title: `Request Resubmitted: ${targetReq.request_number}`,
+          message: `Request '${targetReq.title}' was resubmitted for approval.`,
+          entity_type: 'approval_request',
+          entity_id: requestId,
+          tenant_company_id: activeOperatingCompanyId
+        });
+      }
+
+      return {
+        success: true,
+        request_id: data.request_id,
+        status: data.status,
+        data
+      };
     } catch (err) {
       console.error('Error resubmitting request:', err);
       return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // 7. Withdraw Eligible Pending Request
-  const withdrawRequest = async (requestId) => {
-    if (!authUserId) return { success: false, error: 'Authentication required.' };
-    try {
-      const targetReq = requests.find(r => r.id === requestId);
-      if (!targetReq) return { success: false, error: 'Request not found.' };
-      if (targetReq.requested_by !== authUserId && !isManagementOrAdmin) {
-        return { success: false, error: 'Unauthorized to withdraw this request.' };
-      }
-      if (!['pending_approval', 'returned', 'submitted'].includes(targetReq.status)) {
-        return { success: false, error: `Cannot withdraw request in '${targetReq.status}' status.` };
-      }
-
-      await supabase.from('approval_requests').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', requestId);
-      await recordAction({ requestId, action: 'withdrawn', fromStatus: targetReq.status, toStatus: 'cancelled', comments: 'Withdrawn by requester.' });
-
-      await fetchRequests(activeOperatingCompanyId);
-      return { success: true };
-    } catch (err) {
-      console.error('Error withdrawing request:', err);
-      return { success: false, error: err.message };
-    }
+  // 7. Withdraw Eligible Pending Request via Backend Atomic RPC
+  const withdrawRequest = async (requestId, comments = '') => {
+    return await processApprovalAction({
+      requestId,
+      action: 'withdraw',
+      comments: comments || 'Withdrawn by requester.'
+    });
   };
 
   const value = {
@@ -458,14 +508,19 @@ export function ApprovalProvider({ children }) {
     workflows,
     workflowSteps,
     isLoading,
+    isApprovalLoading: isLoading,
     error,
     isManagementOrAdmin,
     selectedRequestId,
     setSelectedRequestId,
     createAndSubmitRequest,
     processApprovalAction,
+    approveStep,
+    returnStep,
+    rejectStep,
     resubmitRequest,
     withdrawRequest,
+    applyEmployeeChange,
     fetchRequests
   };
 

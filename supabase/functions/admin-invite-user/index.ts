@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
+import { parseInviteRequestBody } from "../_shared/invite-request.ts";
+import { readBoundedBody } from "../_shared/bounded-request-body.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +14,23 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+async function rollbackPendingInvite(
+  admin: SupabaseClient<any, "public", any>,
+  userId: string,
+  membershipId?: string,
+): Promise<boolean> {
+  let complete = true;
+  if (membershipId) {
+    const { error } = await admin.from("tenant_memberships").delete().eq("id", membershipId);
+    if (error) complete = false;
+  }
+  const { error: profileError } = await admin.from("profiles").delete().eq("id", userId);
+  if (profileError) complete = false;
+  const { error: authError } = await admin.auth.admin.deleteUser(userId);
+  if (authError) complete = false;
+  return complete;
 }
 
 Deno.serve(async (req: Request) => {
@@ -31,12 +50,12 @@ Deno.serve(async (req: Request) => {
   const callerId = claimsData?.claims?.sub;
   if (claimsError || typeof callerId !== "string") return json({ error: "Invalid or expired session" }, 401);
 
-  let body: { email?: unknown; role?: unknown; tenant_id?: unknown; tenant_company_id?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: "Invalid JSON body" }, 400);
-  }
+  // Enforce the body limit and reject non-object JSON before reading any fields.
+  const boundedBody = await readBoundedBody(req.body);
+  if (!boundedBody.ok) return json({ error: boundedBody.error }, boundedBody.status);
+  const parsed = parseInviteRequestBody(boundedBody.bytes);
+  if (!parsed.ok) return json({ error: parsed.error }, parsed.status);
+  const body = parsed.body;
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const requestedTenantId = typeof body.tenant_id === "string" ? body.tenant_id.trim() : "";
@@ -92,8 +111,10 @@ Deno.serve(async (req: Request) => {
   }, { onConflict: "id" });
 
   if (profileError) {
-    await admin.auth.admin.deleteUser(userId);
-    return json({ error: "Invitation setup failed while creating the user profile; the pending account was rolled back." }, 500);
+    const rolledBack = await rollbackPendingInvite(admin, userId);
+    return json({ error: rolledBack
+      ? "Invitation setup failed while creating the user profile; the pending account was rolled back."
+      : "Invitation setup failed and cleanup was incomplete; an administrator must review the pending account." }, 500);
   }
 
   const { data: membership, error: insertMembershipError } = await admin.from("tenant_memberships").insert({
@@ -104,9 +125,10 @@ Deno.serve(async (req: Request) => {
   }).select("id").single();
 
   if (insertMembershipError || !membership) {
-    await admin.from("profiles").delete().eq("id", userId);
-    await admin.auth.admin.deleteUser(userId);
-    return json({ error: "Invitation setup failed while assigning tenant access; the pending account was rolled back." }, 500);
+    const rolledBack = await rollbackPendingInvite(admin, userId);
+    return json({ error: rolledBack
+      ? "Invitation setup failed while assigning tenant access; the pending account was rolled back."
+      : "Invitation setup failed and cleanup was incomplete; an administrator must review the pending account." }, 500);
   }
 
   // A tenant membership alone does not grant access to operating companies for non-admin roles.
@@ -118,10 +140,10 @@ Deno.serve(async (req: Request) => {
     can_edit: requestedRole === "MANAGER" || requestedRole === "TEAM",
   });
   if (accessError) {
-    await admin.from("tenant_memberships").delete().eq("id", membership.id);
-    await admin.from("profiles").delete().eq("id", userId);
-    await admin.auth.admin.deleteUser(userId);
-    return json({ error: "Invitation setup failed while assigning operating company access; the pending account was rolled back." }, 500);
+    const rolledBack = await rollbackPendingInvite(admin, userId, membership.id);
+    return json({ error: rolledBack
+      ? "Invitation setup failed while assigning operating company access; the pending account was rolled back."
+      : "Invitation setup failed and cleanup was incomplete; an administrator must review the pending account." }, 500);
   }
 
   return json({ success: true, email, role: requestedRole, tenant_company_id: requestedCompanyId });
