@@ -45,7 +45,7 @@ Latest read-only Security Advisor findings:
 
 ## Newly confirmed migration-history blocker
 
-The Supabase workflow log states: **"Remote migration versions not found in local migrations directory."** A direct comparison confirms 131 migration versions recorded in the production database but only 7 migration SQL files on GitHub `main`. Therefore 124 remote migration versions have no matching local file. The two restored October 4 files are present locally now but cannot solve the broader gap. Git history lookups for several representative missing files returned no historical copies. This is a migration-source-of-truth gap, not evidence that the live schema should be reset.
+The Supabase workflow log states: **"Remote migration versions not found in local migrations directory."** A direct comparison confirms 131 migration versions recorded in the production database but only 7 migration SQL files on GitHub `main`. Therefore 129 remote migration versions have no matching local file. The two restored October 4 files are present locally now but cannot solve the broader gap. Git history lookups for several representative missing files returned no historical copies. This is a migration-source-of-truth gap, not evidence that the live schema should be reset.
 
 Do not create empty placeholder migration files, run migration repair against production, reset/rebase the development branch blindly, or attempt to replay reconstructed migrations. The safe recovery plan is to recover authentic historical SQL where available, compare the live schema to the tracked state, then produce a reviewed baseline/reconciliation strategy in a disposable environment before changing branch integration.
 
