@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseInviteRequestBody } from "../_shared/invite-request.ts";
+import { readBoundedBody } from "../_shared/bounded-request-body.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,13 +51,9 @@ Deno.serve(async (req: Request) => {
   if (claimsError || typeof callerId !== "string") return json({ error: "Invalid or expired session" }, 401);
 
   // Enforce the body limit and reject non-object JSON before reading any fields.
-  let rawBody: ArrayBuffer;
-  try {
-    rawBody = await req.arrayBuffer();
-  } catch {
-    return json({ error: "Unable to read request body" }, 400);
-  }
-  const parsed = parseInviteRequestBody(rawBody);
+  const boundedBody = await readBoundedBody(req.body);
+  if (!boundedBody.ok) return json({ error: boundedBody.error }, boundedBody.status);
+  const parsed = parseInviteRequestBody(boundedBody.bytes);
   if (!parsed.ok) return json({ error: parsed.error }, parsed.status);
   const body = parsed.body;
 
