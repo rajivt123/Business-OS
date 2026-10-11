@@ -125,7 +125,7 @@ BEGIN
           -- by apply_employee_change_request_atomic in this same transaction.
           IF v_apply->>'code' = 'SNAPSHOT_CONFLICT' THEN
             UPDATE public.approval_request_steps
-              SET comments = concat_ws(E'\n', nullif(comments,''), coalesce(v_apply->>'error','Snapshot conflict'),
+              SET comments = concat_ws(E'\n', nullif(comments,''), 'Snapshot conflict: ' || coalesce(v_apply->>'error','Employee Master changed after the request was submitted.'),
                 'Conflicting fields: ' || coalesce(v_apply->'conflicts','[]'::jsonb)::text),
                   updated_at = now()
               WHERE id = v_step.id;
