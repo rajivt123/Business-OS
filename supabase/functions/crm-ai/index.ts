@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { readBoundedBody } from "../_shared/bounded-request-body.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,8 +48,6 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return respond({ error: "Method not allowed" }, 405);
   const url = Deno.env.get("SUPABASE_URL"), serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"), geminiKey = Deno.env.get("GEMINI_API_KEY");
   if (!url || !serviceKey || !geminiKey) return respond({ error: "AI service configuration unavailable" }, 503);
-  const contentLength = Number(req.headers.get("Content-Length") || 0);
-  if (Number.isFinite(contentLength) && contentLength > 16384) return respond({ error: "Request body is too large" }, 413);
   const authorization = req.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return respond({ error: "Authentication required" }, 401);
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -58,10 +57,10 @@ Deno.serve(async (req: Request) => {
 
   let body: { action?: unknown; tenant_id?: unknown; tenant_company_id?: unknown; work_id?: unknown; message?: unknown };
   try {
-    // Enforce the limit on actual bytes, not only Content-Length (which clients may omit).
-    const rawBody = await req.arrayBuffer();
-    if (rawBody.byteLength > 16384) return respond({ error: "Request body is too large" }, 413);
-    body = JSON.parse(new TextDecoder().decode(rawBody));
+    // Read the body as a bounded stream; do not buffer an untrusted unbounded payload.
+    const boundedBody = await readBoundedBody(req.body);
+    if (!boundedBody.ok) return respond({ error: boundedBody.error }, boundedBody.status);
+    body = JSON.parse(new TextDecoder().decode(boundedBody.bytes));
     if (!body || typeof body !== "object" || Array.isArray(body)) return respond({ error: "Invalid JSON body" }, 400);
   } catch { return respond({ error: "Invalid JSON body" }, 400); }
   const action = cleanText(body.action, 32), tenantId = body.tenant_id;
