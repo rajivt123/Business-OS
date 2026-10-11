@@ -73,6 +73,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_payroll_form16_access_guard.sql
       - name: Run journal reversal idempotency regression
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_journal_reversal_idempotency.sql
+      - name: Run atomic approval action regression
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/phase00_approval_action_atomic.sql
       - name: Apply CRM AI rate-limit migration to disposable PostgreSQL
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261011190000_phase00_crm_ai_durable_rate_limit.sql
       - name: Run CRM AI rate-limit regression checks
