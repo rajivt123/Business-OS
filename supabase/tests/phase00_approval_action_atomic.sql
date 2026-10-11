@@ -52,6 +52,13 @@ DECLARE
  s2 constant uuid:='50000000-0000-0000-0000-000000000002';
  got jsonb;
  st text;
+ req_conflict constant uuid:='40000000-0000-0000-0000-000000000002';
+ s_conflict constant uuid:='50000000-0000-0000-0000-000000000003';
+ emp constant uuid:='60000000-0000-0000-0000-000000000001';
+ conflict_result jsonb;
+ conflict_status text;
+ conflict_audit_count integer;
+ conflict_step_comments text;
 BEGIN
  PERFORM set_config('test.uid',maker::text,false);
  PERFORM set_config('test.manager','false',false);
@@ -83,15 +90,6 @@ BEGIN
  IF st<>'pending' THEN RAISE EXCEPTION 'Next step did not become pending'; END IF;
  IF (SELECT count(*) FROM public.approval_request_actions WHERE request_id=req)<>1 THEN RAISE EXCEPTION 'Action history was not written atomically'; END IF;
  -- Snapshot conflict must be a durable domain result, not an exception that rolls back audit.
- DECLARE
-  req_conflict constant uuid:='40000000-0000-0000-0000-000000000002';
-  s_conflict constant uuid:='50000000-0000-0000-0000-000000000003';
-  emp constant uuid:='60000000-0000-0000-0000-000000000001';
-  conflict_result jsonb;
-  conflict_status text;
-  conflict_audit_count integer;
-  conflict_step_comments text;
- BEGIN
   INSERT INTO public.employees(id,tenant_id,tenant_company_id,linked_user_id)
   VALUES(emp,t,c,maker);
   INSERT INTO public.approval_requests(id,tenant_id,tenant_company_id,request_type,requested_by,subject_employee_id,title,payload,status,current_step_order)
@@ -114,7 +112,6 @@ BEGIN
     RAISE EXCEPTION 'Approval step does not explain application conflict: %',conflict_step_comments;
   END IF;
   PERFORM set_config('test.snapshot_conflict','false',false);
- END;
 END;
 $test$;
 DROP FUNCTION public.process_approval_request_action_atomic(uuid,text,text);
