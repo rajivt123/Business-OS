@@ -39,7 +39,7 @@ BEGIN
  END IF;
  RETURN jsonb_build_object('success',true);
 END;
-$;
+$mock$;
 \i supabase/migrations/20261012120000_phase00_approval_action_atomic.sql
 DO $test$
 DECLARE
