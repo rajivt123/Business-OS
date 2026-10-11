@@ -43,6 +43,18 @@ Latest read-only Security Advisor findings:
 - `rajivk@metrixengineers.co.in` has six active assignment rows associated with Rajiv Fire Systems Pvt Ltd, but no view grant for that company. Review the assignments; do not automatically grant or delete.
 - The Supabase development branch currently reports `MIGRATIONS_FAILED`, so it is not evidence of successful isolated migration/test execution.
 
+## Newly confirmed migration-history blocker
+
+The Supabase workflow log states: **"Remote migration versions not found in local migrations directory."** A direct comparison confirms 131 migration versions recorded in the production database but only 7 migration SQL files on GitHub `main`. Therefore 124 remote migration versions have no matching local file. The two restored October 4 files are present locally now but cannot solve the broader gap. Git history lookups for several representative missing files returned no historical copies. This is a migration-source-of-truth gap, not evidence that the live schema should be reset.
+
+Do not create empty placeholder migration files, run migration repair against production, reset/rebase the development branch blindly, or attempt to replay reconstructed migrations. The safe recovery plan is to recover authentic historical SQL where available, compare the live schema to the tracked state, then produce a reviewed baseline/reconciliation strategy in a disposable environment before changing branch integration.
+
+## Newly added CRM AI protections
+
+- The request parser now reads the actual request bytes and rejects bodies above 16 KiB even when Content-Length is missing.
+- Added migration `20261011190000_phase00_crm_ai_durable_rate_limit.sql` with a private per-user counter and a service-role-only atomic RPC; the Edge Function enforces 10 requests per 60 seconds per authenticated user.
+- These changes are not deployed and have not been tested against PostgreSQL or Deno. Verify function/table owner privileges, RPC return decoding, concurrency, window reset, and rate-limit behavior in isolation.
+
 ## Required next batch gates
 
 1. Diagnose and restore a clean disposable Supabase branch/project. Do not use production for write tests.
