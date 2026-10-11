@@ -40,6 +40,13 @@ BEGIN
   IF v_allowed THEN
     RAISE EXCEPTION 'request 11 was unexpectedly allowed';
   END IF;
+  -- Repeated rejected requests must not grow the stored counter without bound.
+  FOR i IN 1..100 LOOP
+    v_allowed := public.consume_crm_ai_rate_limit(v_user_id, 10, 60);
+    IF v_allowed THEN
+      RAISE EXCEPTION 'a request above the limit was unexpectedly allowed';
+    END IF;
+  END LOOP;
 
   SELECT request_count INTO v_count
   FROM private.crm_ai_rate_limits WHERE user_id = v_user_id;
