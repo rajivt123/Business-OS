@@ -293,7 +293,20 @@ export function ApprovalProvider({ children }) {
 
       if (!data || !data.success) {
         const errorMsg = data?.error || `Failed to process ${normalizedAction} action.`;
-        return { success: false, error: errorMsg };
+        const isConflict = data?.code === 'SNAPSHOT_CONFLICT';
+        // The backend durably marks snapshot conflicts as failed and records the audit.
+        // Refresh before returning so the Approval Center does not keep stale pending state.
+        if (isConflict) {
+          await fetchRequests(activeOperatingCompanyId);
+        }
+        return {
+          success: false,
+          error: errorMsg,
+          code: data?.code,
+          status: data?.status,
+          conflict: isConflict,
+          conflicts: Array.isArray(data?.conflicts) ? data.conflicts : []
+        };
       }
 
       const targetReq = requests.find(r => r.id === requestId);

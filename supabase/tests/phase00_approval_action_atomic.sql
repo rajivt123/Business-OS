@@ -24,7 +24,22 @@ CREATE TABLE public.approval_request_actions(
  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.employees(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,tenant_company_id uuid NOT NULL,linked_user_id uuid);
-CREATE FUNCTION public.apply_employee_change_request_atomic(uuid) RETURNS jsonb LANGUAGE sql AS $$ SELECT jsonb_build_object('success',true) $$;
+CREATE FUNCTION public.apply_employee_change_request_atomic(p_approval_request_id uuid) RETURNS jsonb
+LANGUAGE plpgsql AS $mock$
+BEGIN
+ IF coalesce(current_setting('test.snapshot_conflict',true),'false')='true' THEN
+  UPDATE public.approval_requests SET status='failed',updated_at=now() WHERE id=p_approval_request_id;
+  INSERT INTO public.approval_request_actions(tenant_id,tenant_company_id,request_id,actor_id,action,from_status,to_status,comments,metadata,created_at)
+  SELECT tenant_id,tenant_company_id,id,auth.uid(),'failed','approved','failed',
+    'Snapshot conflict during atomic Employee Master application. Conflicting fields: mobile',
+    jsonb_build_object('conflicts',jsonb_build_array('mobile')),now()
+  FROM public.approval_requests WHERE id=p_approval_request_id;
+  RETURN jsonb_build_object('success',false,'code','SNAPSHOT_CONFLICT',
+    'error','Employee Master changed after the request was submitted.','conflicts',jsonb_build_array('mobile'));
+ END IF;
+ RETURN jsonb_build_object('success',true);
+END;
+$mock$;
 \i supabase/migrations/20261012120000_phase00_approval_action_atomic.sql
 DO $test$
 DECLARE
@@ -37,6 +52,13 @@ DECLARE
  s2 constant uuid:='50000000-0000-0000-0000-000000000002';
  got jsonb;
  st text;
+ req_conflict constant uuid:='40000000-0000-0000-0000-000000000002';
+ s_conflict constant uuid:='50000000-0000-0000-0000-000000000003';
+ emp constant uuid:='60000000-0000-0000-0000-000000000001';
+ conflict_result jsonb;
+ conflict_status text;
+ conflict_audit_count integer;
+ conflict_step_comments text;
 BEGIN
  PERFORM set_config('test.uid',maker::text,false);
  PERFORM set_config('test.manager','false',false);
@@ -67,6 +89,29 @@ BEGIN
  SELECT status INTO st FROM public.approval_request_steps WHERE id=s2;
  IF st<>'pending' THEN RAISE EXCEPTION 'Next step did not become pending'; END IF;
  IF (SELECT count(*) FROM public.approval_request_actions WHERE request_id=req)<>1 THEN RAISE EXCEPTION 'Action history was not written atomically'; END IF;
+ -- Snapshot conflict must be a durable domain result, not an exception that rolls back audit.
+  INSERT INTO public.employees(id,tenant_id,tenant_company_id,linked_user_id)
+  VALUES(emp,t,c,maker);
+  INSERT INTO public.approval_requests(id,tenant_id,tenant_company_id,request_type,requested_by,subject_employee_id,title,payload,status,current_step_order)
+  VALUES(req_conflict,t,c,'employee_change',maker,emp,'Employee contact change','{"mobile":"999"}','pending_approval',1);
+  INSERT INTO public.approval_request_steps(id,tenant_id,tenant_company_id,request_id,step_order,status)
+  VALUES(s_conflict,t,c,req_conflict,1,'pending');
+  PERFORM set_config('test.snapshot_conflict','true',false);
+  conflict_result:=public.process_approval_request_action_atomic(req_conflict,'approve',NULL);
+  SELECT status INTO conflict_status FROM public.approval_requests WHERE id=req_conflict;
+  SELECT count(*) INTO conflict_audit_count FROM public.approval_request_actions
+    WHERE request_id=req_conflict AND action='failed' AND to_status='failed';
+  SELECT comments INTO conflict_step_comments FROM public.approval_request_steps WHERE id=s_conflict;
+  IF conflict_result->>'success'<>'false' OR conflict_result->>'code'<>'SNAPSHOT_CONFLICT'
+     OR conflict_result->'conflicts'<>jsonb_build_array('mobile') THEN
+    RAISE EXCEPTION 'Snapshot conflict details not returned: %',conflict_result;
+  END IF;
+  IF conflict_status<>'failed' THEN RAISE EXCEPTION 'Snapshot conflict status was rolled back: %',conflict_status; END IF;
+  IF conflict_audit_count<>1 THEN RAISE EXCEPTION 'Snapshot conflict audit was rolled back or duplicated: %',conflict_audit_count; END IF;
+  IF conflict_step_comments NOT LIKE '%Snapshot conflict%' OR conflict_step_comments NOT LIKE '%mobile%' THEN
+    RAISE EXCEPTION 'Approval step does not explain application conflict: %',conflict_step_comments;
+  END IF;
+  PERFORM set_config('test.snapshot_conflict','false',false);
 END;
 $test$;
 DROP FUNCTION public.process_approval_request_action_atomic(uuid,text,text);

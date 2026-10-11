@@ -120,6 +120,24 @@ BEGIN
       IF v_request.request_type='employee_change' THEN
         v_apply := public.apply_employee_change_request_atomic(v_request.id);
         IF coalesce((v_apply->>'success')::boolean,false) IS NOT TRUE THEN
+          -- Snapshot conflicts are expected domain outcomes, not SQL exceptions.
+          -- Raising here would roll back the failed status and conflict audit written
+          -- by apply_employee_change_request_atomic in this same transaction.
+          IF v_apply->>'code' = 'SNAPSHOT_CONFLICT' THEN
+            UPDATE public.approval_request_steps
+              SET comments = concat_ws(E'\n', nullif(comments,''), 'Snapshot conflict: ' || coalesce(v_apply->>'error','Employee Master changed after the request was submitted.'),
+                'Conflicting fields: ' || coalesce(v_apply->'conflicts','[]'::jsonb)::text),
+                  updated_at = now()
+              WHERE id = v_step.id;
+            RETURN jsonb_build_object(
+              'success', false,
+              'request_id', v_request.id,
+              'status', 'failed',
+              'code', 'SNAPSHOT_CONFLICT',
+              'error', coalesce(v_apply->>'error','Employee Master changed after the request was submitted.'),
+              'conflicts', coalesce(v_apply->'conflicts','[]'::jsonb)
+            );
+          END IF;
           RAISE EXCEPTION 'Employee change application failed: %',coalesce(v_apply->>'error','unknown error') USING ERRCODE='P0001';
         END IF;
       END IF;
