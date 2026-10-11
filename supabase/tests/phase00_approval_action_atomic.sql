@@ -52,6 +52,14 @@ BEGIN
  END;
  SELECT status INTO st FROM public.approval_requests WHERE id=req;
  IF st<>'pending_approval' THEN RAISE EXCEPTION 'Denied action changed request'; END IF;
+ -- An unrelated user must not approve a step with no assignment.
+ PERFORM set_config('test.uid','30000000-0000-0000-0000-000000000099',false);
+ BEGIN
+  PERFORM public.process_approval_request_action_atomic(req,'approve',NULL);
+  RAISE EXCEPTION 'Expected unassigned user denial';
+ EXCEPTION WHEN SQLSTATE '42501' THEN
+  IF SQLERRM<>'Current approver or manager permission required' THEN RAISE; END IF;
+ END;
  PERFORM set_config('test.uid',manager::text,false);
  PERFORM set_config('test.manager','true',false);
  got:=public.process_approval_request_action_atomic(req,'approve','reviewed');
