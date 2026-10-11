@@ -48,8 +48,7 @@ BEGIN
       '30000000-0000-0000-0000-000000000001','2026-27'
     );
     RAISE EXCEPTION 'Expected non-manager peer access to be rejected';
-  EXCEPTION WHEN raise_exception THEN
-    IF SQLERRM = 'Expected non-manager peer access to be rejected' THEN RAISE; END IF;
+  EXCEPTION WHEN SQLSTATE '42501' THEN
     IF SQLERRM <> 'Not authorized' THEN RAISE; END IF;
   END;
 END;
