@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
     const logs = (logsRes.data || []).filter((l) => workIds.has(l.work_id));
     const reminders = (remindersRes.data || []).filter((r) => !r.work_id || workIds.has(r.work_id));
     context = JSON.stringify({
-      projects: works.map((w) => ({ id: w.id, title: cleanText(w.title, 180), client: cleanText(w.companies?.name, 180), unit: cleanText(w.units?.name, 180), po_number: cleanText(w.po_number, 100), wo_number: cleanText(w.wo_number, 100), stages: boundedJsonText(w.stages, 1000), boq_attached: Boolean(w.boq_url),
+      projects: works.map((w) => ({ id: w.id, title: cleanText(w.title, 180), client: relatedName(w.companies), unit: relatedName(w.units), po_number: cleanText(w.po_number, 100), wo_number: cleanText(w.wo_number, 100), stages: boundedJsonText(w.stages, 1000), boq_attached: Boolean(w.boq_url),
         open_issues: issues.filter((i) => i.work_id === w.id && String(i.status || "").toLowerCase() === "open").slice(0, 8).map((i) => cleanText(i.title, 240)),
         recent_updates: logs.filter((l) => l.work_id === w.id).slice(0, 5).map((l) => ({ stage: cleanText(l.stage_name, 120), content: cleanText(l.content, 600), date: l.created_at })) })),
       pending_tasks: reminders.filter((r) => !r.is_completed).slice(0, 60).map((r) => ({ content: cleanText(r.content, 300), due: r.target_date })),
