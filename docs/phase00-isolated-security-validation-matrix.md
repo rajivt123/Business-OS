@@ -1,6 +1,6 @@
 # Phase 00 — Isolated Security Validation Matrix
 
-Status: TEST SPECIFICATION ONLY; no production changes authorized. No isolated tests have passed yet. Production has 131 recorded migration versions but GitHub main contains only 7 matching SQL files; 124 versions are missing locally. Supabase branch automation reports `Remote migration versions not found in local migrations directory`.
+Status: TEST SPECIFICATION ONLY; no production changes authorized. No isolated tests have passed yet. Production has 131 recorded migration versions but GitHub main contains only 7 matching SQL files; 129 versions are missing locally and 5 tracked files are not recorded as applied remotely. Supabase branch automation reports `Remote migration versions not found in local migrations directory`.
 
 ## Safety boundary
 - Run only against a disposable Supabase branch/project with synthetic users and records.
