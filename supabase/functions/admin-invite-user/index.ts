@@ -56,6 +56,7 @@ Deno.serve(async (req: Request) => {
   const { data: memberships, error: membershipError } = await admin
     .from("tenant_memberships")
     .select("tenant_id, role, status")
+    .eq("tenant_id", requestedTenantId)
     .eq("user_id", callerId)
     .eq("status", "active");
 
