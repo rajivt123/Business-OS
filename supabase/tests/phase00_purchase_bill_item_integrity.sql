@@ -118,7 +118,7 @@ BEGIN
     INSERT INTO public.purchase_bill_items (
       tenant_id,tenant_company_id,purchase_bill_id,description,quantity,unit_price,
       taxable_amount,tax_rate,cgst_amount,sgst_amount,igst_amount,line_total
-    ) VALUES (t,c,b,'Invalid tax split',1,100,100,18,18,0,0,118);
+    ) VALUES (t,c,b,'Invalid tax split',1,100,100,18,10,0,0,110);
     RAISE EXCEPTION 'Expected invalid tax total to be rejected';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM = 'Expected invalid tax total to be rejected' THEN RAISE; END IF;
