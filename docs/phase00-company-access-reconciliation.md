@@ -40,7 +40,13 @@ These accounts also use TEAM membership roles despite labels that suggest admin/
 | rajivk@metrixengineers.co.in | TEAM | 2 | 3 | **Mismatch:** active assignment data spans more companies than current view grants |
 | Owner account | OWNER | 3 | 2 | OWNER authorization helper allows all active companies in the tenant; assignment rows are not the full access basis |
 
-Do not infer that a TEAM user should gain access to every company found in their assignments without checking active assignment IDs and intended policy. In particular, the rajivk@metrixengineers.co.in mismatch needs an explicit review.
+Exact assignment cross-check:
+- misbha has active assignments in Metrix Engineering Services and Metrix Industrial Solutions; both have matching view grants.
+- rajivk has assignments in those same two companies, plus Rajiv Fire Systems Pvt Ltd (company ID 11111111-1111-1111-1111-111111111111). That third company is active, but rajivk has no view grant for it.
+- Three active assignment rows point to the Rajiv Fire Systems Pvt Ltd company across assignment sources. This may be legitimate work or stale/default test data; it must be reviewed, not auto-granted.
+- Owner has grants for three companies, including the active Rajiv Fire Systems company.
+
+Do not infer that a TEAM user should gain access to every company found in their assignments without checking active assignment IDs and intended policy. In particular, the rajivk mismatch needs an explicit review.
 
 ## Likely test-account contamination
 
@@ -62,10 +68,11 @@ The branch migration 20261011180000_phase00_remove_legacy_permissive_crm_policie
 ## Safe next steps
 
 1. Use the active operating-company assignments UI/records and the business owner’s roster to reconcile the seven unresolved real-looking accounts.
-2. Inspect project_assignments, stage_assignments, and task_assignees by exact company UUID for the three assigned users; compare to user_company_access UUIDs.
-3. Review probable test users for retirement in a separate cleanup plan; do not bundle account deletion with RLS hardening.
-4. Build isolated test fixtures for the access matrix; do not create fake business transactions in production.
-5. Apply the lockdown migration only after review and regression tests.
+2. Review the three assignment rows associated with Rajiv Fire Systems Pvt Ltd and confirm whether they are valid assignments or legacy/default records.
+3. Inspect project_assignments, stage_assignments, and task_assignees by exact company UUID for the three assigned users; compare to user_company_access UUIDs.
+4. Review probable test users for retirement in a separate cleanup plan; do not bundle account deletion with RLS hardening.
+5. Build isolated test fixtures for the access matrix; do not create fake business transactions in production.
+6. Apply the lockdown migration only after review and regression tests.
 
 ## Change record
 
