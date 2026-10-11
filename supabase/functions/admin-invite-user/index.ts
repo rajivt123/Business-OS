@@ -31,7 +31,7 @@ Deno.serve(async (req: Request) => {
   const callerId = claimsData?.claims?.sub;
   if (claimsError || typeof callerId !== "string") return json({ error: "Invalid or expired session" }, 401);
 
-  let body: { email?: unknown; role?: unknown; tenant_id?: unknown };
+  let body: { email?: unknown; role?: unknown; tenant_id?: unknown; tenant_company_id?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -40,6 +40,7 @@ Deno.serve(async (req: Request) => {
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const requestedTenantId = typeof body.tenant_id === "string" ? body.tenant_id.trim() : "";
+  const requestedCompanyId = typeof body.tenant_company_id === "string" ? body.tenant_company_id.trim() : "";
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedTenantId)) {
     return json({ error: "A valid tenant_id is required" }, 400);
   }
@@ -66,6 +67,11 @@ Deno.serve(async (req: Request) => {
   );
   if (!adminMembership?.tenant_id) return json({ error: "Tenant administrator permission required" }, 403);
 
+  const { data: company, error: companyError } = await admin.from("tenant_companies").select("id")
+    .eq("id", requestedCompanyId).eq("tenant_id", requestedTenantId).eq("status", "active").maybeSingle();
+  if (companyError) return json({ error: "Unable to verify operating company" }, 500);
+  if (!company) return json({ error: "Operating company does not belong to this tenant or is inactive" }, 400);
+
   const tenantId = requestedTenantId;
   // Auth Admin API is the authoritative duplicate-account check. If an account already
   // exists, Supabase returns an error and no membership is granted by this endpoint.
@@ -87,17 +93,33 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Invitation setup failed while creating the user profile; the pending account was rolled back." }, 500);
   }
 
-  const { error: insertMembershipError } = await admin.from("tenant_memberships").insert({
+  const { data: membership, error: insertMembershipError } = await admin.from("tenant_memberships").insert({
     tenant_id: tenantId,
     user_id: userId,
     role: requestedRole,
     status: "active",
-  });
+  }).select("id").single();
 
-  if (insertMembershipError) {
+  if (insertMembershipError || !membership) {
+    await admin.from("profiles").delete().eq("id", userId);
     await admin.auth.admin.deleteUser(userId);
     return json({ error: "Invitation setup failed while assigning tenant access; the pending account was rolled back." }, 500);
   }
 
-  return json({ success: true, email, role: requestedRole });
+  // A tenant membership alone does not grant access to operating companies for non-admin roles.
+  const { error: accessError } = await admin.from("user_company_access").insert({
+    tenant_id: tenantId,
+    membership_id: membership.id,
+    tenant_company_id: requestedCompanyId,
+    can_view: true,
+    can_edit: requestedRole === "MANAGER" || requestedRole === "TEAM",
+  });
+  if (accessError) {
+    await admin.from("tenant_memberships").delete().eq("id", membership.id);
+    await admin.from("profiles").delete().eq("id", userId);
+    await admin.auth.admin.deleteUser(userId);
+    return json({ error: "Invitation setup failed while assigning operating company access; the pending account was rolled back." }, 500);
+  }
+
+  return json({ success: true, email, role: requestedRole, tenant_company_id: requestedCompanyId });
 });
