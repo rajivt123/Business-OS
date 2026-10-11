@@ -85,7 +85,7 @@ BEGIN
   FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'No active pending approval step' USING ERRCODE='22023'; END IF;
 
-  v_is_assigned := v_step.assigned_user_id=v_uid;
+  v_is_assigned := coalesce(v_step.assigned_user_id=v_uid,false);
   IF NOT v_is_assigned AND v_step.assigned_employee_id IS NOT NULL THEN
     SELECT linked_user_id INTO v_employee_user FROM public.employees
     WHERE id=v_step.assigned_employee_id
