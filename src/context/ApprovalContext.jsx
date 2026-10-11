@@ -303,6 +303,7 @@ export function ApprovalProvider({ children }) {
           success: false,
           error: errorMsg,
           code: data?.code,
+          status: data?.status,
           conflict: isConflict,
           conflicts: Array.isArray(data?.conflicts) ? data.conflicts : []
         };
