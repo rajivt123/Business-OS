@@ -62,31 +62,8 @@ Deno.serve(async (req: Request) => {
   if (!adminMembership?.tenant_id) return json({ error: "Tenant administrator permission required" }, 403);
 
   const tenantId = adminMembership.tenant_id;
-  const { data: existingMembership, error: existingError } = await admin
-    .from("tenant_memberships")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .eq("status", "active")
-    .limit(500);
-
-  if (existingError) return json({ error: "Unable to verify existing tenant membership" }, 500);
-
-  // Prevent creating duplicate active memberships for an existing Auth user/email.
-  const { data: existingUserPage, error: usersError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (usersError) return json({ error: "Unable to verify account status" }, 500);
-  const existingUser = existingUserPage.users.find((u) => (u.email || "").toLowerCase() === email);
-  if (existingUser) {
-    const { data: alreadyMember, error: alreadyMemberError } = await admin
-      .from("tenant_memberships")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("user_id", existingUser.id)
-      .maybeSingle();
-    if (alreadyMemberError) return json({ error: "Unable to verify existing membership" }, 500);
-    if (alreadyMember) return json({ error: "This email already has a membership in your tenant" }, 409);
-    return json({ error: "An account already exists for this email. Ask the account owner to manage access." }, 409);
-  }
-
+  // Auth Admin API is the authoritative duplicate-account check. If an account already
+  // exists, Supabase returns an error and no membership is granted by this endpoint.
   const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
   if (inviteError || !inviteData.user) {
     return json({ error: "Invitation could not be sent. Check Supabase Auth email/SMTP configuration and try again." }, 502);
