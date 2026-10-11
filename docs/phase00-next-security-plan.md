@@ -1,6 +1,6 @@
 # Phase 00 — Next Security Work
 
-Status: planning only. This document does not authorize production changes.
+Status: planning and source-only remediation. This document does not authorize production changes.
 
 ## 1. Replace shared-password account creation
 
@@ -27,6 +27,15 @@ Status: planning only. This document does not authorize production changes.
 - Do not blanket-revoke authenticated execution from legitimate RPCs.
 - Preserve intentional public recruitment submissions only after validating token scoping, expiry, submission limits, and data exposure.
 - Recheck Supabase Security Advisor after reviewed changes.
+
+### Financial RPC audit — live read-only inspection (2026-10-11)
+
+- `post_journal_entry_atomic(jsonb)` requires authenticated manager + company access, an open fiscal period, active same-company accounts, at least two nonzero-sided lines, and equal positive debit/credit totals. Remaining checks: validate party/project references against the same tenant/company, define a maximum line count and monetary precision policy, and validate source-type/source-id relationships where intended to be authoritative.
+- `reverse_journal_entry_atomic(jsonb)` scopes the original journal to tenant/company and reverses its lines, but an existing idempotency key is returned without checking that its stored `request_hash` matches the requested original entry/date/narration. This can return a different pre-existing entry as if it were this reversal. The original entry row is locked and status-checked; review lock ordering before changing concurrency logic.
+- `create_payroll_payment_batch_atomic(jsonb)` calculates the batch total from posted payroll run items and validates the bank account and employee ownership. Its idempotency hash excludes an item snapshot; follow-up review must ensure payroll run items and verified employee bank accounts cannot change after posting/approval and before payment.
+- `process_payroll_payment_batch_atomic(uuid,text)` is ADMIN-only and checks approved status, approved request, pending-item total vs batch total, bank account, salary payable mapping, and open fiscal period. Remaining checks: ensure the approval snapshot matches immutable payment items, and confirm payment item/header direct DML permissions cannot bypass approval.
+- `create_purchase_bill_with_accounting_atomic(jsonb,jsonb)` uses an idempotency lock, validates the PO and GRN, checks remaining accepted quantities and GRNI availability, and posts a journal through the journal RPC. The live `create_purchase_bill_atomic(jsonb,jsonb)` is separately executable by authenticated clients and creates a bill in `verified` status without its accounting journal. Repository caller search found the frontend uses the accounting wrapper, not the inner creator. A source-only privilege migration removes direct anon/authenticated execution of the inner RPC while preserving service-role execution; the wrapper's security-definer owner can still call it. This must pass isolated regression and full procurement integration checks before production use.
+- These are audit observations, not a declaration that production has been changed. The new privilege migration remains source-only.
 
 ## 4. CRM company-access rollout blocker (verified 2026-10-11)
 
