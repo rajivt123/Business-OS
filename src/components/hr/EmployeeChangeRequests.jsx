@@ -16,7 +16,7 @@ export default function EmployeeChangeRequests({ targetEmployee = null, onClose 
   // Determine subject employee: targetEmployee or authenticated user's linked employee
   const currentEmployee = useMemo(() => {
     if (targetEmployee) return targetEmployee;
-    return employees.find(e => e.user_id === authUserId || e.email === currentUser?.email) || employees[0] || null;
+    return employees.find(e => (e.linked_user_id && e.linked_user_id === authUserId) || (e.user_id && e.user_id === authUserId) || (currentUser?.email && e.email === currentUser.email)) || employees[0] || null;
   }, [targetEmployee, employees, authUserId, currentUser]);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -47,12 +47,18 @@ export default function EmployeeChangeRequests({ targetEmployee = null, onClose 
       setNoticeBanner({ type: 'error', text: 'No active employee profile linked to current user.' });
       return;
     }
+    const curMobile = currentEmployee.personal_mobile || currentEmployee.mobile || '';
+    const curEmail = currentEmployee.personal_email || currentEmployee.email || '';
+    const curAddress = currentEmployee.current_address || currentEmployee.address || '';
+    const curEmergency = currentEmployee.emergency_contact_phone || currentEmployee.emergency_contact || '';
+    const curMarital = currentEmployee.marital_status || 'Single';
+
     setFormFields({
-      mobile: currentEmployee.mobile || '',
-      email: currentEmployee.email || '',
-      address: currentEmployee.address || '',
-      emergency_contact: currentEmployee.emergency_contact || '',
-      marital_status: currentEmployee.marital_status || 'Single',
+      mobile: curMobile,
+      email: curEmail,
+      address: curAddress,
+      emergency_contact: curEmergency,
+      marital_status: curMarital,
       reason: ''
     });
     setIsCreateModalOpen(true);
@@ -66,25 +72,31 @@ export default function EmployeeChangeRequests({ targetEmployee = null, onClose 
     const payload = {};
     const snapshot = {};
 
-    if (formFields.mobile !== currentEmployee.mobile) {
+    const curMobile = currentEmployee.personal_mobile || currentEmployee.mobile || '';
+    const curEmail = currentEmployee.personal_email || currentEmployee.email || '';
+    const curAddress = currentEmployee.current_address || currentEmployee.address || '';
+    const curEmergency = currentEmployee.emergency_contact_phone || currentEmployee.emergency_contact || '';
+    const curMarital = currentEmployee.marital_status || 'Single';
+
+    if (formFields.mobile !== curMobile) {
       payload.mobile = formFields.mobile;
-      snapshot.mobile = currentEmployee.mobile || '';
+      snapshot.mobile = curMobile;
     }
-    if (formFields.email !== currentEmployee.email) {
+    if (formFields.email !== curEmail) {
       payload.email = formFields.email;
-      snapshot.email = currentEmployee.email || '';
+      snapshot.email = curEmail;
     }
-    if (formFields.address !== currentEmployee.address) {
+    if (formFields.address !== curAddress) {
       payload.address = formFields.address;
-      snapshot.address = currentEmployee.address || '';
+      snapshot.address = curAddress;
     }
-    if (formFields.emergency_contact !== currentEmployee.emergency_contact) {
+    if (formFields.emergency_contact !== curEmergency) {
       payload.emergency_contact = formFields.emergency_contact;
-      snapshot.emergency_contact = currentEmployee.emergency_contact || '';
+      snapshot.emergency_contact = curEmergency;
     }
-    if (formFields.marital_status !== currentEmployee.marital_status) {
+    if (formFields.marital_status !== curMarital) {
       payload.marital_status = formFields.marital_status;
-      snapshot.marital_status = currentEmployee.marital_status || 'Single';
+      snapshot.marital_status = curMarital;
     }
 
     if (Object.keys(payload).length === 0) {

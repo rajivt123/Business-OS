@@ -51,9 +51,12 @@ export default function ApprovalCenter() {
       if (!currentStep) return true; // Default visible if step details pending
 
       // Check if user is approver by role or explicit ID
-      if (currentStep.approver_type === 'role') {
-        if (currentStep.approver_role === currentRole) return true;
-        if (['OWNER', 'ADMIN'].includes(currentRole)) return true;
+      if (currentStep.assigned_user_id && currentStep.assigned_user_id === authUserId) return true;
+      const appType = (currentStep.approver_type || '').toLowerCase();
+      const appRole = (currentStep.approver_role || '').toUpperCase();
+      if (appType === 'role') {
+        if (appRole === currentRole) return true;
+        if (['OWNER', 'ADMIN', 'MANAGER'].includes(currentRole)) return true;
       }
       return false;
     });
@@ -527,7 +530,7 @@ function RequestDetailModal({
   }, [request.current_snapshot]);
 
   const subjectEmp = employees.find(e => e.id === request.subject_employee_id);
-  const subjectUserId = subjectEmp?.user_id;
+  const subjectUserId = subjectEmp?.linked_user_id || subjectEmp?.user_id;
 
   const isMaker = request.requested_by === authUserId || (subjectUserId && subjectUserId === authUserId);
   const canActOnStep = ['pending_approval', 'submitted'].includes(request.status) && !isMaker;
