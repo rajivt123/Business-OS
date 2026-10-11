@@ -41,12 +41,14 @@ Before applying the policy-removal migration:
 - Verify all affected UI flows and related tables, including companies, units, works, issues, logs, reminders, and profile peer visibility.
 - Confirm the intended meaning of `TEAM` membership vs legacy profile roles and role permissions.
 
-## 5. Git/release status
+## 5. Git/release status (rechecked 2026-10-11)
 
-- Security work stays on `security/phase00-remove-hardcoded-qa-credential` and draft PR #1.
-- The branch currently diverges from `main` (reported 25 commits ahead, 1 behind). Do not rebase, reset, merge, or force-push until the single main-only commit and merge-base are inspected.
-- Vercel's PR check was successful at an earlier PR head; re-run checks after subsequent commits.
-- No production migration or Edge Function deployment is authorized by this plan.
+- Security work stays on `security/phase00-remove-hardcoded-qa-credential` and draft PR #1: https://github.com/rajivt123/Business-OS/pull/1
+- GitHub compare currently reports the security branch **45 commits ahead and 0 behind** `main`; no rebase/reset/force-push is needed to resolve divergence based on this current compare.
+- PR #1 is open, draft, unmerged, with 21 changed files. Its current head is `730e1b644076fbe8c400d5904419ceaad14aa23c`.
+- The Vercel check for that exact head reports **success**. This is a deployment/build signal only; it does not establish that SQL, RLS behavior, Edge Functions, or tenant isolation passed runtime tests.
+- Supabase has one listed branch, named `main`, with status `MIGRATIONS_FAILED`; no paid development branch will be created under the current no-cost constraint.
+- No production migration or Edge Function deployment is authorized by this plan. Keep PR #1 in draft.
 
 ## Release guardrails
 
