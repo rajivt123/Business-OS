@@ -9,7 +9,7 @@ export type InviteBodyParseResult =
   | { ok: true; body: InviteRequestBody }
   | { ok: false; status: 400 | 413; error: string };
 
-export function parseInviteRequestBody(rawBody: ArrayBuffer): InviteBodyParseResult {
+export function parseInviteRequestBody(rawBody: Uint8Array): InviteBodyParseResult {
   if (rawBody.byteLength > 16_384) {
     return { ok: false, status: 413, error: "Request body exceeds 16 KiB" };
   }
