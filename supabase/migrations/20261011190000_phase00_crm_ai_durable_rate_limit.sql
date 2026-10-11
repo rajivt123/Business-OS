@@ -49,7 +49,10 @@ BEGIN
         WHEN current_limit.window_started_at
              + pg_catalog.make_interval(secs => p_window_seconds) <= pg_catalog.clock_timestamp()
         THEN 1
-        ELSE current_limit.request_count + 1
+        ELSE CASE
+          WHEN current_limit.request_count >= p_limit + 1 THEN p_limit + 1
+          ELSE current_limit.request_count + 1
+        END
       END,
       updated_at = pg_catalog.clock_timestamp()
   RETURNING request_count INTO v_count;
