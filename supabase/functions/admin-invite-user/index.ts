@@ -31,7 +31,7 @@ Deno.serve(async (req: Request) => {
   const callerId = claimsData?.claims?.sub;
   if (claimsError || typeof callerId !== "string") return json({ error: "Invalid or expired session" }, 401);
 
-  let body: { email?: unknown; role?: unknown };
+  let body: { email?: unknown; role?: unknown; tenant_id?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -39,6 +39,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const requestedTenantId = typeof body.tenant_id === "string" ? body.tenant_id.trim() : "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedTenantId)) {
+    return json({ error: "A valid tenant_id is required" }, 400);
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     return json({ error: "Enter a valid email address" }, 400);
   }
@@ -61,7 +65,7 @@ Deno.serve(async (req: Request) => {
   );
   if (!adminMembership?.tenant_id) return json({ error: "Tenant administrator permission required" }, 403);
 
-  const tenantId = adminMembership.tenant_id;
+  const tenantId = requestedTenantId;
   // Auth Admin API is the authoritative duplicate-account check. If an account already
   // exists, Supabase returns an error and no membership is granted by this endpoint.
   const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
