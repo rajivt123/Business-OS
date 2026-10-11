@@ -49,6 +49,11 @@ BEGIN
     'Reversal of '||v_original_voucher
   );
 
+  -- Serialize reversals of the same source entry before checking the idempotency key.
+  -- This prevents a concurrent retry from observing the source as already reversed
+  -- before it has a chance to find the first transaction's committed reversal.
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_original::text,0));
+
   SELECT * INTO v_existing
   FROM public.accounting_journal_entries
   WHERE tenant_company_id=v_company AND idempotency_key=v_idem;
@@ -73,24 +78,6 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Journal entry not found'; END IF;
   IF v_original_reversal IS NOT NULL THEN RAISE EXCEPTION 'A reversal entry cannot itself be reversed'; END IF;
   IF v_status <> 'posted' THEN RAISE EXCEPTION 'Only a posted journal entry can be reversed'; END IF;
-
-  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_original::text,0));
-
-  -- Re-check after acquiring the source-entry lock to handle concurrent same-key calls.
-  SELECT * INTO v_existing
-  FROM public.accounting_journal_entries
-  WHERE tenant_company_id=v_company AND idempotency_key=v_idem;
-  IF FOUND THEN
-    IF v_existing.reversal_of_entry_id IS DISTINCT FROM v_original
-       OR v_existing.source_type IS DISTINCT FROM 'journal_reversal'
-       OR v_existing.entry_date IS DISTINCT FROM v_reverse_date
-       OR v_existing.narration IS DISTINCT FROM v_expected_narration THEN
-      RAISE EXCEPTION 'IDEMPOTENCY_KEY_REUSED: key already belongs to a different reversal request'
-        USING ERRCODE='22023';
-    END IF;
-    RETURN jsonb_build_object('id',v_existing.id,'reversal_of_entry_id',v_original,
-      'status',v_existing.status,'idempotent',true);
-  END IF;
 
   SELECT id INTO v_period FROM public.accounting_fiscal_periods
   WHERE tenant_id=v_tenant AND tenant_company_id=v_company
