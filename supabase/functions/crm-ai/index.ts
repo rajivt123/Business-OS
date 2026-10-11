@@ -52,7 +52,13 @@ Deno.serve(async (req: Request) => {
   if (claimError || typeof userId !== "string" || !isUuid(userId)) return respond({ error: "Invalid or expired session" }, 401);
 
   let body: { action?: unknown; tenant_id?: unknown; tenant_company_id?: unknown; work_id?: unknown; message?: unknown };
-  try { body = await req.json(); } catch { return respond({ error: "Invalid JSON body" }, 400); }
+  try {
+    // Enforce the limit on actual bytes, not only Content-Length (which clients may omit).
+    const rawBody = await req.arrayBuffer();
+    if (rawBody.byteLength > 16384) return respond({ error: "Request body is too large" }, 413);
+    body = JSON.parse(new TextDecoder().decode(rawBody));
+    if (!body || typeof body !== "object" || Array.isArray(body)) return respond({ error: "Invalid JSON body" }, 400);
+  } catch { return respond({ error: "Invalid JSON body" }, 400); }
   const action = cleanText(body.action, 32), tenantId = body.tenant_id;
   const tenantCompanyId = body.tenant_company_id == null || body.tenant_company_id === "" ? null : body.tenant_company_id;
   const workId = body.work_id == null || body.work_id === "" ? null : body.work_id;
@@ -88,6 +94,18 @@ Deno.serve(async (req: Request) => {
       if (!companyGrant) return respond({ error: "Operating company access denied" }, 403);
     }
   }
+
+  // Durable per-user limit: 10 AI requests per 60-second window. The RPC is
+  // service-role-only and increments atomically to avoid per-instance memory limits.
+  const { data: rateAllowed, error: rateError } = await admin.rpc("consume_crm_ai_rate_limit", {
+    p_user_id: userId,
+    p_limit: 10,
+    p_window_seconds: 60,
+  });
+  if (rateError || typeof rateAllowed !== "boolean") {
+    return respond({ error: "AI service temporarily unavailable" }, 503);
+  }
+  if (!rateAllowed) return respond({ error: "AI request limit reached. Please wait a minute and retry." }, 429);
 
   let context = "";
   if (action === "summarize_project") {
