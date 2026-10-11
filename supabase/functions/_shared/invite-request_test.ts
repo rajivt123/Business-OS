@@ -1,8 +1,8 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { parseInviteRequestBody } from "./invite-request.ts";
 
-function bytes(value: string): ArrayBuffer {
-  return new TextEncoder().encode(value).buffer;
+function bytes(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
 }
 
 Deno.test("accepts an object body", () => {
