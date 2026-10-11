@@ -25,7 +25,7 @@ CREATE TABLE public.approval_request_actions(
 );
 CREATE TABLE public.employees(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,tenant_company_id uuid NOT NULL,linked_user_id uuid);
 CREATE FUNCTION public.apply_employee_change_request_atomic(p_approval_request_id uuid) RETURNS jsonb
-LANGUAGE plpgsql AS $
+LANGUAGE plpgsql AS $mock$
 BEGIN
  IF coalesce(current_setting('test.snapshot_conflict',true),'false')='true' THEN
   UPDATE public.approval_requests SET status='failed',updated_at=now() WHERE id=p_approval_request_id;
