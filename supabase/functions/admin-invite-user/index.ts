@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { parseInviteRequestBody } from "../_shared/invite-request.ts";
 import { readBoundedBody } from "../_shared/bounded-request-body.ts";
 
@@ -17,7 +17,7 @@ function json(body: unknown, status = 200) {
 }
 
 async function rollbackPendingInvite(
-  admin: ReturnType<typeof createClient>,
+  admin: SupabaseClient<any, "public", any>,
   userId: string,
   membershipId?: string,
 ): Promise<boolean> {
