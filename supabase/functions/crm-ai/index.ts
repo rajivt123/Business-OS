@@ -54,15 +54,29 @@ Deno.serve(async (req: Request) => {
   if (action === "summarize_project" && !isUuid(workId)) return respond({ error: "A valid work_id is required" }, 400);
 
   // Service-role reads bypass RLS; verify tenant membership and explicitly scope all CRM reads.
-  const { data: membership, error: membershipError } = await admin.from("tenant_memberships").select("tenant_id,role,status")
+  const { data: membership, error: membershipError } = await admin.from("tenant_memberships").select("id,tenant_id,role,status")
     .eq("tenant_id", tenantId).eq("user_id", userId).eq("status", "active").maybeSingle();
   if (membershipError) return respond({ error: "Unable to verify tenant access" }, 500);
   if (!membership) return respond({ error: "Tenant access denied" }, 403);
+  const elevatedTenantRole = ["OWNER", "ADMIN"].includes(String(membership.role || "").toUpperCase());
+
+  // Non-admin tenant members must be scoped to an explicitly assigned operating company.
+  // Otherwise a tenant-wide portfolio request would bypass private.has_company_access().
+  if (!tenantCompanyId && !elevatedTenantRole) {
+    return respond({ error: "Select an operating company before using CRM AI" }, 403);
+  }
   if (tenantCompanyId) {
-    const { data: company, error } = await admin.from("tenant_companies").select("id").eq("id", tenantCompanyId)
-      .eq("tenant_id", tenantId).eq("status", "active").maybeSingle();
+    const { data: company, error } = await admin.from("tenant_companies").select("id")
+      .eq("id", tenantCompanyId).eq("tenant_id", tenantId).eq("status", "active").maybeSingle();
     if (error) return respond({ error: "Unable to verify company access" }, 500);
     if (!company) return respond({ error: "Company access denied" }, 403);
+
+    if (!elevatedTenantRole) {
+      const { data: companyGrant, error: grantError } = await admin.from("user_company_access").select("id")
+        .eq("membership_id", membership.id).eq("tenant_company_id", tenantCompanyId).eq("can_view", true).maybeSingle();
+      if (grantError) return respond({ error: "Unable to verify operating company access" }, 500);
+      if (!companyGrant) return respond({ error: "Operating company access denied" }, 403);
+    }
   }
 
   let context = "";
