@@ -15,6 +15,23 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function rollbackPendingInvite(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  membershipId?: string,
+): Promise<boolean> {
+  let complete = true;
+  if (membershipId) {
+    const { error } = await admin.from("tenant_memberships").delete().eq("id", membershipId);
+    if (error) complete = false;
+  }
+  const { error: profileError } = await admin.from("profiles").delete().eq("id", userId);
+  if (profileError) complete = false;
+  const { error: authError } = await admin.auth.admin.deleteUser(userId);
+  if (authError) complete = false;
+  return complete;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -97,8 +114,10 @@ Deno.serve(async (req: Request) => {
   }, { onConflict: "id" });
 
   if (profileError) {
-    await admin.auth.admin.deleteUser(userId);
-    return json({ error: "Invitation setup failed while creating the user profile; the pending account was rolled back." }, 500);
+    const rolledBack = await rollbackPendingInvite(admin, userId);
+    return json({ error: rolledBack
+      ? "Invitation setup failed while creating the user profile; the pending account was rolled back."
+      : "Invitation setup failed and cleanup was incomplete; an administrator must review the pending account." }, 500);
   }
 
   const { data: membership, error: insertMembershipError } = await admin.from("tenant_memberships").insert({
@@ -109,9 +128,10 @@ Deno.serve(async (req: Request) => {
   }).select("id").single();
 
   if (insertMembershipError || !membership) {
-    await admin.from("profiles").delete().eq("id", userId);
-    await admin.auth.admin.deleteUser(userId);
-    return json({ error: "Invitation setup failed while assigning tenant access; the pending account was rolled back." }, 500);
+    const rolledBack = await rollbackPendingInvite(admin, userId);
+    return json({ error: rolledBack
+      ? "Invitation setup failed while assigning tenant access; the pending account was rolled back."
+      : "Invitation setup failed and cleanup was incomplete; an administrator must review the pending account." }, 500);
   }
 
   // A tenant membership alone does not grant access to operating companies for non-admin roles.
@@ -123,10 +143,10 @@ Deno.serve(async (req: Request) => {
     can_edit: requestedRole === "MANAGER" || requestedRole === "TEAM",
   });
   if (accessError) {
-    await admin.from("tenant_memberships").delete().eq("id", membership.id);
-    await admin.from("profiles").delete().eq("id", userId);
-    await admin.auth.admin.deleteUser(userId);
-    return json({ error: "Invitation setup failed while assigning operating company access; the pending account was rolled back." }, 500);
+    const rolledBack = await rollbackPendingInvite(admin, userId, membership.id);
+    return json({ error: rolledBack
+      ? "Invitation setup failed while assigning operating company access; the pending account was rolled back."
+      : "Invitation setup failed and cleanup was incomplete; an administrator must review the pending account." }, 500);
   }
 
   return json({ success: true, email, role: requestedRole, tenant_company_id: requestedCompanyId });
