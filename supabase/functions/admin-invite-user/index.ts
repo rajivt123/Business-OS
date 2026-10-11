@@ -31,12 +31,25 @@ Deno.serve(async (req: Request) => {
   const callerId = claimsData?.claims?.sub;
   if (claimsError || typeof callerId !== "string") return json({ error: "Invalid or expired session" }, 401);
 
-  let body: { email?: unknown; role?: unknown; tenant_id?: unknown; tenant_company_id?: unknown };
+  // Enforce a real byte limit rather than trusting Content-Length, which clients can omit.
+  let rawBody: ArrayBuffer;
   try {
-    body = await req.json();
+    rawBody = await req.arrayBuffer();
+  } catch {
+    return json({ error: "Unable to read request body" }, 400);
+  }
+  if (rawBody.byteLength > 16_384) return json({ error: "Request body exceeds 16 KiB" }, 413);
+
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(new TextDecoder().decode(rawBody));
   } catch {
     return json({ error: "Invalid JSON body" }, 400);
   }
+  if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
+    return json({ error: "Request body must be a JSON object" }, 400);
+  }
+  const body = parsedBody as { email?: unknown; role?: unknown; tenant_id?: unknown; tenant_company_id?: unknown };
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const requestedTenantId = typeof body.tenant_id === "string" ? body.tenant_id.trim() : "";
