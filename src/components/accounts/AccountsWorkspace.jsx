@@ -514,9 +514,11 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                         <td className="py-3 px-4 text-slate-800 dark:text-slate-200 truncate max-w-xs">{j.narration || '-'}</td>
                         <td className="py-3 px-4 text-right font-mono text-slate-600 dark:text-slate-300">{j.lines?.length || 0}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            POSTED
-                          </span>
+                          {j.status ? (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${String(j.status).toLowerCase() === 'posted' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'}`}>
+                              {String(j.status).replace(/_/g, ' ').toUpperCase()}
+                            </span>
+                          ) : <span className="text-slate-500">Unavailable</span>}
                         </td>
                       </tr>
                     ))}
