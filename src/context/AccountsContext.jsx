@@ -61,9 +61,7 @@ export function AccountsProvider({ children }) {
       if (err) {
         console.error('[AccountsContext] Error fetching financials:', err);
         setFinancials(null);
-        if (err.code === '42501') {
-          setError('Authorization error (42501) accessing accounting financials');
-        }
+        setError(`Financial report RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
       setFinancials(data || null);
@@ -87,9 +85,7 @@ export function AccountsProvider({ children }) {
       if (err) {
         console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
         setArApIntegrity(null);
-        if (err.code === '42501') {
-          setError('Authorization error (42501) accessing AR/AP integrity');
-        }
+        setError(`AR/AP integrity RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
       setArApIntegrity(data || null);
@@ -166,12 +162,50 @@ export function AccountsProvider({ children }) {
 
       const { data, error: err } = await q;
       if (err) throw err;
-      setBankAccounts(data || []);
+
+      // Calculate balances using two explicit queries rather than nested PostgREST
+      // filters, so tenant/date/status scoping is clear and the query contract is robust.
+      // Include opening entries before the selected period; only the end date limits balance.
+      let entriesQuery = supabase
+        .from('accounting_journal_entries')
+        .select('id')
+        .eq('status', 'posted')
+        .lte('entry_date', toDate);
+      if (opCoId) entriesQuery = entriesQuery.eq('tenant_company_id', opCoId);
+      else if (tenantId) entriesQuery = entriesQuery.eq('tenant_id', tenantId);
+
+      const { data: postedEntries, error: entriesError } = await entriesQuery;
+      if (entriesError) throw entriesError;
+
+      const entryIds = (postedEntries || []).map((entry) => entry.id);
+      let ledgerLines = [];
+      if (entryIds.length) {
+        const { data: lines, error: lineError } = await supabase
+          .from('accounting_journal_lines')
+          .select('journal_entry_id, account_id, debit, credit')
+          .in('journal_entry_id', entryIds);
+        if (lineError) throw lineError;
+        ledgerLines = lines || [];
+      }
+
+      const balanceByAccount = new Map();
+      for (const line of ledgerLines) {
+        const current = balanceByAccount.get(line.account_id) || 0;
+        balanceByAccount.set(
+          line.account_id,
+          current + (Number(line.debit) || 0) - (Number(line.credit) || 0)
+        );
+      }
+
+      setBankAccounts((data || []).map((account) => ({
+        ...account,
+        current_balance: balanceByAccount.get(account.account_id) || 0
+      })));
     } catch (err) {
       console.error('[AccountsContext] Error fetching bank accounts:', err);
       setBankAccounts([]);
     }
-  }, [tenantId]);
+  }, [tenantId, toDate]);
 
   const fetchBankTransactions = useCallback(async (opCoId) => {
     try {
