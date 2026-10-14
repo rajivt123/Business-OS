@@ -166,12 +166,38 @@ export function AccountsProvider({ children }) {
 
       const { data, error: err } = await q;
       if (err) throw err;
-      setBankAccounts(data || []);
+
+      // Bank account balances are ledger-derived through the selected end date.
+      // Include prior-period opening entries; the dashboard movement card is period-scoped.
+      let lineQuery = supabase
+        .from('accounting_journal_lines')
+        .select('account_id, debit, credit, journal_entry:accounting_journal_entries!inner(entry_date, status, tenant_company_id)')
+        .eq('journal_entry.status', 'posted')
+        .lte('journal_entry.entry_date', toDate);
+      if (opCoId) lineQuery = lineQuery.eq('journal_entry.tenant_company_id', opCoId);
+      else if (tenantId) lineQuery = lineQuery.eq('journal_entry.tenant_id', tenantId);
+
+      const { data: ledgerLines, error: lineError } = await lineQuery;
+      if (lineError) throw lineError;
+
+      const balanceByAccount = new Map();
+      for (const line of ledgerLines || []) {
+        const current = balanceByAccount.get(line.account_id) || 0;
+        balanceByAccount.set(
+          line.account_id,
+          current + (Number(line.debit) || 0) - (Number(line.credit) || 0)
+        );
+      }
+
+      setBankAccounts((data || []).map((account) => ({
+        ...account,
+        current_balance: balanceByAccount.get(account.account_id) || 0
+      })));
     } catch (err) {
       console.error('[AccountsContext] Error fetching bank accounts:', err);
       setBankAccounts([]);
     }
-  }, [tenantId]);
+  }, [tenantId, toDate]);
 
   const fetchBankTransactions = useCallback(async (opCoId) => {
     try {
