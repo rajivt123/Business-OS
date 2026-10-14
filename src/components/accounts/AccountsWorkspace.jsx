@@ -238,15 +238,15 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-5 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
                 <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium mb-2">
-                  <span>Cash & Bank Balance</span>
+                  <span>Cash & Bank Movement</span>
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
                     ₹
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                  {formatFinancialValue(financials?.cash_and_bank ?? financials?.total_cash_bank ?? financials?.cash_balance ?? financials?.cash)}
+                  {formatFinancialValue(financials?.cash_flow?.posted_cash_bank_movement)}
                 </div>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Authoritative liquidity from database RPC</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Net posted cash/bank movement for the selected period</p>
               </div>
 
               <div className="p-5 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm">
@@ -257,7 +257,7 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                  {formatFinancialValue(financials?.accounts_receivable ?? financials?.total_receivables ?? financials?.receivables ?? financials?.ar)}
+                  {formatFinancialValue(financials?.receivables?.outstanding)}
                 </div>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Total customer receivables balance</p>
               </div>
@@ -270,7 +270,7 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                   </div>
                 </div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">
-                  {formatFinancialValue(financials?.accounts_payable ?? financials?.total_payables ?? financials?.payables ?? financials?.ap)}
+                  {formatFinancialValue(financials?.payables?.outstanding)}
                 </div>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Total vendor payables balance</p>
               </div>
@@ -302,19 +302,19 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
                     <span className="text-slate-500 dark:text-slate-400">Total Revenue:</span>
                     <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                      {formatFinancialValue(financials?.total_revenue ?? financials?.revenue ?? financials?.sales_revenue)}
+                      {formatFinancialValue(financials?.profit_and_loss?.revenue)}
                     </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
                     <span className="text-slate-500 dark:text-slate-400">Total Expenses:</span>
                     <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                      {formatFinancialValue(financials?.total_expenses ?? financials?.expenses)}
+                      {formatFinancialValue(financials?.profit_and_loss?.expenses)}
                     </span>
                   </div>
                   <div className="flex justify-between py-1 font-bold pt-1 text-sm">
                     <span className="text-slate-700 dark:text-slate-200">Net Result:</span>
                     <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                      {formatFinancialValue(financials?.net_result ?? financials?.net_profit ?? financials?.pnl)}
+                      {formatFinancialValue(financials?.profit_and_loss?.net_result)}
                     </span>
                   </div>
                 </div>
@@ -329,22 +329,38 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
                     <span className="text-slate-500 dark:text-slate-400">Total Assets:</span>
                     <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                      {formatFinancialValue(financials?.total_assets ?? financials?.assets)}
+                      {formatFinancialValue(financials?.balance_sheet?.assets)}
                     </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
                     <span className="text-slate-500 dark:text-slate-400">Total Liabilities:</span>
                     <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                      {formatFinancialValue(financials?.total_liabilities ?? financials?.liabilities)}
+                      {formatFinancialValue(financials?.balance_sheet?.liabilities)}
                     </span>
                   </div>
                   <div className="flex justify-between py-1 font-bold pt-1 text-sm">
                     <span className="text-slate-700 dark:text-slate-200">Total Equity:</span>
                     <span className="font-mono text-indigo-600 dark:text-indigo-400">
-                      {formatFinancialValue(financials?.total_equity ?? financials?.equity)}
+                      {formatFinancialValue(financials?.balance_sheet?.equity)}
                     </span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-5 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm space-y-3">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Trial Balance</h3>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60"><span className="text-slate-500 dark:text-slate-400">Total Debit</span><span className="font-mono font-bold">{formatFinancialValue(financials?.trial_balance?.debit)}</span></div>
+                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60"><span className="text-slate-500 dark:text-slate-400">Total Credit</span><span className="font-mono font-bold">{formatFinancialValue(financials?.trial_balance?.credit)}</span></div>
+                  <div className="flex justify-between py-1"><span className="text-slate-500 dark:text-slate-400">Difference</span><span className="font-mono font-bold">{formatFinancialValue(financials?.trial_balance?.difference)}</span></div>
+                </div>
+              </div>
+              <div className="p-5 bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm space-y-3">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Balance Sheet Check</h3>
+                <div className="flex items-center justify-between gap-3 text-xs"><span className="text-slate-500 dark:text-slate-400">Assets − liabilities − equity − current result</span><span className="font-mono font-bold">{formatFinancialValue(financials?.balance_sheet?.balance_check)}</span></div>
+                <div className="text-xs">{financials?.balance_sheet?.is_balanced === true ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Balanced</span> : financials?.balance_sheet?.is_balanced === false ? <span className="text-rose-600 dark:text-rose-400 font-semibold">Out of balance</span> : <span className="text-slate-500 dark:text-slate-400">Unavailable</span>}</div>
               </div>
             </div>
 
@@ -498,9 +514,11 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                         <td className="py-3 px-4 text-slate-800 dark:text-slate-200 truncate max-w-xs">{j.narration || '-'}</td>
                         <td className="py-3 px-4 text-right font-mono text-slate-600 dark:text-slate-300">{j.lines?.length || 0}</td>
                         <td className="py-3 px-4 text-center">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            POSTED
-                          </span>
+                          {j.status ? (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${String(j.status).toLowerCase() === 'posted' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'}`}>
+                              {String(j.status).replace(/_/g, ' ').toUpperCase()}
+                            </span>
+                          ) : <span className="text-slate-500">Unavailable</span>}
                         </td>
                       </tr>
                     ))}
