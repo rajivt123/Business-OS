@@ -719,8 +719,14 @@ export default function AccountsWorkspace({ isDarkMode: isDarkModeProp }) {
                       <td className="py-3.5 px-4 text-slate-800 dark:text-slate-200 truncate max-w-sm">{j.narration || '-'}</td>
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-800 dark:text-slate-200">{j.lines?.length || 0}</td>
                       <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          POSTED
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                          j.status === 'posted'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                            : j.status === 'reversed'
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                              : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                        }`}>
+                          {(j.status || 'unknown').toUpperCase()}
                         </span>
                       </td>
                     </tr>
