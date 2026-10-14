@@ -61,9 +61,7 @@ export function AccountsProvider({ children }) {
       if (err) {
         console.error('[AccountsContext] Error fetching financials:', err);
         setFinancials(null);
-        if (err.code === '42501') {
-          setError('Authorization error (42501) accessing accounting financials');
-        }
+        setError(`Financial report RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
       setFinancials(data || null);
@@ -87,9 +85,7 @@ export function AccountsProvider({ children }) {
       if (err) {
         console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
         setArApIntegrity(null);
-        if (err.code === '42501') {
-          setError('Authorization error (42501) accessing AR/AP integrity');
-        }
+        setError(`AR/AP integrity RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
       setArApIntegrity(data || null);
