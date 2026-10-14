@@ -171,7 +171,7 @@ export function AccountsProvider({ children }) {
       // Include prior-period opening entries; the dashboard movement card is period-scoped.
       let lineQuery = supabase
         .from('accounting_journal_lines')
-        .select('account_id, debit, credit, journal_entry:accounting_journal_entries!inner(entry_date, status, tenant_company_id)')
+        .select('account_id, debit, credit, journal_entry:accounting_journal_entries!inner(entry_date, status, tenant_company_id, tenant_id)')
         .eq('journal_entry.status', 'posted')
         .lte('journal_entry.entry_date', toDate);
       if (opCoId) lineQuery = lineQuery.eq('journal_entry.tenant_company_id', opCoId);
