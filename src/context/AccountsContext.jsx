@@ -167,21 +167,33 @@ export function AccountsProvider({ children }) {
       const { data, error: err } = await q;
       if (err) throw err;
 
-      // Bank account balances are ledger-derived through the selected end date.
-      // Include prior-period opening entries; the dashboard movement card is period-scoped.
-      let lineQuery = supabase
-        .from('accounting_journal_lines')
-        .select('account_id, debit, credit, journal_entry:accounting_journal_entries!inner(entry_date, status, tenant_company_id, tenant_id)')
-        .eq('journal_entry.status', 'posted')
-        .lte('journal_entry.entry_date', toDate);
-      if (opCoId) lineQuery = lineQuery.eq('journal_entry.tenant_company_id', opCoId);
-      else if (tenantId) lineQuery = lineQuery.eq('journal_entry.tenant_id', tenantId);
+      // Calculate balances using two explicit queries rather than nested PostgREST
+      // filters, so tenant/date/status scoping is clear and the query contract is robust.
+      // Include opening entries before the selected period; only the end date limits balance.
+      let entriesQuery = supabase
+        .from('accounting_journal_entries')
+        .select('id')
+        .eq('status', 'posted')
+        .lte('entry_date', toDate);
+      if (opCoId) entriesQuery = entriesQuery.eq('tenant_company_id', opCoId);
+      else if (tenantId) entriesQuery = entriesQuery.eq('tenant_id', tenantId);
 
-      const { data: ledgerLines, error: lineError } = await lineQuery;
-      if (lineError) throw lineError;
+      const { data: postedEntries, error: entriesError } = await entriesQuery;
+      if (entriesError) throw entriesError;
+
+      const entryIds = (postedEntries || []).map((entry) => entry.id);
+      let ledgerLines = [];
+      if (entryIds.length) {
+        const { data: lines, error: lineError } = await supabase
+          .from('accounting_journal_lines')
+          .select('journal_entry_id, account_id, debit, credit')
+          .in('journal_entry_id', entryIds);
+        if (lineError) throw lineError;
+        ledgerLines = lines || [];
+      }
 
       const balanceByAccount = new Map();
-      for (const line of ledgerLines || []) {
+      for (const line of ledgerLines) {
         const current = balanceByAccount.get(line.account_id) || 0;
         balanceByAccount.set(
           line.account_id,
