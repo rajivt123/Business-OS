@@ -64,10 +64,36 @@ export function AccountsProvider({ children }) {
         setError(`Financial report RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
-      setFinancials(data || null);
+      // Keep the RPC authoritative, but fail visibly when its payload does not match
+      // the report contract instead of silently rendering every metric as unavailable.
+      const report = data && typeof data === 'object'
+        ? (data.financials && typeof data.financials === 'object' ? data.financials
+          : data.result && typeof data.result === 'object' ? data.result
+          : data.data && typeof data.data === 'object' ? data.data
+          : data)
+        : null;
+      const hasExpectedShape = Boolean(
+        report?.profit_and_loss &&
+        report?.balance_sheet &&
+        report?.trial_balance &&
+        report?.cash_flow
+      );
+      if (!hasExpectedShape) {
+        const rootKeys = report && typeof report === 'object' ? Object.keys(report).slice(0, 20).join(', ') : typeof data;
+        console.error('[AccountsContext] Financial RPC returned an unexpected payload shape', {
+          payloadType: typeof data,
+          rootKeys,
+          hasData: data !== null && data !== undefined
+        });
+        setFinancials(null);
+        setError(`Financial report returned an unexpected response shape. Received: ${rootKeys || 'empty response'}. Expected profit_and_loss, balance_sheet, trial_balance and cash_flow.`);
+        return;
+      }
+      setFinancials(report);
     } catch (err) {
       console.error('[AccountsContext] Error fetching financials:', err);
       setFinancials(null);
+      setError(`Financial report request failed: ${err?.message || 'Unexpected client error'}`);
     }
   }, [tenantId, fromDate, toDate]);
 
@@ -88,10 +114,23 @@ export function AccountsProvider({ children }) {
         setError(`AR/AP integrity RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
-      setArApIntegrity(data || null);
+      const integrity = data && typeof data === 'object'
+        ? (data.integrity && typeof data.integrity === 'object' ? data.integrity
+          : data.result && typeof data.result === 'object' ? data.result
+          : data.data && typeof data.data === 'object' ? data.data
+          : data)
+        : null;
+      if (!integrity || typeof integrity !== 'object') {
+        console.error('[AccountsContext] AR/AP integrity RPC returned an empty or invalid payload');
+        setArApIntegrity(null);
+        setError('AR/AP integrity report returned an empty or invalid response.');
+        return;
+      }
+      setArApIntegrity(integrity);
     } catch (err) {
       console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
       setArApIntegrity(null);
+      setError(`AR/AP integrity request failed: ${err?.message || 'Unexpected client error'}`);
     }
   }, [tenantId, asOfDate]);
 
