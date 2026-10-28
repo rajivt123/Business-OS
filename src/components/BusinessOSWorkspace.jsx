@@ -31,6 +31,7 @@ import MasterBoqWorkspace from './mep/MasterBoqWorkspace';
 import AccountsWorkspace from './accounts/AccountsWorkspace';
 import ReportsWorkspace from './reports/ReportsWorkspace';
 import CompanySettingsWorkspace from './admin/CompanySettingsWorkspace';
+import PermissionsWorkspace from './admin/PermissionsWorkspace';
 import ProfileWorkspace from './profile/ProfileWorkspace';
 import AiChatModal from './ai/AiChatModal';
 import { supabase } from '../lib/supabase';
@@ -935,49 +936,11 @@ function AIPage({ onOpenAiChat }) {
 }
 
 function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
-  const cards = [
-    ['Company Settings', 'Company profiles, registrations, tax, branding & documents', Building2, true, 'company-settings'],
-    ['Users & Access', 'Users, roles, company access', UserCog, true, 'admin-panel'],
-    ['Permissions', 'View, create, edit, approve, assign, export', KeyRound, false],
-    ['Hierarchy', 'Reporting managers and delegation', Network, false],
-    ['Workflow', 'Stages, approval rules, numbering', Workflow, false],
-    ['Notifications', 'Routing and escalation rules', Bell, false],
-    ['Integrations', 'GST, e-invoice, e-way bill, Tally, SAP', Zap, false],
-    ['Audit Log', 'Immutable business activity history', History, false]
-  ];
   return (
-    <div className="space-y-4">
-      <SectionCard title="Administration" subtitle="System controls and user access management." icon={Settings}>
-        <div className="p-4 grid md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {cards.map(([a, b, I, isLive, navTarget]) => isLive ? (
-            <button key={a} onClick={() => {
-              if (navTarget === 'company-settings') {
-                onNavigate('company-settings');
-              } else {
-                data?.openAdminPanel?.();
-                onOpenCrm?.();
-              }
-            }} className="text-left p-4 rounded-2xl border border-sky-200 dark:border-sky-800/60 bg-sky-50/50 dark:bg-sky-950/20 hover:border-sky-500 transition cursor-pointer">
-              <div className="h-9 w-9 rounded-xl bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-300"><I size={17} /></div>
-              <h3 className="text-xs font-black mt-3 text-sky-900 dark:text-sky-200">{a}</h3>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-4">{b}</p>
-            </button>
-          ) : (
-            <UnavailableAction key={a} className="text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
-              <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400"><I size={17} /></div>
-              <h3 className="text-xs font-black mt-3">{a}</h3>
-              <p className="text-[10px] text-slate-400 mt-1 leading-4">{b}</p>
-            </UnavailableAction>
-          ))}
-        </div>
-      </SectionCard>
-      <SectionCard title="Authorization Model" subtitle="Existing user authorization management." icon={ShieldCheck}>
-        <div className="p-4 flex items-center justify-between">
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Manage active team member profiles, roles, and approval requests.</p>
-          <button onClick={() => { data?.openAdminPanel?.(); onOpenCrm?.(); }} className="os-primary cursor-pointer"><UserCog size={14} /> Open User Control Panel</button>
-        </div>
-      </SectionCard>
-    </div>
+    <PermissionsWorkspace
+      onNavigate={onNavigate}
+      onOpenUserPanel={() => { data?.openAdminPanel?.(); onOpenCrm?.(); }}
+    />
   );
 }
 
