@@ -80,6 +80,7 @@ export default function PermissionsWorkspace({ onOpenUserPanel, onNavigate }) {
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">Manage company access, module rights and delegated authority in one workspace.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => onNavigate?.('company-settings')} className="os-secondary inline-flex items-center gap-2"><Building2 size={14} /> Company settings</button>
           <button type="button" onClick={() => { setTab('people'); onOpenUserPanel?.(); }} className="os-secondary inline-flex items-center gap-2"><Users size={14} /> Existing user panel</button>
           <button type="button" onClick={() => { setTab('people'); setNotice('Invitation is not connected in this UI-only preview.'); }} className="os-primary inline-flex items-center gap-2"><Plus size={14} /> Add person</button>
         </div>
