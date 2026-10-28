@@ -44,6 +44,80 @@ Evidence: calls handleUpdateUserRole without awaiting it, no row-level saving st
 Impact: the user cannot distinguish saved role from a local/failed update and can trigger overlapping updates.
 Status: Confirmed source behavior.
 
+
+### F-005 — Admin-created user flow does not call the secure invitation function (P0)
+Files:
+- `src/context/CrmContext.jsx` — `handleAdminCreateUser`
+- `src/components/crm/Modals.jsx` — Add User UI
+- `supabase/functions/admin-invite-user/index.ts` — secure function exists in source, but repository search found no frontend invocation.
+Evidence:
+- The browser calls `supabase.auth.signUp` with the shared password `crm12345`.
+- It then upserts `profiles` and inserts `tenant_memberships` directly from the client.
+- Membership insert errors are not checked; the catch does not catch normal Supabase returned error objects.
+- It does not create the `user_company_access` grant required by the new company-scoped authorization model.
+- The secure `admin-invite-user` Edge Function has a constrained role allowlist and verifies caller membership/tenant/company, but the current Add User UI does not invoke it.
+Impact: Add User can report success when tenant membership or company-access setup failed, may create an account without required operating-company access, and uses unsafe credential provisioning.
+Status: Confirmed source/integration gap. The secure function's own runtime behavior and SMTP configuration remain untested.
+
+### F-006 — Tenant context assumes a user has at most one active tenant membership (P1)
+File: `src/context/CrmContext.jsx` — `initializeAuthAndTenantContext`.
+Evidence: selects active memberships by `user_id` and `status='active'`, then calls `.maybeSingle()` without selecting a tenant or resolving multiple memberships.
+Impact: if the intended multi-tenant model allows a user to belong to multiple tenants, the query can return a multiple-row error. The code logs the error but continues with no resolved tenant and no tenant role, potentially leaving the user in a partially initialized workspace. If the intended model truly allows only one active tenant per user, that invariant must be enforced by database constraints and documented; current code alone does not prove it.
+Status: Conditional defect requiring schema/constraint confirmation and a multi-tenant acceptance test.
+
+### F-007 — Global profile list is coupled to broad profile-read policies (P1 security/compatibility)
+Files:
+- `src/context/CrmContext.jsx` — `fetchProfiles` runs `profiles.select('*')` without tenant scoping.
+- `src/components/crm/Modals.jsx` — Admin Control Panel builds All Teammates and Pending from that list.
+- `supabase/migrations/20261011180000_phase00_remove_legacy_permissive_crm_policies.sql` on PR #1 removes global profile-reader policies.
+Evidence:
+- Frontend loads every profile it is allowed to read and uses the resulting rows for admin user management and pending counts; it does not derive the list from tenant memberships scoped to the active tenant.
+- The Phase 00 migration explicitly proposes removing global profile readers. If the frontend remains unchanged, the Admin Control Panel may lose access to teammate profiles, or the broad list may expose profile metadata across tenant boundaries while the permissive policy remains.
+Impact: a security hardening migration and the existing UI are not yet integrated. The correct design is a server/RLS-scoped tenant membership listing with only necessary profile fields.
+Status: Confirmed source design gap; exact live exposure depends on current policies. Do not apply the migration until frontend/RLS integration and access tests are complete.
+
+### F-008 — Authentication initialization has two competing role sources (P1)
+Files: `src/App.jsx` and `src/context/CrmContext.jsx`.
+Evidence:
+- Root `App.jsx` fetches only `profiles.role` and defaults to `guest` on missing profile/error.
+- `CrmContext.jsx` separately loads active `tenant_memberships`, then falls back to `profiles.role` through `normalizeRole`.
+- Role mapping supports legacy profile strings and canonical tenant roles, but the Admin UI permits arbitrary custom role strings. The Edge Function only allows TEAM/MANAGER/VIEWER for invitations and deliberately excludes ADMIN/OWNER.
+Impact: the app can display different role values across root initialization, CRM context and Admin Control Panel. A profile role must not be treated as the authorization source when tenant membership is authoritative.
+Status: Confirmed duplicate-source design; define one canonical role contract and explicit compatibility rules.
+
+### F-009 — Sign-up and password recovery need lifecycle acceptance tests (P1)
+File: `src/App.jsx`.
+Evidence:
+- Self-sign-up uses `supabase.auth.signUp` and reports “Access requested” without verifying that a pending membership/invitation record exists.
+- Password reset redirects to `${window.location.origin}/#reset-password`; success depends on Supabase Auth URL allowlists and recovery settings.
+- The Auth listener can call `fetchRole` while the initial `getSession()` path also calls it; initialization ordering and loading/error state should be tested for race conditions.
+Impact: sign-up may create an Auth user without an application membership/profile state, and reset behavior may differ by environment/configuration. No live test was performed.
+Status: Needs isolated runtime tests; not yet confirmed as runtime failures.
+
+### F-010 — User termination is implemented as a role string rather than a complete revocation workflow (P1)
+Files: `src/context/CrmContext.jsx` — `handleTerminateUser` and `handleUpdateUserRole`.
+Evidence:
+- Termination routes through `handleUpdateUserRole(userId, 'terminated')`.
+- The handler first updates `profiles.role`, then attempts to set the current tenant membership inactive; errors from the membership update are not checked.
+- If no membership row exists, it skips insertion (correctly avoids re-activating a terminated user), but does not revoke company-access rows, invalidate existing sessions, or show a verified revocation result.
+Impact: the UI may indicate termination while active membership/company grants or existing sessions remain usable depending on backend policy enforcement.
+Status: Confirmed incomplete client workflow; actual session/access revocation behavior needs isolated authorization tests.
+
+## Module 1 severity summary
+
+- **P0 — Must fix before freeze:** F-001 role write is non-atomic and hides membership errors; F-002/F-005 hard-coded-password Add User path and missing secure invitation integration.
+- **P1 — Must resolve or explicitly accept with evidence:** F-003 pending count source, F-004 missing save feedback, F-006 multi-tenant cardinality assumption, F-007 profile list/RLS integration, F-008 competing role sources, F-009 signup/recovery lifecycle, F-010 complete termination/revocation.
+- These findings are based on source inspection and prior review-only policy/migration artifacts. They are not a substitute for a live authorization test matrix. No production data was modified.
+
+## Cross-check questions for owner review
+
+1. Can the same login belong to multiple tenants, and if so, should the user choose a tenant after sign-in?
+2. Which roles are officially supported at tenant level: OWNER, ADMIN, MANAGER, TEAM, VIEWER only? Are custom labels display-only, never authorization roles?
+3. Should Add User always send an invitation email and require the user to set their own password?
+4. Does termination mean immediate tenant/company access revocation and session invalidation, or merely disabling one tenant membership?
+5. Should Pending count invitation status, inactive/pending membership status, or an explicit approval request? It should not be inferred from a profile role string.
+6. Which operating companies should an invited TEAM/MANAGER/VIEWER be granted access to by default? The secure invite function currently requires one explicit company.
+
 ## Repository-wide audit approach
 
 Audit each feature across four layers:
