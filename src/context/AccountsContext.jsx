@@ -49,6 +49,11 @@ export function AccountsProvider({ children }) {
   const fetchFinancials = useCallback(async (opCoId) => {
     if (!tenantId || !opCoId) {
       setFinancials(null);
+      if (!tenantId) {
+        setError('Financial reports need an authenticated tenant. Please sign in again and refresh.');
+      } else {
+        setError('Select a specific company from the top company selector to load financial reports. “All Companies” is not supported by the current single-company reporting RPC.');
+      }
       return;
     }
     try {
@@ -100,6 +105,11 @@ export function AccountsProvider({ children }) {
   const fetchArApIntegrity = useCallback(async (opCoId) => {
     if (!tenantId || !opCoId) {
       setArApIntegrity(null);
+      if (!tenantId) {
+        setError('AR/AP reconciliation needs an authenticated tenant. Please sign in again and refresh.');
+      } else {
+        setError('Select a specific company from the top company selector to load AR/AP reconciliation. “All Companies” is not supported by the current single-company reporting RPC.');
+      }
       return;
     }
     try {
