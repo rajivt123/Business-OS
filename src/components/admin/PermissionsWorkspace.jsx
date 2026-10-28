@@ -44,7 +44,8 @@ export default function PermissionsWorkspace({ onOpenUserPanel, onNavigate }) {
   const [companyFilter, setCompanyFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState('p1');
-  const [draft, setDraft] = useState(initialPermissions);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('co1');
+  const [draft, setDraft] = useState({});
   const [showDelegation, setShowDelegation] = useState(false);
   const [notice, setNotice] = useState('');
   const selected = people.find(person => person.id === selectedId) || people[0];
@@ -53,9 +54,11 @@ export default function PermissionsWorkspace({ onOpenUserPanel, onNavigate }) {
     const text = (person.name + ' ' + person.email + ' ' + person.role).toLowerCase();
     return matchesCompany && text.includes(query.trim().toLowerCase());
   });
+  const permissionKey = selectedId + ':' + selectedCompanyId;
+  const permissionValue = (personId, companyId, moduleKey) => draft[personId + ':' + companyId]?.[moduleKey] ?? initialPermissions[personId]?.[moduleKey] ?? 'none';
   const changePermission = (moduleKey, value) => {
-    setDraft(current => ({ ...current, [selectedId]: { ...(current[selectedId] || {}), [moduleKey]: value } }));
-    setNotice('Preview updated locally. Nothing has been saved to the database.');
+    setDraft(current => ({ ...current, [permissionKey]: { ...(current[permissionKey] || {}), [moduleKey]: value } }));
+    setNotice('Preview updated locally for this person and company. Nothing has been saved to the database.');
   };
   const tabs = [
     ['overview', 'Overview', Gauge],
@@ -140,15 +143,15 @@ export default function PermissionsWorkspace({ onOpenUserPanel, onNavigate }) {
               <button type="button" onClick={() => setTab('modules')} className="os-secondary inline-flex items-center gap-2"><KeyRound size={14} /> Edit module permissions</button>
             </div>
           </section>
-          <section className={sectionClass}><div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800"><h3 className="text-xs font-bold uppercase tracking-wider">Module access summary</h3></div><div className="p-3 grid sm:grid-cols-2 gap-2">{modules.map(module => { const value = draft[selected.id]?.[module.key] || 'none'; const Icon = module.icon; return <div key={module.key} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-center gap-2.5"><Icon size={16} className="text-slate-400 shrink-0" /><div className="flex-1 min-w-0"><p className="text-xs font-bold">{module.name}</p><p className="text-[10px] text-slate-400 mt-0.5">{module.detail}</p></div><span className={'text-[10px] font-bold border rounded-md px-2 py-1 whitespace-nowrap ' + accessTone(value)}>{accessLabel(value)}</span></div>; })}</div></section>
+          <section className={sectionClass}><div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800"><h3 className="text-xs font-bold uppercase tracking-wider">Module access summary · {companies.find(company => company.id === selectedCompanyId)?.name || 'Selected company'}</h3></div><div className="p-3 grid sm:grid-cols-2 gap-2">{modules.map(module => { const value = permissionValue(selected.id, selectedCompanyId, module.key); const Icon = module.icon; return <div key={module.key} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-center gap-2.5"><Icon size={16} className="text-slate-400 shrink-0" /><div className="flex-1 min-w-0"><p className="text-xs font-bold">{module.name}</p><p className="text-[10px] text-slate-400 mt-0.5">{module.detail}</p></div><span className={'text-[10px] font-bold border rounded-md px-2 py-1 whitespace-nowrap ' + accessTone(value)}>{accessLabel(value)}</span></div>; })}</div></section>
         </div>
       </div>}
 
       {tab === 'modules' && <div className="space-y-4">
         <section className={sectionClass}>
           <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800"><h3 className="text-xs font-bold uppercase tracking-wider">Module permissions</h3><p className="text-xs text-slate-400 mt-0.5">Select a person and preview rights per module.</p></div>
-          <div className="p-4 grid sm:grid-cols-2 gap-3"><label className="space-y-1.5"><span className="text-[11px] font-bold text-slate-500">Person</span><select value={selectedId} onChange={e => setSelectedId(e.target.value)} className={inputClass + ' w-full'}>{people.map(person => <option key={person.id} value={person.id}>{person.name} — {person.role}</option>)}</select></label><label className="space-y-1.5"><span className="text-[11px] font-bold text-slate-500">Company context</span><select value={companyFilter} onChange={e => setCompanyFilter(e.target.value)} className={inputClass + ' w-full'}><option value="all">All assigned companies</option>{companies.filter(company => selected.companies.includes(company.id)).map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label></div>
-          <div className="border-t border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">{modules.map(module => { const value = draft[selectedId]?.[module.key] || 'none'; const Icon = module.icon; return <div key={module.key} className="p-4 flex flex-col md:flex-row md:items-center gap-3"><div className="flex items-center gap-3 flex-1 min-w-0"><div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500"><Icon size={16} /></div><div><p className="text-xs font-extrabold">{module.name}</p><p className="text-[11px] text-slate-400 mt-0.5">{module.detail}</p></div></div><div className="flex items-center gap-2 flex-wrap">{['none','read','write'].map(option => <button key={option} type="button" onClick={() => changePermission(module.key, option)} className={'px-3 py-2 rounded-lg border text-[11px] font-bold transition ' + (value === option ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300' : 'border-slate-200 text-slate-500 dark:border-slate-700 hover:border-slate-400')}>{option === 'none' ? 'No access' : option === 'read' ? 'Read only' : 'Read & write'}</button>)}</div></div>; })}</div>
+          <div className="p-4 grid sm:grid-cols-2 gap-3"><label className="space-y-1.5"><span className="text-[11px] font-bold text-slate-500">Person</span><select value={selectedId} onChange={e => setSelectedId(e.target.value)} className={inputClass + ' w-full'}>{people.map(person => <option key={person.id} value={person.id}>{person.name} — {person.role}</option>)}</select></label><label className="space-y-1.5"><span className="text-[11px] font-bold text-slate-500">Company context</span><select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} className={inputClass + ' w-full'}>{companies.filter(company => selected.companies.includes(company.id)).map(company => <option key={company.id} value={company.id}>{company.name}</option>)}</select></label></div>
+          <div className="border-t border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">{modules.map(module => { const value = permissionValue(selectedId, selectedCompanyId, module.key); const Icon = module.icon; return <div key={module.key} className="p-4 flex flex-col md:flex-row md:items-center gap-3"><div className="flex items-center gap-3 flex-1 min-w-0"><div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500"><Icon size={16} /></div><div><p className="text-xs font-extrabold">{module.name}</p><p className="text-[11px] text-slate-400 mt-0.5">{module.detail}</p></div></div><div className="flex items-center gap-2 flex-wrap">{['none','read','write'].map(option => <button key={option} type="button" onClick={() => changePermission(module.key, option)} className={'px-3 py-2 rounded-lg border text-[11px] font-bold transition ' + (value === option ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300' : 'border-slate-200 text-slate-500 dark:border-slate-700 hover:border-slate-400')}>{option === 'none' ? 'No access' : option === 'read' ? 'Read only' : 'Read & write'}</button>)}</div></div>; })}</div>
           <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><p className="text-[11px] text-slate-400">Approve, delete, export and administer may require separate rights.</p><button type="button" onClick={() => setNotice('Draft is local to this preview only. No database changes were made.')} className="os-primary inline-flex items-center gap-2"><Check size={14} /> Keep preview draft</button></div>
         </section>
       </div>}
@@ -168,7 +171,7 @@ export default function PermissionsWorkspace({ onOpenUserPanel, onNavigate }) {
         </section>
       </div>}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400 px-1"><span>Administration workspace · UI-only prototype</span><button type="button" onClick={() => { setTab('overview'); setCompanyFilter('all'); setQuery(''); setSelectedId('p1'); setDraft(initialPermissions); setNotice(''); }} className="inline-flex items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-200"><RotateCcw size={12} /> Reset preview</button></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-400 px-1"><span>Administration workspace · UI-only prototype</span><button type="button" onClick={() => { setTab('overview'); setCompanyFilter('all'); setQuery(''); setSelectedId('p1'); setSelectedCompanyId('co1'); setDraft({}); setNotice(''); }} className="inline-flex items-center gap-1.5 hover:text-slate-700 dark:hover:text-slate-200"><RotateCcw size={12} /> Reset preview</button></div>
     </div>
   );
 }
