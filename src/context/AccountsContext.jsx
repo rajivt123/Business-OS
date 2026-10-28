@@ -49,6 +49,11 @@ export function AccountsProvider({ children }) {
   const fetchFinancials = useCallback(async (opCoId) => {
     if (!tenantId || !opCoId) {
       setFinancials(null);
+      if (!tenantId) {
+        setError('Financial reports need an authenticated tenant. Please sign in again and refresh.');
+      } else {
+        setError('Select a specific company from the top company selector to load financial reports. “All Companies” is not supported by the current single-company reporting RPC.');
+      }
       return;
     }
     try {
@@ -61,21 +66,50 @@ export function AccountsProvider({ children }) {
       if (err) {
         console.error('[AccountsContext] Error fetching financials:', err);
         setFinancials(null);
-        if (err.code === '42501') {
-          setError('Authorization error (42501) accessing accounting financials');
-        }
+        setError(`Financial report RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
-      setFinancials(data || null);
+      // Keep the RPC authoritative, but fail visibly when its payload does not match
+      // the report contract instead of silently rendering every metric as unavailable.
+      const report = data && typeof data === 'object'
+        ? (data.financials && typeof data.financials === 'object' ? data.financials
+          : data.result && typeof data.result === 'object' ? data.result
+          : data.data && typeof data.data === 'object' ? data.data
+          : data)
+        : null;
+      const hasExpectedShape = Boolean(
+        report?.profit_and_loss &&
+        report?.balance_sheet &&
+        report?.trial_balance &&
+        report?.cash_flow
+      );
+      if (!hasExpectedShape) {
+        const rootKeys = report && typeof report === 'object' ? Object.keys(report).slice(0, 20).join(', ') : typeof data;
+        console.error('[AccountsContext] Financial RPC returned an unexpected payload shape', {
+          payloadType: typeof data,
+          rootKeys,
+          hasData: data !== null && data !== undefined
+        });
+        setFinancials(null);
+        setError(`Financial report returned an unexpected response shape. Received: ${rootKeys || 'empty response'}. Expected profit_and_loss, balance_sheet, trial_balance and cash_flow.`);
+        return;
+      }
+      setFinancials(report);
     } catch (err) {
       console.error('[AccountsContext] Error fetching financials:', err);
       setFinancials(null);
+      setError(`Financial report request failed: ${err?.message || 'Unexpected client error'}`);
     }
   }, [tenantId, fromDate, toDate]);
 
   const fetchArApIntegrity = useCallback(async (opCoId) => {
     if (!tenantId || !opCoId) {
       setArApIntegrity(null);
+      if (!tenantId) {
+        setError('AR/AP reconciliation needs an authenticated tenant. Please sign in again and refresh.');
+      } else {
+        setError('Select a specific company from the top company selector to load AR/AP reconciliation. “All Companies” is not supported by the current single-company reporting RPC.');
+      }
       return;
     }
     try {
@@ -87,15 +121,26 @@ export function AccountsProvider({ children }) {
       if (err) {
         console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
         setArApIntegrity(null);
-        if (err.code === '42501') {
-          setError('Authorization error (42501) accessing AR/AP integrity');
-        }
+        setError(`AR/AP integrity RPC failed [${err.code || 'unknown'}]: ${err.message || 'No error message returned'}`);
         return;
       }
-      setArApIntegrity(data || null);
+      const integrity = data && typeof data === 'object'
+        ? (data.integrity && typeof data.integrity === 'object' ? data.integrity
+          : data.result && typeof data.result === 'object' ? data.result
+          : data.data && typeof data.data === 'object' ? data.data
+          : data)
+        : null;
+      if (!integrity || typeof integrity !== 'object') {
+        console.error('[AccountsContext] AR/AP integrity RPC returned an empty or invalid payload');
+        setArApIntegrity(null);
+        setError('AR/AP integrity report returned an empty or invalid response.');
+        return;
+      }
+      setArApIntegrity(integrity);
     } catch (err) {
       console.error('[AccountsContext] Error fetching AR/AP integrity:', err);
       setArApIntegrity(null);
+      setError(`AR/AP integrity request failed: ${err?.message || 'Unexpected client error'}`);
     }
   }, [tenantId, asOfDate]);
 
@@ -166,12 +211,50 @@ export function AccountsProvider({ children }) {
 
       const { data, error: err } = await q;
       if (err) throw err;
-      setBankAccounts(data || []);
+
+      // Calculate balances using two explicit queries rather than nested PostgREST
+      // filters, so tenant/date/status scoping is clear and the query contract is robust.
+      // Include opening entries before the selected period; only the end date limits balance.
+      let entriesQuery = supabase
+        .from('accounting_journal_entries')
+        .select('id')
+        .eq('status', 'posted')
+        .lte('entry_date', toDate);
+      if (opCoId) entriesQuery = entriesQuery.eq('tenant_company_id', opCoId);
+      else if (tenantId) entriesQuery = entriesQuery.eq('tenant_id', tenantId);
+
+      const { data: postedEntries, error: entriesError } = await entriesQuery;
+      if (entriesError) throw entriesError;
+
+      const entryIds = (postedEntries || []).map((entry) => entry.id);
+      let ledgerLines = [];
+      if (entryIds.length) {
+        const { data: lines, error: lineError } = await supabase
+          .from('accounting_journal_lines')
+          .select('journal_entry_id, account_id, debit, credit')
+          .in('journal_entry_id', entryIds);
+        if (lineError) throw lineError;
+        ledgerLines = lines || [];
+      }
+
+      const balanceByAccount = new Map();
+      for (const line of ledgerLines) {
+        const current = balanceByAccount.get(line.account_id) || 0;
+        balanceByAccount.set(
+          line.account_id,
+          current + (Number(line.debit) || 0) - (Number(line.credit) || 0)
+        );
+      }
+
+      setBankAccounts((data || []).map((account) => ({
+        ...account,
+        current_balance: balanceByAccount.get(account.account_id) || 0
+      })));
     } catch (err) {
       console.error('[AccountsContext] Error fetching bank accounts:', err);
       setBankAccounts([]);
     }
-  }, [tenantId]);
+  }, [tenantId, toDate]);
 
   const fetchBankTransactions = useCallback(async (opCoId) => {
     try {
