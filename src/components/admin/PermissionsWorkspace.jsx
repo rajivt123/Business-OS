@@ -235,11 +235,19 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
                     {MODULES.map(module => {
                       const permissions = permissionFor(module.key);
                       const assigned = (selectedMember.company_access || []).some(a => a.tenant_company_id === selectedCompanyId && a.can_view);
-                      const mayEdit = assigned && (isOwner || selectedMember.membership_id !== workspace.actor_membership_id);
+                      const actorModuleGrant = (actorMember?.module_permissions || []).find(
+                        grant => grant.tenant_company_id === selectedCompanyId && grant.module_key === module.key
+                      );
+                      const actorCanManage = actorModuleGrant?.can_manage_permissions === true;
+                      const targetIsOwner = selectedMember.role === 'OWNER';
+                      const mayEdit = assigned && !targetIsOwner &&
+                        (isOwner || (actorCanManage && selectedMember.membership_id !== workspace.actor_membership_id));
                       return <div key={module.key} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div><p className="text-xs font-bold">{module.label}</p><p className="text-[10px] text-slate-500 mt-0.5">{module.detail}</p></div>
                           {!assigned && <span className="text-[10px] text-amber-700">No company assignment</span>}
+                          {targetIsOwner && <span className="text-[10px] text-amber-700">Owner permissions are protected</span>}
+                          {assigned && !isOwner && !actorCanManage && !targetIsOwner && <span className="text-[10px] text-amber-700">No grant-management authority for this module</span>}
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
                           {ACTIONS.map(([key,label]) => <label key={key} className={'flex items-center gap-2 text-[11px] ' + ((!mayEdit || (key !== 'can_read' && !permissions.can_read)) ? 'opacity-50' : '')}>
