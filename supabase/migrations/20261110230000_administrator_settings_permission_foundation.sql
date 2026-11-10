@@ -109,14 +109,14 @@ GRANT EXECUTE ON FUNCTION private.can_delegate_tenant_admin_action(uuid,text) TO
 
 CREATE POLICY company_module_permissions_select ON public.company_module_permissions FOR SELECT TO authenticated
 USING (
- EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=membership_id AND tm.user_id=auth.uid() AND tm.tenant_id=tenant_id AND tm.status='active')
+ EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=company_module_permissions.membership_id AND tm.user_id=auth.uid() AND tm.tenant_id=company_module_permissions.tenant_id AND tm.status='active')
  OR private.can_manage_company_permissions(tenant_id,tenant_company_id,module_key)
- OR EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.user_id=auth.uid() AND tm.tenant_id=tenant_id AND tm.status='active' AND tm.role='OWNER')
+ OR EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.user_id=auth.uid() AND tm.tenant_id=company_module_permissions.tenant_id AND tm.status='active' AND tm.role='OWNER')
 );
 CREATE POLICY company_module_permissions_insert ON public.company_module_permissions FOR INSERT TO authenticated
 WITH CHECK (
  private.can_manage_company_permissions(tenant_id,tenant_company_id,module_key)
- AND EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=membership_id AND tm.tenant_id=tenant_id AND tm.status='active')
+ AND EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=company_module_permissions.membership_id AND tm.tenant_id=company_module_permissions.tenant_id AND tm.status='active')
  AND EXISTS(SELECT 1 FROM public.tenant_companies tc WHERE tc.id=tenant_company_id AND tc.tenant_id=tenant_id AND tc.status='active')
 );
 CREATE POLICY company_module_permissions_update ON public.company_module_permissions FOR UPDATE TO authenticated
@@ -127,13 +127,13 @@ USING(private.can_manage_company_permissions(tenant_id,tenant_company_id,module_
 
 CREATE POLICY tenant_admin_action_delegations_select ON public.tenant_admin_action_delegations FOR SELECT TO authenticated
 USING (
- EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=membership_id AND tm.user_id=auth.uid() AND tm.tenant_id=tenant_id AND tm.status='active')
+ EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=tenant_admin_action_delegations.membership_id AND tm.user_id=auth.uid() AND tm.tenant_id=tenant_admin_action_delegations.tenant_id AND tm.status='active')
  OR private.can_delegate_tenant_admin_action(tenant_id,action_key)
 );
 CREATE POLICY tenant_admin_action_delegations_insert ON public.tenant_admin_action_delegations FOR INSERT TO authenticated
 WITH CHECK (
  private.can_delegate_tenant_admin_action(tenant_id,action_key)
- AND EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=membership_id AND tm.tenant_id=tenant_id AND tm.status='active')
+ AND EXISTS(SELECT 1 FROM public.tenant_memberships tm WHERE tm.id=tenant_admin_action_delegations.membership_id AND tm.tenant_id=tenant_admin_action_delegations.tenant_id AND tm.status='active')
 );
 CREATE POLICY tenant_admin_action_delegations_update ON public.tenant_admin_action_delegations FOR UPDATE TO authenticated
 USING(private.can_delegate_tenant_admin_action(tenant_id,action_key))
