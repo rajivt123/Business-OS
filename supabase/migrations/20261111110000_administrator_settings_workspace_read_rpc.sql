@@ -1,6 +1,6 @@
 -- Read model for the Administrator Settings workspace.
 -- Only owners or members with tenant membership-management authority can enumerate people.
-CREATE OR REPLACE FUNCTION public.admin_get_permission_workspace()
+CREATE OR REPLACE FUNCTION public.admin_get_permission_workspace(p_tenant_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
@@ -18,8 +18,7 @@ BEGIN
 
   SELECT * INTO v_actor
   FROM public.tenant_memberships
-  WHERE user_id=auth.uid() AND status='active'
-  ORDER BY created_at ASC
+  WHERE user_id=auth.uid() AND tenant_id=p_tenant_id AND status='active'
   LIMIT 1;
 
   IF NOT FOUND THEN
@@ -113,5 +112,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.admin_get_permission_workspace() FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.admin_get_permission_workspace() TO authenticated;
+REVOKE ALL ON FUNCTION public.admin_get_permission_workspace(uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.admin_get_permission_workspace(uuid) TO authenticated;
