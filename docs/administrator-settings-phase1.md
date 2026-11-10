@@ -58,3 +58,19 @@ A holder can grant/revoke only the exact action they hold and only if can_delega
 - Payroll maker-checker: requester cannot approve own run.
 - Storage: upload/finalize/download/archive/delete enforce company and parent entity identity.
 - Missing active company: fail closed, never choose first company.
+
+
+## Company assignment workflow
+
+The workspace now exposes company assignment controls through
+`admin_upsert_company_assignment`. The RPC requires an active tenant actor and
+target, validates the company belongs to that tenant, protects owner assignments,
+and writes an audit event. A non-owner must hold delegated
+`membership_manage` execution authority, must already have access to the company,
+and cannot grant edit access unless they themselves have edit access.
+
+This is still pending runtime authorization tests. The live legacy
+`user_company_access` table currently has broad ADMIN write policies and broad
+authenticated table grants. Those legacy paths must be reviewed and safely
+replaced before claiming that all assignment changes are forced through the
+audited RPC.
