@@ -234,7 +234,7 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
         <Lock size={16} className="text-sky-700 dark:text-sky-300 shrink-0 mt-0.5"/>
         <div className="text-xs text-sky-900 dark:text-sky-100">
           <p className="font-extrabold">Backend-authorized workspace</p>
-          <p className="mt-0.5 opacity-80">All permission changes use audited server-side RPCs. Company assignment changes are intentionally not available here until their own controlled workflow is implemented.</p>
+          <p className="mt-0.5 opacity-80">Company assignments, module permissions and tenant-action delegations are designed to use audited server-side RPCs. This workspace is unavailable until the required permission migrations are installed in the connected Supabase project.</p>
         </div>
       </div>
 
