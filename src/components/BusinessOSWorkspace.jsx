@@ -949,7 +949,7 @@ function AdminPage({ onNavigate, onOpenCrm, data = {}, tenantId, tenantRole }) {
 export default function BusinessOSWorkspace() {
   const crm = useCrm();
   const {
-    isDarkMode, setIsDarkMode, onSignOut, tenantId, tenantRole, availableTenantMemberships = [], selectTenantMembership, operatingCompanies = [], activeOperatingCompany,
+    isDarkMode, setIsDarkMode, onSignOut, authLoading, tenantId, tenantRole, availableTenantMemberships = [], selectTenantMembership, operatingCompanies = [], activeOperatingCompany,
     setActiveOperatingCompanyId, currentUser, userRole, setIsAiChatOpen,
     companies = [], works = [], tasks = [], taskAssignees = [], reminders = [], missingData = [],
     projectAssignments = [], stageDefinitions = [], profiles = [], issues = [], logs = [],
@@ -1360,6 +1360,14 @@ export default function BusinessOSWorkspace() {
   };
 
   const meta = pageMeta[page] || pageMeta.dashboard;
+
+  if (authLoading) {
+    return (
+      <div className={`business-os min-h-screen flex items-center justify-center p-5 ${isDarkMode ? 'dark' : ''}`}>
+        <div className="os-card px-6 py-5 text-sm text-slate-500">Loading authorized workspace…</div>
+      </div>
+    );
+  }
 
   if (!tenantId && availableTenantMemberships.length > 1) {
     return (
