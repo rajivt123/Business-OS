@@ -103,28 +103,43 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
     setSaving(true);
     setError('');
     setNotice('');
+    const savedKeys = [];
+    const pendingModules = MODULES.filter(module =>
+      Boolean(drafts[permissionKey(selectedMember.membership_id, selectedCompany.id, module.key)])
+    );
     try {
-      for (const module of MODULES) {
+      for (const module of pendingModules) {
         const key = permissionKey(selectedMember.membership_id, selectedCompany.id, module.key);
-        const value = drafts[key];
-        if (!value) continue;
         const { error: saveError } = await supabase.rpc('admin_upsert_company_module_permissions', {
           p_target_membership_id: selectedMember.membership_id,
           p_tenant_company_id: selectedCompany.id,
           p_module_key: module.key,
-          p_permissions: value,
+          p_permissions: drafts[key],
         });
-        if (saveError) throw saveError;
+        if (saveError) throw Object.assign(saveError, { failedModule: module.label });
+        savedKeys.push(key);
       }
       setDrafts(current => {
         const next = { ...current };
-        MODULES.forEach(m => delete next[permissionKey(selectedMember.membership_id, selectedCompany.id, m.key)]);
+        savedKeys.forEach(key => delete next[key]);
         return next;
       });
       await loadWorkspace();
-      setNotice('Permission changes saved and audited.');
+      setNotice(`Saved and audited permissions for ${savedKeys.length} module(s).`);
     } catch (e) {
-      setError(e?.message || 'Permission save failed. No success was assumed.');
+      // Each module is a separate server transaction. Preserve only unsaved drafts
+      // and make any partial commit explicit instead of implying all-or-nothing.
+      setDrafts(current => {
+        const next = { ...current };
+        savedKeys.forEach(key => delete next[key]);
+        return next;
+      });
+      if (savedKeys.length) {
+        await loadWorkspace();
+        setError(`Partial save: ${savedKeys.length} module(s) were saved and audited. Remaining changes are still drafts. Failed at ${e?.failedModule || 'a later module'}: ${e?.message || 'unknown error'}`);
+      } else {
+        setError(`No permission changes were saved. ${e?.message || 'Save failed.'}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -139,22 +154,25 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
   }, [selectedMembershipId, selectedAction, savedDelegation?.can_execute, savedDelegation?.can_delegate]);
 
   const saveDelegation = async () => {
-    if (!selectedMember) return;
+    if (!selectedMember || selectedMember.role === 'OWNER' || !hasDelegationAuthority) return;
     setSaving(true);
     setError('');
     setNotice('');
-    const { error: saveError } = await supabase.rpc('admin_upsert_tenant_action_delegation', {
-      p_target_membership_id: selectedMember.membership_id,
-      p_action_key: selectedAction,
-      p_can_execute: delegationDraft.can_execute,
-      p_can_delegate: delegationDraft.can_delegate,
-    });
-    if (saveError) setError(saveError.message || 'Delegation update failed.');
-    else {
+    try {
+      const { error: saveError } = await supabase.rpc('admin_upsert_tenant_action_delegation', {
+        p_target_membership_id: selectedMember.membership_id,
+        p_action_key: selectedAction,
+        p_can_execute: delegationDraft.can_execute,
+        p_can_delegate: delegationDraft.can_delegate,
+      });
+      if (saveError) throw saveError;
       await loadWorkspace();
       setNotice('Tenant action delegation saved and audited.');
+    } catch (e) {
+      setError(e?.message || 'Delegation update failed.');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const isOwner = workspace?.is_owner === true;
@@ -272,7 +290,8 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
               <label className="space-y-1"><span className="text-[11px] font-bold text-slate-500">Action</span><select value={selectedAction} onChange={e => setSelectedAction(e.target.value)} className="os-input w-full text-xs">{TENANT_ACTIONS.map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
               <div className="flex items-end gap-4 text-xs"><label className="flex items-center gap-2"><input type="checkbox" checked={delegationDraft.can_execute} onChange={e => setDelegationDraft(d => ({can_execute:e.target.checked,can_delegate:e.target.checked ? d.can_delegate : false}))}/> Execute</label><label className="flex items-center gap-2"><input type="checkbox" checked={delegationDraft.can_delegate} disabled={!delegationDraft.can_execute} onChange={e => setDelegationDraft(d => ({...d,can_delegate:e.target.checked}))}/> Re-delegate</label></div>
             </div>
-            <div className="flex justify-end"><button type="button" disabled={!selectedMember || saving || !hasDelegationAuthority || (!isOwner && selectedMember.membership_id === workspace.actor_membership_id)} onClick={saveDelegation} className="os-primary inline-flex items-center gap-2 disabled:opacity-50"><Save size={14}/>Save delegation</button></div>
+            <div className="flex justify-end"><button type="button" disabled={!selectedMember || selectedMember.role === 'OWNER' || saving || !hasDelegationAuthority || (!isOwner && selectedMember.membership_id === workspace.actor_membership_id)} onClick={saveDelegation} className="os-primary inline-flex items-center gap-2 disabled:opacity-50"><Save size={14}/>Save delegation</button></div>
+            {selectedMember?.role === 'OWNER' && <p className="text-[11px] text-amber-700">Owner delegation is protected and cannot be changed here.</p>}
             {!hasDelegationAuthority && <p className="text-[11px] text-amber-700">You do not have tenant-action delegation authority. Ask the tenant owner.</p>}
           </section>
         </>
