@@ -20,18 +20,20 @@ A holder can grant/revoke only the exact action they hold and only if can_delega
 
 ## Grant mutation implementation status
 - Added SECURITY DEFINER RPCs for module grants and tenant-action delegation. They validate active actor/target memberships, tenant/company identity, explicit target company assignment, prevent self-grants, enforce grantor ceilings, and write before/after audit events.
+- Added a tenant-scoped workspace read RPC. It requires an explicit tenant ID and owner or delegated membership-management authority; non-owners receive company-scoped access/permission rows only within their own company visibility.
 - Direct authenticated INSERT/UPDATE/DELETE on permission tables is revoked; only the RPCs can mutate them. Read access remains subject to RLS.
 - These RPCs are committed but not runtime-tested. They are not yet wired into the Administrator Settings UI.
 
 ## Follow-on implementation required
-1. Run the migration and fixture tests against a disposable Supabase database; correct any SQL/runtime errors before production consideration.
-2. Replace legacy has_company_access and has_action_permission call sites only after grant reconciliation; preserve owner access and remove implicit ADMIN-wide company access.
-3. Add module/action checks to every SECURITY DEFINER RPC across HR, payroll, accounts, procurement/inventory, CRM, company settings and reports.
-4. Update Edge Functions to use the same authorization predicates and verify exact entity-to-company identity, especially upload finalization.
-5. Remove frontend first-company fallback and require explicit active company.
-6. Replace broad legacy RLS policies only after mapping callers. Public MEP reference catalog policies require a separate product decision.
-7. Split company settings into safe profile read and sensitive settings write/read permissions. Sleeping partners see assigned modules read-only, subject to sensitive submodule grants.
-8. Reconcile the live 70 memberships and 7 company-access rows with the owner before backfill. Never auto-grant.
+1. Run all three migrations and fixture tests against a disposable Supabase database; correct any SQL/runtime errors before production consideration.
+2. Connect the Permissions UI to `admin_get_permission_workspace(p_tenant_id)` for reads and the two audited mutation RPCs for writes. Remove all mock people/companies and local-only permission drafts before enabling this screen.
+3. Replace legacy has_company_access and has_action_permission call sites only after grant reconciliation; preserve owner access and remove implicit ADMIN-wide company access.
+4. Add module/action checks to every SECURITY DEFINER RPC across HR, payroll, accounts, procurement/inventory, CRM, company settings and reports.
+5. Update Edge Functions to use the same authorization predicates and verify exact entity-to-company identity, especially upload finalization.
+6. Remove frontend first-company fallback and require explicit active company.
+7. Replace broad legacy RLS policies only after mapping callers. Public MEP reference catalog policies require a separate product decision.
+8. Split company settings into safe profile read and sensitive settings write/read permissions. Sleeping partners see assigned modules read-only, subject to sensitive submodule grants.
+9. Reconcile the live 70 memberships and 7 company-access rows with the owner before backfill. Never auto-grant.
 
 ## Rollout and rollback
 - Branch-only preparation. No production SQL or deployment.
