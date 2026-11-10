@@ -102,6 +102,7 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
   const [tenantId, setTenantId] = useState(null);
   const [tenantMembership, setTenantMembership] = useState(null);
   const [tenantRole, setTenantRole] = useState(null);
+  const [availableTenantMemberships, setAvailableTenantMemberships] = useState([]);
 
   // Operating Company State (public.tenant_companies - OUR OWN OPERATING COMPANIES)
   const [operatingCompanies, setOperatingCompanies] = useState([]);
@@ -382,6 +383,8 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
       setTenantId(null);
       setTenantMembership(null);
       setTenantRole(null);
+      setAvailableTenantMemberships([]);
+      localStorage.removeItem('crm_active_tenant_membership_id');
       setOperatingCompanies([]);
       setActiveOperatingCompanyIdState(null);
       localStorage.setItem('crm_active_operating_company_id', 'ALL');
@@ -452,28 +455,56 @@ export function CrmProvider({ children, session: sessionProp, isDarkMode, setIsD
 
     try {
       // Step 2: Load Active Tenant Membership from public.tenant_memberships
-      const { data: membershipData, error: membershipError } = await supabase
+      const { data: membershipRows, error: membershipError } = await supabase
         .from('tenant_memberships')
         .select('*')
         .eq('user_id', currentSession.user.id)
         .eq('status', 'active')
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
       if (!isCurrentAuthInitialization(generation)) return;
 
       if (membershipError) {
         console.error('[Supabase Query Error - tenant_memberships]:', membershipError);
+        throw membershipError;
       }
 
-      let resolvedTenantId = null;
-      let resolvedTenantRole = null;
-      let resolvedMembership = null;
+      const availableMemberships = Array.isArray(membershipRows) ? membershipRows : [];
+      setAvailableTenantMemberships(availableMemberships);
+      const savedMembershipId = localStorage.getItem('crm_active_tenant_membership_id');
+      const selectedMembership = availableMemberships.find(m => m.id === savedMembershipId)
+        || (availableMemberships.length === 1 ? availableMemberships[0] : null);
+
+      // Never silently choose the first tenant when a user belongs to multiple tenants.
+      if (availableMemberships.length > 1 && !selectedMembership) {
+        setTenantId(null);
+        setTenantRole(null);
+        setTenantMembership(null);
+        setOperatingCompanies([]);
+        setActiveOperatingCompanyIdState(null);
+        setUserRole('guest');
+        setCompanies([]);
+        setUnits([]);
+        setWorks([]);
+        setIssues([]);
+        setLogs([]);
+        setReminders([]);
+        setNotifications([]);
+        setMissingData([]);
+        setTenantMembers([]);
+        setAuthLoading(false);
+        return;
+      }
+
+      let resolvedTenantId = selectedMembership?.tenant_id || null;
+      let resolvedTenantRole = selectedMembership?.role || null;
+      let resolvedMembership = selectedMembership || null;
       let resolvedOpCoId = null;
 
-      if (membershipData) {
-        resolvedTenantId = membershipData.tenant_id;
-        resolvedTenantRole = membershipData.role;
-        resolvedMembership = membershipData;
+      if (selectedMembership) {
+        localStorage.setItem('crm_active_tenant_membership_id', selectedMembership.id);
+      } else {
+        localStorage.removeItem('crm_active_tenant_membership_id');
       }
 
       setTenantId(resolvedTenantId);
@@ -4447,6 +4478,44 @@ USER REQUEST: ${trimmedMsg}`;
     tenantId,
     tenantMembership,
     tenantRole,
+    availableTenantMemberships,
+    selectTenantMembership: async (membershipId) => {
+      const target = availableTenantMemberships.find(m => m.id === membershipId);
+      if (!target || !session?.user) return { success: false, error: 'Select a valid tenant membership.' };
+      localStorage.setItem('crm_active_tenant_membership_id', target.id);
+      setAuthLoading(true);
+      setTenantId(null);
+      setTenantRole(null);
+      setTenantMembership(null);
+      setOperatingCompanies([]);
+      setActiveOperatingCompanyIdState(null);
+      setCompanies([]);
+      setActiveCompanyId(null);
+      setUnits([]);
+      setActiveUnitId(null);
+      setWorks([]);
+      setActiveWorkId(null);
+      setIssues([]);
+      setLogs([]);
+      setReminders([]);
+      setNotifications([]);
+      setMissingData([]);
+      setTenantMembers([]);
+      setProjectAssignments([]);
+      setTasks([]);
+      setTaskAssignees([]);
+      setStageDefinitions([]);
+      setStageAssignments([]);
+      setContacts([]);
+      setEnquiries([]);
+      setFollowUps([]);
+      setCrmSummary(null);
+      const nextGeneration = authInitializationRef.current.generation + 1;
+      const nextPromise = initializeAuthAndTenantContext(session, nextGeneration);
+      authInitializationRef.current = { sessionKey: session.user.id, promise: nextPromise, generation: nextGeneration };
+      await nextPromise;
+      return { success: true };
+    },
     operatingCompanies,
     activeOperatingCompanyId,
     activeOperatingCompany,

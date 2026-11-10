@@ -58,76 +58,76 @@ async function user(req: Request) {
 /**
  * Verify user has membership access to specific tenant company
  */
-async function companyAccess(userId: string, tenantCompanyId: string, requiredOp: string = 'read') {
-  if (!uuid(tenantCompanyId)) {
-    throw new Error("Invalid tenant_company_id format");
+async function companyAccess(userId: string, tenantCompanyId: string, requiredOp: string = "read") {
+  if (!uuid(tenantCompanyId)) throw new Error("Invalid tenant_company_id format");
+
+  const { data: company, error: companyErr } = await admin
+    .from("tenant_companies")
+    .select("id, tenant_id, status")
+    .eq("id", tenantCompanyId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (companyErr || !company) throw new Error("Company not found or inactive");
+
+  const { data: membership, error: membershipErr } = await admin
+    .from("tenant_memberships")
+    .select("id, role, status")
+    .eq("tenant_id", company.tenant_id)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (membershipErr || !membership) throw new Error("Unauthorized: Active tenant membership required");
+
+  // Owner authority is tenant-wide; every other role requires an explicit company grant.
+  if (membership.role === "OWNER") {
+    return { tenantId: company.tenant_id, membershipId: membership.id };
   }
 
-  // Use the view which correctly enforces specific company-level access,
-  // instead of generic tenant_membership which spans all companies.
   const { data: access, error: accessErr } = await admin
     .from("user_company_access")
-    .select("tenant_id, role")
-    .eq("user_id", userId)
-    .eq("company_id", tenantCompanyId)
+    .select("can_view, can_edit")
+    .eq("membership_id", membership.id)
+    .eq("tenant_id", company.tenant_id)
+    .eq("tenant_company_id", tenantCompanyId)
     .maybeSingle();
 
-  if (accessErr || !access) {
-    throw new Error("Unauthorized: Company access denied or not found");
+  if (accessErr || !access || access.can_view !== true) {
+    throw new Error("Unauthorized: Company read access denied");
   }
-
-  const role = (access.role || '').toLowerCase();
-  
-  if (requiredOp === 'edit' || requiredOp === 'write') {
-    if (role === 'viewer' || role === 'guest' || role === 'readonly') {
-      throw new Error(`Unauthorized: Company ${requiredOp} permission required`);
-    }
+  if ((requiredOp === "edit" || requiredOp === "write") && access.can_edit !== true) {
+    throw new Error("Unauthorized: Company edit permission required");
   }
-
-  return { tenantId: access.tenant_id, role: access.role };
+  return { tenantId: company.tenant_id, membershipId: membership.id };
 }
 
 /**
  * Validate that entity_type and entity_id exist and match tenant
  */
 async function validateEntity(entityType: string, entityId: string, tenantCompanyId: string) {
-  if (!entityType || !entityId) {
-    throw new Error("entity_type and entity_id are required");
+  if (!entityType || !uuid(entityId) || !uuid(tenantCompanyId)) {
+    throw new Error("Valid entity_type, entity_id and tenant_company_id are required");
   }
 
-  // Specific entity type verification
-  if (entityType === "work") {
-    const { data: work, error } = await admin
-      .from("works")
-      .select("id, tenant_company_id")
-      .eq("id", entityId)
-      .maybeSingle();
-
-    if (error || !work) {
-      throw new Error(`Work with ID ${entityId} not found`);
-    }
-  } else if (entityType === "log") {
-    const { data: log, error } = await admin
-      .from("logs")
-      .select("id")
-      .eq("id", entityId)
-      .maybeSingle();
-
-    if (error || !log) {
-      throw new Error(`Log with ID ${entityId} not found`);
-    }
-  } else if (entityType === "employee_document" || entityType === "employee") {
-    if (entityType === "employee") {
-      const { data: emp, error } = await admin
-        .from("employees")
-        .select("id")
-        .eq("id", entityId)
-        .maybeSingle();
-      if (error || !emp) throw new Error(`Employee with ID ${entityId} not found`);
-    }
+  let table: string;
+  switch (entityType) {
+    case "work": table = "works"; break;
+    case "log": table = "logs"; break;
+    case "employee": table = "employees"; break;
+    default:
+      throw new Error(`Unsupported entity_type: ${entityType}`);
   }
 
-  return true;
+  const { data, error } = await admin
+    .from(table)
+    .select("id, tenant_id, tenant_company_id")
+    .eq("id", entityId)
+    .eq("tenant_company_id", tenantCompanyId)
+    .maybeSingle();
+
+  if (error || !data || !data.tenant_id) {
+    throw new Error("Entity not found in the requested company");
+  }
+  return { tenantId: data.tenant_id, tenantCompanyId: data.tenant_company_id };
 }
 
 Deno.serve(async (req: Request) => {
@@ -154,8 +154,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify company access
-    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id, 'write');
+    // Read-only members may list/download; every mutation requires edit access.
+    const readActions = new Set(["list-attachments", "create-download-url"]);
+    const writeActions = new Set(["create-upload-url", "finalize-upload", "archive-attachment", "delete-attachment"]);
+    if (!readActions.has(action) && !writeActions.has(action)) {
+      return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id, readActions.has(action) ? "read" : "write");
 
     // 1. CREATE UPLOAD URL
     if (action === "create-upload-url") {
@@ -194,7 +201,7 @@ Deno.serve(async (req: Request) => {
           tenant_id: tenantId,
           entity_type,
           entity_id,
-          field_key: fieldKey || "file",
+          field_key: field_key || "file",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -222,6 +229,19 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      if (!uuid(attachment_id) || !uuid(entity_id)) {
+        return new Response(JSON.stringify({ error: "Invalid attachment or entity ID" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      await validateEntity(entity_type, entity_id, tenant_company_id);
+      const expectedPrefix = `attachments/${tenant_company_id}/${entity_type}/${entity_id}/`;
+      if (typeof storage_key !== "string" || !storage_key.startsWith(expectedPrefix) ||
+          !storage_key.includes(`/${attachment_id}_`)) {
+        return new Response(JSON.stringify({ error: "Storage key does not match upload scope" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const insertData = {
         id: attachment_id,
         tenant_id: tenantId,
@@ -235,15 +255,15 @@ Deno.serve(async (req: Request) => {
         file_name,
         mime_type: mime_type || "application/octet-stream",
         file_size_bytes: file_size_bytes || 0,
-        version: version || "1.0",
+        version: Number.isInteger(version) && version > 0 ? version : 1,
         metadata: metadata || {},
         is_archived: false,
-        created_by: currentUser.id,
+        uploaded_by: currentUser.id,
       };
 
       const { data: attachmentRow, error: insertErr } = await admin
         .from("file_attachments")
-        .upsert(insertData)
+        .upsert(insertData, { onConflict: "id" })
         .select()
         .single();
 

@@ -935,9 +935,11 @@ function AIPage({ onOpenAiChat }) {
   );
 }
 
-function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
+function AdminPage({ onNavigate, onOpenCrm, data = {}, tenantId, tenantRole }) {
   return (
     <PermissionsWorkspace
+      tenantId={tenantId}
+      tenantRole={tenantRole}
       onNavigate={onNavigate}
       onOpenUserPanel={() => { data?.openAdminPanel?.(); onOpenCrm?.(); }}
     />
@@ -947,8 +949,8 @@ function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
 export default function BusinessOSWorkspace() {
   const crm = useCrm();
   const {
-    isDarkMode, setIsDarkMode, onSignOut, operatingCompanies = [], activeOperatingCompany,
-    setActiveOperatingCompanyId, currentUser, tenantRole, userRole, setIsAiChatOpen,
+    isDarkMode, setIsDarkMode, onSignOut, authLoading, tenantId, tenantRole, availableTenantMemberships = [], selectTenantMembership, operatingCompanies = [], activeOperatingCompany,
+    setActiveOperatingCompanyId, currentUser, userRole, setIsAiChatOpen,
     companies = [], works = [], tasks = [], taskAssignees = [], reminders = [], missingData = [],
     projectAssignments = [], stageDefinitions = [], profiles = [], issues = [], logs = [],
     notifications = [], isNotificationsLoading = false, unreadNotificationsCount = 0,
@@ -1358,6 +1360,44 @@ export default function BusinessOSWorkspace() {
   };
 
   const meta = pageMeta[page] || pageMeta.dashboard;
+
+  if (authLoading) {
+    return (
+      <div className={`business-os min-h-screen flex items-center justify-center p-5 ${isDarkMode ? 'dark' : ''}`}>
+        <div className="os-card px-6 py-5 text-sm text-slate-500">Loading authorized workspace…</div>
+      </div>
+    );
+  }
+
+  if (!tenantId && availableTenantMemberships.length > 1) {
+    return (
+      <div className={`business-os min-h-screen flex items-center justify-center p-5 ${isDarkMode ? 'dark' : ''}`}>
+        <section className="os-card w-full max-w-xl p-6 space-y-4">
+          <div>
+            <h1 className="text-xl font-black">Choose your workspace</h1>
+            <p className="text-sm text-slate-500 mt-1">Your account belongs to more than one tenant. Select the workspace you want to enter. No tenant is selected automatically.</p>
+          </div>
+          <div className="space-y-2">
+            {availableTenantMemberships.map(membership => (
+              <button
+                key={membership.id}
+                type="button"
+                onClick={async () => {
+                  const result = await selectTenantMembership?.(membership.id);
+                  if (!result?.success) window.alert(result?.error || 'Unable to open this workspace.');
+                }}
+                className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-4 hover:border-sky-500 hover:bg-sky-50/60 dark:hover:bg-sky-500/10 transition"
+              >
+                <span className="block text-sm font-bold">{membership.tenant_name || `Workspace ${membership.tenant_id.slice(0, 8)}`}</span>
+                <span className="block text-xs text-slate-500 mt-1">{membership.role} · {membership.status}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400">You can switch workspaces after entering from your account settings.</p>
+        </section>
+      </div>
+    );
+  }
 
   return <div className={`business-os ${isDarkMode ? 'dark' : ''}`}>
     {/* DESKTOP NAVIGATION RAIL WITH HOVER EXPANSION */}
@@ -1968,7 +2008,7 @@ export default function BusinessOSWorkspace() {
         {page === 'ai' && <AIPage onOpenAiChat={() => setIsAiChatOpen?.(true)} />}
         {page === 'mep-knowledge' && <MepKnowledgeWorkspace isDarkMode={isDarkMode} />}
         {page === 'mep-master-boq' && <MasterBoqWorkspace isDarkMode={isDarkMode} />}
-        {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
+        {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} tenantId={tenantId} tenantRole={tenantRole} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
       </div>
