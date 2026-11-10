@@ -950,7 +950,7 @@ export default function BusinessOSWorkspace() {
   const crm = useCrm();
   const {
     isDarkMode, setIsDarkMode, onSignOut, tenantId, tenantRole, operatingCompanies = [], activeOperatingCompany,
-    setActiveOperatingCompanyId, currentUser, tenantRole, userRole, setIsAiChatOpen,
+    setActiveOperatingCompanyId, currentUser, userRole, setIsAiChatOpen,
     companies = [], works = [], tasks = [], taskAssignees = [], reminders = [], missingData = [],
     projectAssignments = [], stageDefinitions = [], profiles = [], issues = [], logs = [],
     notifications = [], isNotificationsLoading = false, unreadNotificationsCount = 0,
