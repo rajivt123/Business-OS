@@ -35,6 +35,7 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
   const [selectedAction, setSelectedAction] = useState('membership_manage');
   const [delegationDraft, setDelegationDraft] = useState({ can_execute: false, can_delegate: false });
   const [assignmentDraft, setAssignmentDraft] = useState({ can_view: false, can_edit: false });
+  const [roleDraft, setRoleDraft] = useState('VIEWER');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -154,6 +155,10 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
     });
   }, [selectedMembershipId, selectedCompanyId, savedAssignment?.can_view, savedAssignment?.can_edit]);
 
+  useEffect(() => {
+    setRoleDraft(selectedMember?.role || 'VIEWER');
+  }, [selectedMembershipId, selectedMember?.role]);
+
   const actorMember = (workspace?.members || []).find(m => m.membership_id === workspace?.actor_membership_id);
   const isOwner = workspace?.is_owner === true;
   const canManageMemberships = isOwner || (actorMember?.tenant_action_delegations || []).some(
@@ -177,6 +182,27 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
       setNotice('Company assignment saved and audited.');
     } catch (e) {
       setError(e?.message || 'Company assignment update failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveMembershipRole = async () => {
+    if (!isOwner || !selectedMember || selectedMember.role === 'OWNER' || !['ADMIN','MANAGER','TEAM','VIEWER'].includes(roleDraft)) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const { error: saveError } = await supabase.rpc('admin_update_membership_role', {
+        p_target_membership_id: selectedMember.membership_id,
+        p_new_role: roleDraft,
+      });
+      if (saveError) throw saveError;
+      await loadWorkspace();
+      setNotice(`Role updated to ${roleDraft} and recorded in the audit log.`);
+    } catch (e) {
+      setError(e?.message || 'Role update failed.');
+      setRoleDraft(selectedMember.role);
     } finally {
       setSaving(false);
     }
@@ -273,6 +299,22 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
               </div>
               {!selectedMember ? <p className="p-5 text-xs text-slate-500">Select a member to view their permissions.</p> : (
                 <div className="p-4 space-y-4">
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 space-y-3">
+                    <div>
+                      <h4 className="text-xs font-extrabold">Tenant role</h4>
+                      <p className="text-[11px] text-slate-500 mt-1">Role controls legacy tenant-level behavior. Module permissions remain separately controlled below.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <select aria-label="Tenant role" value={roleDraft} disabled={!isOwner || saving || selectedMember.role === 'OWNER'} onChange={e => setRoleDraft(e.target.value)} className="os-input text-xs">
+                        {['ADMIN','MANAGER','TEAM','VIEWER'].map(role => <option key={role} value={role}>{role}</option>)}
+                      </select>
+                      <button type="button" onClick={saveMembershipRole} disabled={!isOwner || saving || selectedMember.role === 'OWNER' || roleDraft === selectedMember.role} className="os-primary inline-flex items-center gap-2 disabled:opacity-50">
+                        <Save size={14}/>{saving ? 'Saving…' : 'Save role'}
+                      </button>
+                    </div>
+                    {!isOwner && <p className="text-[11px] text-amber-700">Only the tenant owner can change tenant roles.</p>}
+                    {selectedMember.role === 'OWNER' && <p className="text-[11px] text-amber-700">The owner role is protected and cannot be changed here.</p>}
+                  </div>
                   <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
                     <p className="text-xs font-bold mb-2">Explicit company assignments</p>
                     <div className="flex flex-wrap gap-2">
