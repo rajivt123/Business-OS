@@ -7,7 +7,7 @@
 - Backend enforcement is authoritative; UI hiding is not security.
 
 ## Phase 1 migration scope
-The additive migration creates company_module_permissions and tenant_admin_action_delegations, plus private authorization predicates and RLS on the new tables. It does not rewrite existing helpers, remove legacy policies, backfill users, or change existing access. It is a preparation migration and must not be run against production yet.
+The additive migrations create company_module_permissions, tenant_admin_action_delegations and permission_change_audit, plus private authorization predicates, controlled audited mutation RPCs and RLS. They do not rewrite existing helpers, remove legacy policies, backfill users, or change existing access. They are preparation only and must not be run against production yet.
 
 ## Permission vocabulary
 Actions: read, create, update, delete, approve, export, manage_permissions.
@@ -18,8 +18,13 @@ Role labels are UI presets only. Persist explicit grants.
 Initial action keys: tenant_delete, ownership_transfer, tenant_settings_manage, membership_manage, company_create, company_archive.
 A holder can grant/revoke only the exact action they hold and only if can_delegate=true. Owner can delegate. A controlled grant/revoke RPC with immutable audit logging is required before UI writes are enabled.
 
+## Grant mutation implementation status
+- Added SECURITY DEFINER RPCs for module grants and tenant-action delegation. They validate active actor/target memberships, tenant/company identity, explicit target company assignment, prevent self-grants, enforce grantor ceilings, and write before/after audit events.
+- Direct authenticated INSERT/UPDATE/DELETE on permission tables is revoked; only the RPCs can mutate them. Read access remains subject to RLS.
+- These RPCs are committed but not runtime-tested. They are not yet wired into the Administrator Settings UI.
+
 ## Follow-on implementation required
-1. Build atomic grant/revoke RPCs; validate target membership and company tenant identity; ensure requested booleans are a subset of grantor rights; write audit events.
+1. Run the migration and fixture tests against a disposable Supabase database; correct any SQL/runtime errors before production consideration.
 2. Replace legacy has_company_access and has_action_permission call sites only after grant reconciliation; preserve owner access and remove implicit ADMIN-wide company access.
 3. Add module/action checks to every SECURITY DEFINER RPC across HR, payroll, accounts, procurement/inventory, CRM, company settings and reports.
 4. Update Edge Functions to use the same authorization predicates and verify exact entity-to-company identity, especially upload finalization.
