@@ -69,6 +69,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Company is not active in this tenant' USING ERRCODE='22023'; END IF;
   v_owner := v_actor.role='OWNER';
   IF NOT v_owner THEN
+    IF v_target.role='OWNER' THEN RAISE EXCEPTION 'Non-owners cannot modify owner permissions' USING ERRCODE='42501'; END IF;
     IF v_actor.id=v_target.id THEN RAISE EXCEPTION 'Self-grant is prohibited' USING ERRCODE='42501'; END IF;
     IF NOT EXISTS (SELECT 1 FROM public.user_company_access a
       WHERE a.membership_id=v_actor.id AND a.tenant_id=v_actor.tenant_id
@@ -165,6 +166,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Actor is not an active member of this tenant' USING ERRCODE='42501'; END IF;
   v_owner := v_actor.role='OWNER';
   IF NOT v_owner THEN
+    IF v_target.role='OWNER' THEN RAISE EXCEPTION 'Non-owners cannot delegate actions to the owner account' USING ERRCODE='42501'; END IF;
     IF v_actor.id=v_target.id THEN RAISE EXCEPTION 'Self-delegation is prohibited' USING ERRCODE='42501'; END IF;
     IF NOT private.can_delegate_tenant_admin_action(v_actor.tenant_id,p_action_key) THEN
       RAISE EXCEPTION 'You cannot delegate this tenant action' USING ERRCODE='42501';
