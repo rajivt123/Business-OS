@@ -72,13 +72,10 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
   const savedPermissions = useMemo(() => {
     const result = {};
     for (const row of selectedMember?.module_permissions || []) {
-      result[permissionKey(row.tenant_company_id, row.module_key)] = Object.fromEntries(ACTIONS.map(([key]) => [key, row[key] === true]));
+      result[row.tenant_company_id + ':' + row.module_key] = Object.fromEntries(ACTIONS.map(([key]) => [key, row[key] === true]));
     }
     return result;
   }, [selectedMember]);
-  const currentPermissions = selectedCompany
-    ? (drafts[permissionKey(selectedCompany.id, 'all')] || null)
-    : null;
   const permissionFor = moduleKey => {
     if (!selectedCompany || !selectedMember) return emptyPermissions();
     const key = permissionKey(selectedMember.membership_id, selectedCompany.id, moduleKey);
@@ -92,7 +89,7 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
     }
     setDrafts(current => ({
       ...current,
-      [permissionKey(selectedCompanyId, moduleKey)]: {
+      [permissionKey(selectedMember.membership_id, selectedCompanyId, moduleKey)]: {
         ...permissionFor(moduleKey),
         [action]: checked,
         ...(action === 'can_read' && !checked ? Object.fromEntries(ACTIONS.filter(([key]) => key !== 'can_read').map(([key]) => [key, false])) : {}),
