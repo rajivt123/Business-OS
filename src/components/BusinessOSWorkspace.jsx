@@ -935,9 +935,11 @@ function AIPage({ onOpenAiChat }) {
   );
 }
 
-function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
+function AdminPage({ onNavigate, onOpenCrm, data = {}, tenantId, tenantRole }) {
   return (
     <PermissionsWorkspace
+      tenantId={tenantId}
+      tenantRole={tenantRole}
       onNavigate={onNavigate}
       onOpenUserPanel={() => { data?.openAdminPanel?.(); onOpenCrm?.(); }}
     />
@@ -947,7 +949,7 @@ function AdminPage({ onNavigate, onOpenCrm, data = {} }) {
 export default function BusinessOSWorkspace() {
   const crm = useCrm();
   const {
-    isDarkMode, setIsDarkMode, onSignOut, operatingCompanies = [], activeOperatingCompany,
+    isDarkMode, setIsDarkMode, onSignOut, tenantId, tenantRole, operatingCompanies = [], activeOperatingCompany,
     setActiveOperatingCompanyId, currentUser, tenantRole, userRole, setIsAiChatOpen,
     companies = [], works = [], tasks = [], taskAssignees = [], reminders = [], missingData = [],
     projectAssignments = [], stageDefinitions = [], profiles = [], issues = [], logs = [],
@@ -1968,7 +1970,7 @@ export default function BusinessOSWorkspace() {
         {page === 'ai' && <AIPage onOpenAiChat={() => setIsAiChatOpen?.(true)} />}
         {page === 'mep-knowledge' && <MepKnowledgeWorkspace isDarkMode={isDarkMode} />}
         {page === 'mep-master-boq' && <MasterBoqWorkspace isDarkMode={isDarkMode} />}
-        {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} />}
+        {page === 'admin' && <AdminPage onNavigate={go} onOpenCrm={() => go('crm')} data={dashboardData} tenantId={tenantId} tenantRole={tenantRole} />}
         {page === 'company-settings' && <CompanySettingsWorkspace />}
         {page === 'profile' && <ProfileWorkspace onNavigate={go} />}
       </div>
