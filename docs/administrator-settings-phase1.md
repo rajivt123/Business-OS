@@ -7,7 +7,7 @@
 - Backend enforcement is authoritative; UI hiding is not security.
 
 ## Phase 1 migration scope
-The additive migrations create company_module_permissions, tenant_admin_action_delegations and permission_change_audit, plus private authorization predicates, controlled audited mutation RPCs and RLS. They do not rewrite existing helpers, remove legacy policies, backfill users, or change existing access. They are preparation only and must not be run against production yet.
+The additive migrations create company_module_permissions, tenant_admin_action_delegations and permission_change_audit, plus private authorization predicates, controlled audited mutation RPCs and RLS. They do not rewrite existing helpers, remove legacy policies, backfill users, or change existing access. They were applied to the live Supabase project as four forward-only migrations on 2026-11-10. The repository filenames now match the versions recorded by Supabase, preventing duplicate application.
 
 ## Permission vocabulary
 Actions: read, create, update, delete, approve, export, manage_permissions.
@@ -21,15 +21,15 @@ A holder can grant/revoke only the exact action they hold and only if can_delega
 ## Grant mutation implementation status
 - Added SECURITY DEFINER RPCs for module grants and tenant-action delegation. They validate active actor/target memberships, tenant/company identity, explicit target company assignment, prevent self-grants, enforce grantor ceilings, and write before/after audit events.
 - Added a tenant-scoped workspace read RPC. It requires an explicit tenant ID and owner or delegated membership-management authority; non-owners receive company-scoped access/permission rows only within their own company visibility.
-- Replaced the mock Permissions screen with a Supabase-backed workspace that reads real members/companies and writes through audited RPCs. Module draft state is isolated by member + company + module. Company assignment editing remains intentionally disabled.
+- Replaced the mock Permissions screen with a Supabase-backed workspace that reads real members/companies and writes through audited RPCs. Module draft state is isolated by member + company + module. Company assignment editing is available through its audited RPC.
 - Added database triggers to reject UPDATE, DELETE and TRUNCATE against permission audit history.
 - Non-owner grantors cannot modify the owner account's permissions or delegate tenant actions to the owner account.
 - Direct authenticated INSERT/UPDATE/DELETE on permission tables is revoked; only the RPCs can mutate them. Read access remains subject to RLS.
-- These RPCs are committed but not runtime-tested. They are not yet wired into the Administrator Settings UI.
+- The four migrations are installed in live Supabase and the four public RPC signatures, table existence, authenticated execution grant, anonymous denial, and direct-write denial on new permission tables were verified with read-only SQL checks. Fixture-driven positive/negative authorization tests and browser-authenticated UI verification are still outstanding.
 
 ## Follow-on implementation required
-1. Run all three migrations and fixture tests against a disposable Supabase database; correct any SQL/runtime errors before production consideration.
-2. Run a frontend production build and verify the real Supabase-backed Permissions screen using owner, delegated manager and read-only member accounts.
+1. Complete fixture-driven positive/negative authorization tests using owner, delegated manager, sleeping partner, assigned/unassigned ADMIN, and cross-tenant fixtures.
+2. Verify the live Permissions screen in an authenticated browser session and exercise company assignment, module grants and tenant-action delegation.
 3. Replace legacy has_company_access and has_action_permission call sites only after grant reconciliation; preserve owner access and remove implicit ADMIN-wide company access.
 4. Add module/action checks to every SECURITY DEFINER RPC across HR, payroll, accounts, procurement/inventory, CRM, company settings and reports.
 5. Update Edge Functions to use the same authorization predicates and verify exact entity-to-company identity, especially upload finalization.
@@ -39,8 +39,8 @@ A holder can grant/revoke only the exact action they hold and only if can_delega
 9. Reconcile the live 70 memberships and 7 company-access rows with the owner before backfill. Never auto-grant.
 
 ## Rollout and rollback
-- Branch-only preparation. No production SQL or deployment.
-- Apply only to a disposable test database first.
+- Permission foundation is installed as additive forward-only migrations in live Supabase. No existing company assignments were backfilled or modified.
+- Keep this feature branch unmerged and production frontend unchanged until authorization integration and regression testing are complete.
 - Validate cross-company and cross-tenant negative tests, RPCs, Edge Functions and existing HR/Accounts/Payroll workflows.
 - Rollback this additive phase by removing its policies, functions and tables only after verifying no client depends on them. Never delete existing memberships or grants.
 
