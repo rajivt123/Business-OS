@@ -143,3 +143,9 @@ USING(private.can_delegate_tenant_admin_action(tenant_id,action_key));
 
 COMMENT ON TABLE public.company_module_permissions IS 'Explicit company-scoped module/action grants; no automatic backfill.';
 COMMENT ON TABLE public.tenant_admin_action_delegations IS 'Explicit tenant-wide administrative action delegation with controlled re-delegation.';
+
+-- Explicit Data API privileges; RLS remains the row-level boundary.
+REVOKE ALL ON TABLE public.company_module_permissions FROM anon;
+REVOKE ALL ON TABLE public.tenant_admin_action_delegations FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.company_module_permissions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tenant_admin_action_delegations TO authenticated;
