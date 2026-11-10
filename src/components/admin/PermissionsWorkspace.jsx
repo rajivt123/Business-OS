@@ -34,6 +34,7 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
   const [drafts, setDrafts] = useState({});
   const [selectedAction, setSelectedAction] = useState('membership_manage');
   const [delegationDraft, setDelegationDraft] = useState({ can_execute: false, can_delegate: false });
+  const [assignmentDraft, setAssignmentDraft] = useState({ can_view: false, can_edit: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -145,6 +146,42 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
     }
   };
 
+  const savedAssignment = selectedMember?.company_access?.find(a => a.tenant_company_id === selectedCompanyId);
+  useEffect(() => {
+    setAssignmentDraft({
+      can_view: savedAssignment?.can_view === true,
+      can_edit: savedAssignment?.can_edit === true,
+    });
+  }, [selectedMembershipId, selectedCompanyId, savedAssignment?.can_view, savedAssignment?.can_edit]);
+
+  const actorMember = (workspace?.members || []).find(m => m.membership_id === workspace?.actor_membership_id);
+  const isOwner = workspace?.is_owner === true;
+  const canManageMemberships = isOwner || (actorMember?.tenant_action_delegations || []).some(
+    d => d.action_key === 'membership_manage' && d.can_execute === true
+  );
+
+  const saveCompanyAssignment = async () => {
+    if (!selectedMember || !selectedCompany || !canManageMemberships) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const { error: saveError } = await supabase.rpc('admin_upsert_company_assignment', {
+        p_target_membership_id: selectedMember.membership_id,
+        p_tenant_company_id: selectedCompany.id,
+        p_can_view: assignmentDraft.can_view,
+        p_can_edit: assignmentDraft.can_view && assignmentDraft.can_edit,
+      });
+      if (saveError) throw saveError;
+      await loadWorkspace();
+      setNotice('Company assignment saved and audited.');
+    } catch (e) {
+      setError(e?.message || 'Company assignment update failed.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const savedDelegation = selectedMember?.tenant_action_delegations?.find(d => d.action_key === selectedAction);
   useEffect(() => {
     setDelegationDraft({
@@ -175,9 +212,7 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
     }
   };
 
-  const isOwner = workspace?.is_owner === true;
   const hasModuleDraft = selectedCompany && selectedMember && MODULES.some(m => drafts[permissionKey(selectedMember.membership_id, selectedCompany.id, m.key)]);
-  const actorMember = (workspace?.members || []).find(m => m.membership_id === workspace?.actor_membership_id);
   const hasDelegationAuthority = isOwner || (actorMember?.tenant_action_delegations || []).some(d => d.action_key === selectedAction && d.can_delegate === true);
 
   return (
@@ -247,6 +282,27 @@ export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavi
                       })}
                       {!selectedMember.company_access?.length && <span className="text-[11px] text-amber-700">No company assignments.</span>}
                     </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 space-y-3">
+                    <div>
+                      <h4 className="text-xs font-extrabold">Company assignment</h4>
+                      <p className="text-[11px] text-slate-500 mt-1">Assign this member to the selected company. Edit access always includes view access. Changes are audited.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-xs">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={assignmentDraft.can_view} disabled={!canManageMemberships || saving || selectedMember.role === 'OWNER' || (!isOwner && selectedMember.membership_id === workspace.actor_membership_id)} onChange={e => setAssignmentDraft({ can_view: e.target.checked, can_edit: e.target.checked && assignmentDraft.can_edit })}/>
+                        View company
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={assignmentDraft.can_edit} disabled={!canManageMemberships || !assignmentDraft.can_view || saving || selectedMember.role === 'OWNER' || (!isOwner && selectedMember.membership_id === workspace.actor_membership_id)} onChange={e => setAssignmentDraft(d => ({ ...d, can_edit: e.target.checked }))}/>
+                        Edit company
+                      </label>
+                      <button type="button" onClick={saveCompanyAssignment} disabled={!canManageMemberships || saving || selectedMember.role === 'OWNER' || (!isOwner && selectedMember.membership_id === workspace.actor_membership_id) || (assignmentDraft.can_view === (savedAssignment?.can_view === true) && assignmentDraft.can_edit === (savedAssignment?.can_edit === true))} className="os-primary inline-flex items-center gap-2 disabled:opacity-50">
+                        <Save size={14}/>{saving ? 'Saving…' : 'Save company assignment'}
+                      </button>
+                    </div>
+                    {!canManageMemberships && <p className="text-[11px] text-amber-700">You do not have membership-management authority.</p>}
+                    {selectedMember.role === 'OWNER' && <p className="text-[11px] text-amber-700">Owner assignments are protected.</p>}
                   </div>
                   <div className="space-y-3">
                     <div><h4 className="text-xs font-extrabold">Module permissions</h4><p className="text-[11px] text-slate-500 mt-1">Choose individual actions. Any write/approve/export right requires Read.</p></div>
