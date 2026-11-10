@@ -48,7 +48,7 @@ DECLARE
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required' USING ERRCODE='42501'; END IF;
   IF p_permissions IS NULL OR jsonb_typeof(p_permissions) <> 'object'
-     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_permissions) k WHERE NOT (k = ANY(v_allowed)))
+     OR EXISTS (SELECT 1 FROM jsonb_object_keys(p_permissions) AS keys(key) WHERE NOT (keys.key = ANY(v_allowed)))
      OR EXISTS (SELECT 1 FROM jsonb_each(p_permissions) e WHERE jsonb_typeof(e.value) <> 'boolean') THEN
     RAISE EXCEPTION 'Invalid permission payload' USING ERRCODE='22023';
   END IF;
@@ -59,6 +59,11 @@ BEGIN
   SELECT * INTO v_target FROM public.tenant_memberships
     WHERE id=p_target_membership_id AND tenant_id=v_actor.tenant_id AND status='active';
   IF NOT FOUND THEN RAISE EXCEPTION 'Target membership is not active in this tenant' USING ERRCODE='22023'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.user_company_access a
+    WHERE a.membership_id=v_target.id AND a.tenant_id=v_actor.tenant_id
+      AND a.tenant_company_id=p_tenant_company_id AND a.can_view=true) THEN
+    RAISE EXCEPTION 'Target member must have explicit access to this company first' USING ERRCODE='22023';
+  END IF;
   SELECT * INTO v_company FROM public.tenant_companies
     WHERE id=p_tenant_company_id AND tenant_id=v_actor.tenant_id AND status='active';
   IF NOT FOUND THEN RAISE EXCEPTION 'Company is not active in this tenant' USING ERRCODE='22023'; END IF;
