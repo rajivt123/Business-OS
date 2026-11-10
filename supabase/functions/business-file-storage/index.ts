@@ -136,8 +136,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Verify company access
-    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id, 'write');
+    // Read-only members may list/download; every mutation requires edit access.
+    const readActions = new Set(["list-attachments", "create-download-url"]);
+    const writeActions = new Set(["create-upload-url", "finalize-upload", "archive-attachment", "delete-attachment"]);
+    if (!readActions.has(action) && !writeActions.has(action)) {
+      return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { tenantId } = await companyAccess(currentUser.id, tenant_company_id, readActions.has(action) ? "read" : "write");
 
     // 1. CREATE UPLOAD URL
     if (action === "create-upload-url") {
@@ -176,7 +183,7 @@ Deno.serve(async (req: Request) => {
           tenant_id: tenantId,
           entity_type,
           entity_id,
-          field_key: fieldKey || "file",
+          field_key: field_key || "file",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
