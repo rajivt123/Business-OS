@@ -25,7 +25,7 @@ const TENANT_ACTIONS = [
   ['ownership_transfer', 'Transfer ownership'],
 ];
 const emptyPermissions = () => Object.fromEntries(ACTIONS.map(([key]) => [key, false]));
-const permissionKey = (companyId, moduleKey) => companyId + ':' + moduleKey;
+const permissionKey = (membershipId, companyId, moduleKey) => membershipId + ':' + companyId + ':' + moduleKey;
 
 export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserPanel, onNavigate }) {
   const [workspace, setWorkspace] = useState(null);
@@ -81,7 +81,7 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
     : null;
   const permissionFor = moduleKey => {
     if (!selectedCompany || !selectedMember) return emptyPermissions();
-    const key = permissionKey(selectedCompany.id, moduleKey);
+    const key = permissionKey(selectedMember.membership_id, selectedCompany.id, moduleKey);
     return drafts[key] || savedPermissions[key] || emptyPermissions();
   };
 
@@ -109,7 +109,7 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
     setNotice('');
     try {
       for (const module of MODULES) {
-        const key = permissionKey(selectedCompany.id, module.key);
+        const key = permissionKey(selectedMember.membership_id, selectedCompany.id, module.key);
         const value = drafts[key];
         if (!value) continue;
         const { error: saveError } = await supabase.rpc('admin_upsert_company_module_permissions', {
@@ -123,7 +123,7 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
       setNotice('Permission changes saved and audited.');
       setDrafts(current => {
         const next = { ...current };
-        MODULES.forEach(m => delete next[permissionKey(selectedCompany.id, m.key)]);
+        MODULES.forEach(m => delete next[permissionKey(selectedMember.membership_id, selectedCompany.id, m.key)]);
         return next;
       });
       await loadWorkspace();
@@ -162,11 +162,9 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
   };
 
   const isOwner = workspace?.is_owner === true;
-  const hasModuleDraft = selectedCompany && MODULES.some(m => drafts[permissionKey(selectedCompany.id, m.key)]);
-  const hasDelegationAuthority = isOwner || (workspace?.members || []).some(m =>
-    m.membership_id === workspace?.actor_membership_id &&
-    (m.tenant_action_delegations || []).some(d => d.action_key === 'membership_manage' && d.can_delegate)
-  );
+  const hasModuleDraft = selectedCompany && selectedMember && MODULES.some(m => drafts[permissionKey(selectedMember.membership_id, selectedCompany.id, m.key)]);
+  const actorMember = (workspace?.members || []).find(m => m.membership_id === workspace?.actor_membership_id);
+  const hasDelegationAuthority = isOwner || (actorMember?.tenant_action_delegations || []).some(d => d.action_key === selectedAction && d.can_delegate === true);
 
   return (
     <div className="space-y-4">
@@ -241,7 +239,7 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
                     {MODULES.map(module => {
                       const permissions = permissionFor(module.key);
                       const assigned = (selectedMember.company_access || []).some(a => a.tenant_company_id === selectedCompanyId && a.can_view);
-                      const mayEdit = isOwner || (selectedMember.membership_id !== workspace.actor_membership_id && assigned);
+                      const mayEdit = assigned && (isOwner || selectedMember.membership_id !== workspace.actor_membership_id);
                       return <div key={module.key} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div><p className="text-xs font-bold">{module.label}</p><p className="text-[10px] text-slate-500 mt-0.5">{module.detail}</p></div>
