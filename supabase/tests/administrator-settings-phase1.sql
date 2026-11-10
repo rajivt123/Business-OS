@@ -10,6 +10,7 @@ BEGIN
  ASSERT to_regprocedure('public.admin_get_permission_workspace(uuid)') IS NOT NULL, 'workspace read RPC missing';
  ASSERT to_regprocedure('public.admin_upsert_company_module_permissions(uuid,uuid,text,jsonb)') IS NOT NULL, 'module grant RPC missing';
  ASSERT to_regprocedure('public.admin_upsert_tenant_action_delegation(uuid,text,boolean,boolean)') IS NOT NULL, 'tenant action delegation RPC missing';
+ ASSERT to_regprocedure('public.admin_upsert_company_assignment(uuid,uuid,boolean,boolean)') IS NOT NULL, 'company assignment RPC missing';
  ASSERT to_regclass('public.permission_change_audit') IS NOT NULL, 'permission audit table missing';
  ASSERT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='public.permission_change_audit'::regclass AND tgname='permission_change_audit_no_update' AND NOT tgisinternal), 'audit immutability trigger missing';
  ASSERT has_function_privilege('authenticated','public.admin_get_permission_workspace(uuid)','EXECUTE'), 'workspace read RPC not executable by authenticated';
