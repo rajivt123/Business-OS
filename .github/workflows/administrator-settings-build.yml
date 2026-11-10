@@ -1,0 +1,26 @@
+name: Administrator Settings build
+on:
+  pull_request:
+    branches:
+      - ui/permission-management-prototype
+    paths:
+      - 'src/components/admin/PermissionsWorkspace.jsx'
+      - 'src/components/BusinessOSWorkspace.jsx'
+      - 'src/lib/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/administrator-settings-build.yml'
+  push:
+    branches:
+      - security/company-module-permissions-phase1
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
