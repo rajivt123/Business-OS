@@ -208,3 +208,103 @@ REVOKE ALL ON FUNCTION public.admin_upsert_company_module_permissions(uuid,uuid,
 REVOKE ALL ON FUNCTION public.admin_upsert_tenant_action_delegation(uuid,text,boolean,boolean) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.admin_upsert_company_module_permissions(uuid,uuid,text,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.admin_upsert_tenant_action_delegation(uuid,text,boolean,boolean) TO authenticated;
+
+
+-- Company assignment changes are audited and scoped. Non-owner membership
+-- managers may only delegate access within companies they themselves can access,
+-- and cannot grant more edit authority than they hold.
+CREATE OR REPLACE FUNCTION public.admin_upsert_company_assignment(
+  p_target_membership_id uuid,
+  p_tenant_company_id uuid,
+  p_can_view boolean,
+  p_can_edit boolean
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $$
+DECLARE
+  v_actor public.tenant_memberships%ROWTYPE;
+  v_target public.tenant_memberships%ROWTYPE;
+  v_company public.tenant_companies%ROWTYPE;
+  v_actor_access public.user_company_access%ROWTYPE;
+  v_old jsonb;
+  v_new jsonb;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Authentication required' USING ERRCODE='42501';
+  END IF;
+  IF p_can_view IS NULL OR p_can_edit IS NULL OR (p_can_edit AND NOT p_can_view) THEN
+    RAISE EXCEPTION 'Edit access requires view access' USING ERRCODE='22023';
+  END IF;
+
+  SELECT * INTO v_target FROM public.tenant_memberships
+  WHERE id=p_target_membership_id AND status='active';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Target membership is not active' USING ERRCODE='22023';
+  END IF;
+
+  SELECT * INTO v_actor FROM public.tenant_memberships
+  WHERE user_id=auth.uid() AND tenant_id=v_target.tenant_id AND status='active';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Actor is not an active member of this tenant' USING ERRCODE='42501';
+  END IF;
+
+  IF v_target.role='OWNER' AND v_actor.role<>'OWNER' THEN
+    RAISE EXCEPTION 'Owner company access is protected' USING ERRCODE='42501';
+  END IF;
+  IF v_actor.id=v_target.id AND v_actor.role<>'OWNER' THEN
+    RAISE EXCEPTION 'Self-assignment is prohibited' USING ERRCODE='42501';
+  END IF;
+
+  SELECT * INTO v_company FROM public.tenant_companies
+  WHERE id=p_tenant_company_id AND tenant_id=v_actor.tenant_id AND status='active';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Company is not active in this tenant' USING ERRCODE='22023';
+  END IF;
+
+  IF v_actor.role<>'OWNER' THEN
+    IF NOT private.has_tenant_admin_action(v_actor.tenant_id,'membership_manage') THEN
+      RAISE EXCEPTION 'Membership-management authority required' USING ERRCODE='42501';
+    END IF;
+    SELECT * INTO v_actor_access FROM public.user_company_access
+    WHERE membership_id=v_actor.id AND tenant_id=v_actor.tenant_id
+      AND tenant_company_id=p_tenant_company_id AND can_view=true;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Cannot assign access outside your own company scope' USING ERRCODE='42501';
+    END IF;
+    IF p_can_edit AND NOT v_actor_access.can_edit THEN
+      RAISE EXCEPTION 'Cannot delegate edit access you do not hold' USING ERRCODE='42501';
+    END IF;
+  END IF;
+
+  SELECT jsonb_build_object('can_view',can_view,'can_edit',can_edit)
+  INTO v_old FROM public.user_company_access
+  WHERE membership_id=v_target.id AND tenant_id=v_actor.tenant_id
+    AND tenant_company_id=p_tenant_company_id;
+
+  IF p_can_view THEN
+    INSERT INTO public.user_company_access(tenant_id,membership_id,tenant_company_id,can_view,can_edit)
+    VALUES(v_actor.tenant_id,v_target.id,p_tenant_company_id,p_can_view,p_can_edit)
+    ON CONFLICT(membership_id,tenant_company_id) DO UPDATE
+    SET can_view=EXCLUDED.can_view,can_edit=EXCLUDED.can_edit;
+    v_new := jsonb_build_object('can_view',p_can_view,'can_edit',p_can_edit);
+  ELSE
+    DELETE FROM public.user_company_access
+    WHERE membership_id=v_target.id AND tenant_id=v_actor.tenant_id
+      AND tenant_company_id=p_tenant_company_id;
+    v_new := NULL;
+  END IF;
+
+  INSERT INTO public.permission_change_audit(
+    tenant_id,actor_user_id,target_membership_id,tenant_company_id,
+    event_type,old_values,new_values
+  ) VALUES(
+    v_actor.tenant_id,auth.uid(),v_target.id,p_tenant_company_id,
+    'company_assignment_upsert',v_old,v_new
+  );
+
+  RETURN jsonb_build_object('success',true,'previous',v_old,'company_access',v_new);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_upsert_company_assignment(uuid,uuid,boolean,boolean) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.admin_upsert_company_assignment(uuid,uuid,boolean,boolean) TO authenticated;
