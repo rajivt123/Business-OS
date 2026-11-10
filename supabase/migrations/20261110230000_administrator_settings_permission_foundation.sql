@@ -147,5 +147,9 @@ COMMENT ON TABLE public.tenant_admin_action_delegations IS 'Explicit tenant-wide
 -- Explicit Data API privileges; RLS remains the row-level boundary.
 REVOKE ALL ON TABLE public.company_module_permissions FROM anon;
 REVOKE ALL ON TABLE public.tenant_admin_action_delegations FROM anon;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.company_module_permissions TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tenant_admin_action_delegations TO authenticated;
+-- Until the audited grant/revoke RPCs are installed, clients may inspect grants
+-- but cannot mutate permission rows directly. This prevents bypassing grant ceilings.
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.company_module_permissions FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.tenant_admin_action_delegations FROM authenticated;
+GRANT SELECT ON TABLE public.company_module_permissions TO authenticated;
+GRANT SELECT ON TABLE public.tenant_admin_action_delegations TO authenticated;
