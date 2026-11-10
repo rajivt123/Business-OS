@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Building2, Check, Eye, KeyRound, Loader2, Lock, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
+import { AlertTriangle, Building2, Loader2, Lock, RefreshCw, Save, ShieldCheck, Users } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 const MODULES = [
@@ -27,14 +27,13 @@ const TENANT_ACTIONS = [
 const emptyPermissions = () => Object.fromEntries(ACTIONS.map(([key]) => [key, false]));
 const permissionKey = (membershipId, companyId, moduleKey) => membershipId + ':' + companyId + ':' + moduleKey;
 
-export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserPanel, onNavigate }) {
+export default function PermissionsWorkspace({ tenantId, onOpenUserPanel, onNavigate }) {
   const [workspace, setWorkspace] = useState(null);
   const [selectedMembershipId, setSelectedMembershipId] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [drafts, setDrafts] = useState({});
   const [selectedAction, setSelectedAction] = useState('membership_manage');
   const [delegationDraft, setDelegationDraft] = useState({ can_execute: false, can_delegate: false });
-  const [tab, setTab] = useState('modules');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -117,13 +116,13 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
         });
         if (saveError) throw saveError;
       }
-      setNotice('Permission changes saved and audited.');
       setDrafts(current => {
         const next = { ...current };
         MODULES.forEach(m => delete next[permissionKey(selectedMember.membership_id, selectedCompany.id, m.key)]);
         return next;
       });
       await loadWorkspace();
+      setNotice('Permission changes saved and audited.');
     } catch (e) {
       setError(e?.message || 'Permission save failed. No success was assumed.');
     } finally {
@@ -152,8 +151,8 @@ export default function PermissionsWorkspace({ tenantId, tenantRole, onOpenUserP
     });
     if (saveError) setError(saveError.message || 'Delegation update failed.');
     else {
-      setNotice('Tenant action delegation saved and audited.');
       await loadWorkspace();
+      setNotice('Tenant action delegation saved and audited.');
     }
     setSaving(false);
   };
