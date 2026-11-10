@@ -7,12 +7,13 @@ CREATE TABLE IF NOT EXISTS public.permission_change_audit (
   tenant_company_id uuid REFERENCES public.tenant_companies(id),
   module_key text,
   action_key text,
-  event_type text NOT NULL CHECK (event_type IN ('module_permissions_upsert','tenant_action_delegation_upsert')),
+  event_type text NOT NULL CHECK (event_type IN ('module_permissions_upsert','tenant_action_delegation_upsert','company_assignment_upsert')),
   old_values jsonb,
   new_values jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   CHECK ((module_key IS NOT NULL AND tenant_company_id IS NOT NULL AND action_key IS NULL)
-      OR (action_key IS NOT NULL AND tenant_company_id IS NULL AND module_key IS NULL))
+      OR (action_key IS NOT NULL AND tenant_company_id IS NULL AND module_key IS NULL)
+      OR (event_type='company_assignment_upsert' AND tenant_company_id IS NOT NULL AND module_key IS NULL AND action_key IS NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_permission_audit_tenant_created
   ON public.permission_change_audit(tenant_id,created_at DESC);
@@ -291,7 +292,7 @@ BEGIN
     DELETE FROM public.user_company_access
     WHERE membership_id=v_target.id AND tenant_id=v_actor.tenant_id
       AND tenant_company_id=p_tenant_company_id;
-    v_new := NULL;
+    v_new := jsonb_build_object('can_view',false,'can_edit',false,'removed',true);
   END IF;
 
   INSERT INTO public.permission_change_audit(
