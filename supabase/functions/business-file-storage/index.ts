@@ -58,19 +58,37 @@ async function user(req: Request) {
 /**
  * Verify user has membership access to specific tenant company
  */
-async function companyAccess(userId: string, tenantCompanyId: string, requiredOp: string = 'read') {
-  if (!uuid(tenantCompanyId)) {
-    throw new Error("Invalid tenant_company_id format");
+async function companyAccess(userId: string, tenantCompanyId: string, requiredOp: string = "read") {
+  if (!uuid(tenantCompanyId)) throw new Error("Invalid tenant_company_id format");
+
+  const { data: company, error: companyErr } = await admin
+    .from("tenant_companies")
+    .select("id, tenant_id, status")
+    .eq("id", tenantCompanyId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (companyErr || !company) throw new Error("Company not found or inactive");
+
+  const { data: membership, error: membershipErr } = await admin
+    .from("tenant_memberships")
+    .select("id, role, status")
+    .eq("tenant_id", company.tenant_id)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (membershipErr || !membership) throw new Error("Unauthorized: Active tenant membership required");
+
+  // Owner authority is tenant-wide; every other role requires an explicit company grant.
+  if (membership.role === "OWNER") {
+    return { tenantId: company.tenant_id, membershipId: membership.id };
   }
 
-  // Use the view which correctly enforces specific company-level access,
-  // instead of generic tenant_membership which spans all companies.
   const { data: access, error: accessErr } = await admin
     .from("user_company_access")
-    .select("tenant_id, membership_id, can_view, can_edit, tenant_memberships!inner(user_id,status)")
+    .select("can_view, can_edit")
+    .eq("membership_id", membership.id)
+    .eq("tenant_id", company.tenant_id)
     .eq("tenant_company_id", tenantCompanyId)
-    .eq("tenant_memberships.user_id", userId)
-    .eq("tenant_memberships.status", "active")
     .maybeSingle();
 
   if (accessErr || !access || access.can_view !== true) {
@@ -79,7 +97,7 @@ async function companyAccess(userId: string, tenantCompanyId: string, requiredOp
   if ((requiredOp === "edit" || requiredOp === "write") && access.can_edit !== true) {
     throw new Error("Unauthorized: Company edit permission required");
   }
-  return { tenantId: access.tenant_id, membershipId: access.membership_id };
+  return { tenantId: company.tenant_id, membershipId: membership.id };
 }
 
 /**
